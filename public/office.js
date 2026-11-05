@@ -275,7 +275,7 @@ function reqElement(r) {
     const inp = document.createElement('input'); inp.placeholder = 'Escribe tu respuesta…';
     const ok = document.createElement('button'); ok.className = 'primary'; ok.textContent = 'Enviar';
     ok.onclick = () => inp.value.trim() && send({ respuesta: inp.value.trim() });
-    inp.onkeydown = (e) => e.key === 'Enter' && ok.click();
+    inp.onkeydown = (e) => { if (e.key === 'Enter') ok.click(); };
     row.append(inp, ok);
   }
   return el;
@@ -390,7 +390,7 @@ function renderAgent(id, force = false) {
     renderAgent(id, true);
   };
   sendBtn.onclick = send;
-  inp.onkeydown = (e) => e.key === 'Enter' && send();
+  inp.onkeydown = (e) => { if (e.key === 'Enter') send(); };
 }
 
 // Nueva campaña
