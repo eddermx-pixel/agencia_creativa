@@ -28,26 +28,31 @@ export function log(agente, texto, campaignId = null) {
 // ---- Solicitudes al jefe (preguntas y autorizaciones) ----
 const requestWaiters = new Map();
 
-export function askBoss({ tipo, agente, campaignId, texto, opciones = [], detalle = '' }) {
+// tipos: 'pregunta' | 'autorizacion' | 'cuestionario' (varias preguntas) | 'concepto' (idea para aprobar)
+export function askBoss({ tipo, agente, campaignId, texto, opciones = [], detalle = '', preguntas = [] }) {
   const r = {
-    id: newId('r'), tipo, agente, campaignId, texto, opciones, detalle,
+    id: newId('r'), tipo, agente, campaignId, texto, opciones, detalle, preguntas,
     estado: 'pendiente', creada: Date.now(),
   };
   db.requests.push(r);
   save();
-  log(agente, tipo === 'autorizacion' ? `Pide autorización: ${texto}` : `Pregunta: ${texto}`, campaignId);
+  const verbo = { autorizacion: 'Pide autorización', cuestionario: 'Te hace preguntas', concepto: 'Presenta el concepto' }[tipo] || 'Pregunta';
+  log(agente, `${verbo}: ${texto}`, campaignId);
   bus.emit('request', r);
   return new Promise((resolve) => requestWaiters.set(r.id, resolve));
 }
 
-export function answerRequest(id, { respuesta = '', aprobado = null, via = 'web' }) {
+export function answerRequest(id, { respuesta = '', aprobado = null, respuestas = null, via = 'web' }) {
   const r = db.requests.find((x) => x.id === id);
   if (!r || r.estado !== 'pendiente') return null;
+  if (r.tipo === 'cuestionario' && Array.isArray(respuestas)) {
+    respuesta = r.preguntas.map((p, i) => `${i + 1}. ${p.pregunta}\n   → ${String(respuestas[i] || '(sin respuesta)').slice(0, 1500)}`).join('\n');
+  }
   Object.assign(r, { estado: 'respondida', respuesta, aprobado, via, respondida: Date.now() });
   save();
-  const resumen = r.tipo === 'autorizacion'
-    ? (aprobado ? 'AUTORIZADO' : 'NO AUTORIZADO') + (respuesta ? ` — ${respuesta}` : '')
-    : respuesta;
+  const resumen = ['autorizacion', 'concepto'].includes(r.tipo)
+    ? (aprobado ? 'APROBADO' : 'NO / CAMBIOS') + (respuesta ? ` — ${respuesta}` : '')
+    : r.tipo === 'cuestionario' ? 'respondió el cuestionario' : respuesta;
   log('jefe', `Respondió a ${r.agente}: ${resumen} (${via})`, r.campaignId);
   bus.emit('request', r);
   requestWaiters.get(id)?.(r);
@@ -93,20 +98,64 @@ const PRECIOS = {
   'claude-fable-5-1': [10, 50, 0.25],
 };
 
-export function addUsage(campaignId, model, usage) {
+export function addUsage(campaignId, model, usage, agente = null) {
   if (!usage) return 0;
   const [inp, out, cacheRead] = PRECIOS[model] || PRECIOS['claude-opus-5-5'];
   const usd = ((usage.input_tokens || 0) * inp
     + (usage.cache_creation_input_tokens || 0) * inp * 1.25
     + (usage.cache_read_input_tokens || 0) * cacheRead
     + (usage.output_tokens || 0) * out) / 1e6;
+  db.usage.push({
+    t: Date.now(), c: campaignId, a: agente, m: model, usd,
+    i: usage.input_tokens || 0, o: usage.output_tokens || 0,
+    cr: usage.cache_read_input_tokens || 0, cw: usage.cache_creation_input_tokens || 0,
+  });
+  if (db.usage.length > 50000) db.usage.splice(0, db.usage.length - 50000);
   const c = db.campaigns.find((x) => x.id === campaignId);
   if (c) {
     c.costo = (c.costo || 0) + usd;
-    save();
     bus.emit('campaign', c);
   }
+  save();
+  bus.emit('usage', usageSummary());
   return usd;
+}
+
+const startOfMonth = () => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d.getTime(); };
+const startOfDay = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); };
+export const budget = () => Number(process.env.MONTHLY_BUDGET || 0) || null;
+
+export function usageSummary() {
+  const m = startOfMonth(), d = startOfDay();
+  let mes = 0, hoy = 0;
+  for (const u of db.usage) { if (u.t >= m) mes += u.usd; if (u.t >= d) hoy += u.usd; }
+  return { mes, hoy, presupuesto: budget() };
+}
+
+// Reporte completo para el panel de uso.
+export function usageReport() {
+  const m = startOfMonth();
+  const desde30 = Date.now() - 29 * 86400000;
+  const dias = {};
+  for (let i = 29; i >= 0; i--) { const k = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10); dias[k] = { dia: k, usd: 0, llamadas: 0 }; }
+  const agentes = {}, campanas = {}, modelos = {};
+  const tot = { usd: 0, llamadas: 0, entrada: 0, salida: 0, cache: 0 };
+  for (const u of db.usage) {
+    if (u.t >= desde30) { const k = new Date(u.t).toISOString().slice(0, 10); if (dias[k]) { dias[k].usd += u.usd; dias[k].llamadas++; } }
+    if (u.t < m) continue;
+    tot.usd += u.usd; tot.llamadas++; tot.entrada += u.i + u.cw; tot.salida += u.o; tot.cache += u.cr;
+    const add = (map, key, extra = {}) => { map[key] ||= { ...extra, usd: 0, llamadas: 0, tokens: 0 }; map[key].usd += u.usd; map[key].llamadas++; map[key].tokens += u.i + u.o + u.cr + u.cw; };
+    add(agentes, u.a || 'chat', { id: u.a || 'chat' });
+    if (u.c) add(campanas, u.c, { id: u.c, cliente: db.campaigns.find((x) => x.id === u.c)?.cliente || '—' });
+    add(modelos, u.m, { modelo: u.m });
+  }
+  const sorted = (o) => Object.values(o).sort((a, b) => b.usd - a.usd);
+  const diasMes = (Date.now() - m) / 86400000;
+  return {
+    ...usageSummary(), total: tot,
+    proyeccion: diasMes > 0.5 ? (tot.usd / diasMes) * new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() : null,
+    porDia: Object.values(dias), porAgente: sorted(agentes), porCampana: sorted(campanas).slice(0, 15), porModelo: sorted(modelos),
+  };
 }
 
 // Texto del kit de marca que leen los agentes.

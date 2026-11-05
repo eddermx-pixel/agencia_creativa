@@ -22,6 +22,14 @@
     .colors .x { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; border-radius: 50%; font-size: 11px; line-height: 18px; background: var(--no); color: #fff; }
     .logoPrev { display: flex; gap: 10px; align-items: center; }
     .logoPrev img { height: 56px; max-width: 160px; object-fit: contain; background: var(--chip); border-radius: 8px; padding: 4px; }
+    .agency { margin-bottom: 22px; }
+    .agencyRow { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .agencyLogo { width: 220px; height: 110px; border-radius: 14px; background: #07070c; border: 1px dashed var(--line); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; text-align: center; padding: 10px; }
+    .agencyLogo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .agencyForm { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 10px; }
+    .agencyForm label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+    .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    h2.sect { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; }
     .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 520px) { .two { grid-template-columns: 1fr; } }
   </style>
@@ -29,10 +37,23 @@
 <body>
   <header class="top">
     <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
-    <h1>🏷️ Clientes</h1>
+    <a id="brand" class="brand" href="./"></a>
     <span class="sp"></span>
+    <a id="usageChip" class="chip" href="uso.html"></a>
   </header>
   <main class="wrap">
+    <section class="card agency">
+      <h2>🏢 Mi agencia</h2>
+      <div class="agencyRow">
+        <div class="agencyLogo" id="agLogo"></div>
+        <div class="agencyForm">
+          <label>Nombre de la agencia<input id="agName" placeholder="Ej. Pixel"></label>
+          <label>Logo (se ve sobre fondo oscuro: ideal en blanco · PNG, SVG o WEBP · máx. 500 KB)<input type="file" id="agFile" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label>
+          <div class="actions" style="justify-content:flex-start"><button class="primary" id="agSave">Guardar</button><button id="agRemove" type="button">Quitar logo</button><span class="empty" id="agMsg"></span></div>
+        </div>
+      </div>
+    </section>
+    <h2 class="sect">🏷️ Clientes</h2>
     <p class="intro">El kit de marca de cada cliente (colores, logo, tono y público) lo leen todos los agentes en cada campaña.</p>
     <div class="grid" id="grid"></div>
   </main>

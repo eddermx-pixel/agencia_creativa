@@ -5,10 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Agencia IA — Entrar</title>
   <style>
-    :root { --bg: #f4f1ea; --panel: #fff; --ink: #1f1d1a; --muted: #6b665e; --line: #e4ded3; --accent: #6c5ce7; --no: #e5484d; }
-    @media (prefers-color-scheme: dark) { :root { --bg: #15141a; --panel: #1f1e26; --ink: #f2f0ea; --muted: #a29d94; --line: #2f2d38; } }
+    :root { color-scheme: dark; --bg: #0b0b12; --panel: #161622; --ink: #f1f0f7; --muted: #9a98ad; --line: #26263a; --accent: #8b7bff; --no: #ff5d6c; }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, sans-serif; padding: 16px; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: radial-gradient(900px 500px at 20% 0%, #1b1640, transparent 60%), var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, sans-serif; padding: 16px; }
     form { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 28px; width: min(380px, 100%); display: flex; flex-direction: column; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
     h1 { margin: 0; font-size: 22px; } p { margin: 0; color: var(--muted); font-size: 14px; }
     input { font: inherit; color: inherit; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
@@ -18,7 +17,8 @@
 </head>
 <body>
   <form method="post" action="/login">
-    <h1>🏢 Agencia IA</h1>
+    <img src="/api/agency/logo" alt="" style="max-height:56px;max-width:220px;object-fit:contain;align-self:flex-start" onerror="this.remove();document.getElementById('t').hidden=false">
+    <h1 id="t" hidden>Agencia IA</h1>
     <p>Escribe la clave de acceso de tu oficina.</p>
     <div class="err" id="err">Clave incorrecta, intenta de nuevo.</div>
     <input type="password" name="key" placeholder="Clave" autofocus required autocomplete="current-password">

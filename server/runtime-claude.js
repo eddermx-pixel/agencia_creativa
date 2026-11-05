@@ -13,7 +13,7 @@ const EFFORT = process.env.CLAUDE_EFFORT || 'medium';
 
 const REGLAS = `Trabajas en una agencia de marketing operada por agentes de IA. El "jefe" es el dueño de la agencia (humano).
 - Usa la herramienta estado cada vez que empieces algo nuevo, con una frase corta en primera persona ("Buscando referencias de color…"). El jefe te ve como un personaje en una oficina y lee esa frase.
-- Pregunta al jefe (preguntar_al_jefe) solo cuando una decisión importante dependa de él. Ofrece opciones concretas cuando sea posible.
+- Si te falta información importante para hacer bien tu trabajo, pregunta antes de producir (preguntar_al_jefe); es mejor una pregunta que una pieza que no se va a usar. Ofrece opciones concretas cuando sea posible.
 - Pide autorización (pedir_autorizacion) antes de cualquier acción que gaste dinero, publique, o contacte al cliente.
 - Escribe siempre en español.`;
 
@@ -80,6 +80,42 @@ function toolsFor(agentId, campaign) {
   }
 
   if (agentId === 'director') {
+    tools.push(betaTool({
+      name: 'hacer_preguntas',
+      description: 'FASE 1: hace al jefe varias preguntas de una vez (un formulario) antes de planear la campaña. Espera sus respuestas.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          intro: { type: 'string', description: 'Una frase de por qué preguntas' },
+          preguntas: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { pregunta: { type: 'string' }, opciones: { type: 'array', items: { type: 'string' } } },
+              required: ['pregunta'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['preguntas'],
+        additionalProperties: false,
+      },
+      run: ({ intro, preguntas }) => a.cuestionario(intro, preguntas),
+    }));
+    tools.push(betaTool({
+      name: 'presentar_concepto',
+      description: 'FASE 2: presenta el concepto creativo al jefe para aprobarlo antes de producir. Devuelve CONCEPTO APROBADO o los cambios que pide.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          titulo: { type: 'string', description: 'Nombre corto del concepto' },
+          detalle: { type: 'string', description: 'Idea central, mensaje clave, tono y lista de piezas (tipo, formato y objetivo de cada una). Usa saltos de línea.' },
+        },
+        required: ['titulo', 'detalle'],
+        additionalProperties: false,
+      },
+      run: ({ titulo, detalle }) => a.concepto(titulo, detalle),
+    }));
     const equipo = ROSTER.filter((x) => x.id !== 'director');
     tools.push(betaTool({
       name: 'asignar_tarea',
@@ -118,7 +154,7 @@ export async function runAgent(agentId, task, campaign) {
       // Cada vuelta del ciclo es una llamada a la API: sumamos su costo.
       let final;
       for await (const msg of runner) {
-        addUsage(campaign.id, MODEL, msg.usage);
+        addUsage(campaign.id, MODEL, msg.usage, agentId);
         final = msg;
       }
       if (final.stop_reason === 'refusal') {
@@ -151,5 +187,6 @@ export async function chatWithAgent(agentId, mensaje, contexto) {
     system: `${REGLAS}\n\n${agent.prompt}\n\nEl jefe te habla directamente por el chat de la oficina. Responde breve, en personaje.\nLo último que hiciste:\n${contexto}`,
     messages: [{ role: 'user', content: mensaje }],
   });
+  addUsage(null, MODEL, res.usage, agentId);
   return res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
 }

@@ -2,11 +2,13 @@
 
 Una agencia de marketing operada por agentes de Claude, cada uno con su propio rol. Los ves trabajar como personajes de videojuego en una oficina.
 
-- **La oficina:** cada agente trabaja en su escritorio con una burbuja que dice qué está haciendo. Cuando está libre se va por un café. Si necesita algo, **camina hasta tu escritorio** y te pregunta o te pide autorización. Cuando entrega una pieza, va al **mural del feed**.
-- **El feed:** todo lo que produce el equipo (artes, reels y textos) llega a un feed estilo Tinder. Deslizas **→ para aprobar** o **← para rechazar**. Si rechazas con un comentario, el agente hace una nueva versión.
+- **Oficina en 3D:** los agentes son personajes que trabajan en su escritorio con una burbuja que dice qué hacen. Cuando están libres van por café. Si necesitan algo, **caminan a tu escritorio** y levantan la mano; cuando entregan, van al **muro del feed**. Puedes girar y acercar la cámara.
+- **Primero preguntan, luego producen:** el director te hace un **cuestionario** con las dudas clave del brief y te presenta un **concepto creativo**. Nadie diseña nada hasta que tú apruebas el concepto. Si pides cambios, lo ajusta y te lo vuelve a presentar.
+- **Feed tipo Tinder:** todo lo que produce el equipo (artes, reels y textos) llega aquí. Deslizas **→ para aprobar** o **← para rechazar**. Si rechazas con un comentario, el agente hace una nueva versión.
 - **Clientes con kit de marca:** colores, logo, tono, público y reglas de cada cliente. Los agentes los usan en cada campaña y el logo real se coloca solo en los artes y videos.
-- **Costo a la vista:** cada campaña muestra cuánto gastó de la API de Claude (aprox.), y el total del mes.
-- **Telegram:** te llegan las preguntas, autorizaciones y piezas con botones ✅ / ❌. Para escribir una respuesta, contesta (reply) al mensaje.
+- **Uso de IA y costos:** página con el gasto del mes, de hoy, la proyección, el presupuesto y el gasto por agente y por campaña. El indicador ⚡ de arriba lo muestra siempre.
+- **Tu marca:** en *Clientes → Mi agencia* subes el nombre y el logo de tu agencia (en blanco se ve mejor, porque la interfaz es oscura). Aparece arriba, en la pantalla de acceso y en la pared de la oficina.
+- **Telegram:** te llegan las preguntas, los conceptos, las autorizaciones y las piezas con botones. Para escribir una respuesta, contesta (reply) al mensaje.
 
 ## El equipo
 
@@ -34,7 +36,7 @@ npm start
 Abre http://localhost:3000
 
 - **Sin API key** corre en **MODO DEMO**: el equipo sigue un guion de ejemplo. Sirve para probar la oficina, el feed y Telegram sin gastar.
-- **Con API key** (`ANTHROPIC_API_KEY` en `.env`) los agentes son Claude de verdad. Por defecto usan el modelo `claude-opus-5-5` con esfuerzo `medium`. Puedes cambiarlos con `CLAUDE_MODEL` y `CLAUDE_EFFORT`.
+- **Con API key** (`ANTHROPIC_API_KEY`) los agentes son Claude de verdad. Con `MONTHLY_BUDGET=50` defines un presupuesto mensual en dólares para el indicador de gasto. Por defecto usan el modelo `claude-opus-5-5` con esfuerzo `medium`. Puedes cambiarlos con `CLAUDE_MODEL` y `CLAUDE_EFFORT`.
 
 ## Conectar Telegram (5 minutos)
 

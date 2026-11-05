@@ -7,7 +7,7 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import { db, save, newId } from './store.js';
 import { publicRoster, byId } from './roster.js';
-import { bus, agentState, answerRequest, judgePiece, log, pieceSummary } from './hub.js';
+import { bus, agentState, answerRequest, judgePiece, log, pieceSummary, usageSummary, usageReport } from './hub.js';
 import { startTelegram } from './telegram.js';
 
 // Carga .env si existe (sin dependencias extra).
@@ -51,16 +51,20 @@ app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
 app.use((req, res, next) => {
   const q = new URL(req.url, 'http://x').searchParams.get('key');
   if (KEY && q === KEY) res.setHeader('Set-Cookie', keyCookie());
-  if (authorized(req)) return next();
+  if (authorized(req) || req.path === '/api/agency/logo') return next();
   if (req.method === 'GET' && !req.path.startsWith('/api/')) return res.status(401).sendFile(path.join(here, 'login.html'));
   res.status(401).json({ error: 'Acceso restringido' });
 });
 
 app.use(express.static(path.join(here, '..', 'public')));
+app.use('/vendor/three', express.static(path.join(here, '..', 'node_modules', 'three'), { maxAge: '7d' }));
 
 function snapshot() {
   return {
     demo: DEMO,
+    modelo: DEMO ? null : (process.env.CLAUDE_MODEL || 'claude-opus-5-5'),
+    agencia: { nombre: db.agency.nombre || '', tieneLogo: !!db.agency.logo, actualizado: db.agency.actualizado || 0 },
+    uso: usageSummary(),
     roster: publicRoster(),
     clients: db.clients.map(clientSummary),
     agents: Object.values(agentState),
@@ -72,6 +76,7 @@ function snapshot() {
 }
 
 app.get('/api/state', (req, res) => res.json(snapshot()));
+app.get('/api/usage', (req, res) => res.json(usageReport()));
 
 // ---- Clientes (kit de marca) ----
 const clientSummary = ({ logo, ...c }) => ({ ...c, tieneLogo: !!logo });
@@ -105,6 +110,26 @@ app.post('/api/clients/:id', (req, res) => {
   res.json(clientSummary(db.clients[i]));
 });
 
+// ---- Mi agencia (nombre y logo para la interfaz) ----
+app.post('/api/agency', (req, res) => {
+  const b = req.body || {};
+  if ('nombre' in b) db.agency.nombre = String(b.nombre || '').trim().slice(0, 60);
+  if (b.logo === null) delete db.agency.logo;
+  else if (typeof b.logo === 'string' && /^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(b.logo) && b.logo.length < 700_000) db.agency.logo = b.logo;
+  db.agency.actualizado = Date.now();
+  save();
+  const pub = { nombre: db.agency.nombre || '', tieneLogo: !!db.agency.logo, actualizado: db.agency.actualizado };
+  bus.emit('agency', pub);
+  res.json(pub);
+});
+
+app.get('/api/agency/logo', (req, res) => {
+  const m = db.agency.logo && /^data:([^;]+);base64,(.*)$/.exec(db.agency.logo);
+  if (!m) return res.status(404).end();
+  res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
+  res.type(m[1]).send(Buffer.from(m[2], 'base64'));
+});
+
 app.get('/api/clients/:id/logo', (req, res) => {
   const c = db.clients.find((x) => x.id === req.params.id);
   const m = c?.logo && /^data:([^;]+);base64,(.*)$/.exec(c.logo);
@@ -131,8 +156,8 @@ app.post('/api/campaigns', (req, res) => {
 });
 
 app.post('/api/requests/:id', (req, res) => {
-  const { respuesta = '', aprobado = null } = req.body || {};
-  const r = answerRequest(req.params.id, { respuesta, aprobado, via: 'web' });
+  const { respuesta = '', aprobado = null, respuestas = null } = req.body || {};
+  const r = answerRequest(req.params.id, { respuesta: String(respuesta).slice(0, 3000), aprobado, respuestas, via: 'web' });
   r ? res.json(r) : res.status(409).json({ error: 'Ya estaba resuelta' });
 });
 
@@ -192,6 +217,8 @@ bus.on('request', (r) => broadcast('request', r));
 bus.on('piece', (p) => broadcast('piece', pieceSummary(p)));
 bus.on('campaign', (c) => broadcast('campaign', c));
 bus.on('client', (c) => broadcast('client', c));
+bus.on('usage', (u) => broadcast('usage', u));
+bus.on('agency', (a) => broadcast('agency', a));
 
 startTelegram();
 server.listen(PORT, () => {

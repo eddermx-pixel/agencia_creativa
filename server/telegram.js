@@ -54,8 +54,21 @@ async function markDone(id, note) {
 const h = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
 
 function onRequest(r) {
-  if (r.estado !== 'pendiente') return markDone(r.id, r.tipo === 'autorizacion' ? (r.aprobado ? '✅ Autorizado' : '❌ No autorizado') : `💬 Respondido: ${r.respuesta}`);
+  if (r.estado !== 'pendiente') {
+    const nota = { autorizacion: r.aprobado ? '✅ Autorizado' : '❌ No autorizado', concepto: r.aprobado ? '✅ Concepto aprobado' : `✏️ Cambios pedidos: ${r.respuesta}`, cuestionario: '✅ Cuestionario respondido' }[r.tipo] || `💬 Respondido: ${r.respuesta}`;
+    return markDone(r.id, nota);
+  }
   const oficina = link('/');
+  if (r.tipo === 'cuestionario') {
+    const qs = r.preguntas.map((p, i) => `<b>${i + 1}.</b> ${h(p.pregunta)}${p.opciones?.length ? `\n   <i>(${h(p.opciones.join(' / '))})</i>` : ''}`).join('\n\n');
+    return send('r', r.id,
+      `📝 <b>${h(quien(r.agente))}</b> tiene preguntas antes de empezar:\n${h(r.texto)}\n\n${qs}\n\n<i>Responde a este mensaje con una línea por pregunta (1. …, 2. …)${oficina ? `, o hazlo en la <a href="${oficina}">oficina</a>` : ''}.</i>`);
+  }
+  if (r.tipo === 'concepto') {
+    return send('r', r.id,
+      `💡 <b>${h(quien(r.agente))}</b> presenta el concepto: <b>${h(r.texto)}</b>\n\n${h(r.detalle).slice(0, 3200)}\n\n<i>Para pedir cambios, responde a este mensaje.</i>`,
+      [[{ text: '✅ Aprobar concepto', callback_data: `r:${r.id}:1` }]]);
+  }
   if (r.tipo === 'autorizacion') {
     return send('r', r.id,
       `🔐 <b>${h(quien(r.agente))}</b> pide autorización:\n\n${h(r.texto)}${r.detalle ? `\n<i>${h(r.detalle)}</i>` : ''}${oficina ? `\n\n<a href="${oficina}">Abrir oficina</a>` : ''}`,
@@ -104,7 +117,13 @@ async function handle(update) {
   if (ref.kind === 'r') {
     const r = db.requests.find((x) => x.id === ref.id);
     if (r?.tipo === 'autorizacion') answerRequest(ref.id, { aprobado: !/^\s*no\b/i.test(m.text), respuesta: m.text, via: 'telegram' });
-    else answerRequest(ref.id, { respuesta: m.text, via: 'telegram' });
+    else if (r?.tipo === 'concepto') answerRequest(ref.id, { aprobado: false, respuesta: m.text, via: 'telegram' });
+    else if (r?.tipo === 'cuestionario') {
+      // "1. ... / 2. ..." → una respuesta por pregunta; si no viene numerado, todo va a la primera.
+      const partes = m.text.split(/\n(?=\s*\d+[.)-])/).map((x) => x.replace(/^\s*\d+[.)-]\s*/, '').trim());
+      const respuestas = partes.length >= 2 ? partes : [m.text];
+      answerRequest(ref.id, { respuestas, via: 'telegram' });
+    } else answerRequest(ref.id, { respuesta: m.text, via: 'telegram' });
   } else {
     judgePiece(ref.id, { aprobado: false, comentario: m.text, via: 'telegram' });
   }

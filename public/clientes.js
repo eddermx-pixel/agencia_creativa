@@ -83,4 +83,26 @@ $('form').onsubmit = async (e) => {
   } catch (err) { alert(err.message); }
 };
 
-connect(() => render());
+// ---- Mi agencia ----
+let agLogo; // undefined = sin cambios, null = quitar, string = nuevo
+function renderAgency(force) {
+  const a = store.agencia || {};
+  if (force || document.activeElement !== $('agName')) $('agName').value = a.nombre || '';
+  const box = $('agLogo');
+  const src = agLogo || (agLogo === null ? '' : a.tieneLogo ? `/api/agency/logo?v=${a.actualizado}` : '');
+  box.innerHTML = src ? `<img src="${src}" alt="Logo">` : 'Sube tu logo<br>(blanco se ve mejor)';
+}
+$('agFile').onchange = (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  if (f.size > 500_000) { alert('El logo pesa más de 500 KB.'); e.target.value = ''; return; }
+  const r = new FileReader(); r.onload = () => { agLogo = r.result; renderAgency(); }; r.readAsDataURL(f);
+};
+$('agRemove').onclick = () => { agLogo = null; $('agFile').value = ''; renderAgency(); };
+$('agSave').onclick = async () => {
+  const body = { nombre: $('agName').value };
+  if (agLogo !== undefined) body.logo = agLogo;
+  try { await api('/api/agency', body); agLogo = undefined; $('agMsg').textContent = '✓ Guardado'; setTimeout(() => ($('agMsg').textContent = ''), 2500); } catch (e) { alert(e.message); }
+};
+
+let first = true;
+connect((type) => { render(); if (first || type === 'agency') { renderAgency(first); first = false; } });

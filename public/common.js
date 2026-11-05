@@ -9,7 +9,7 @@ export async function api(path, body) {
 }
 
 // Estado compartido que se mantiene sincronizado con el servidor.
-export const store = { demo: false, roster: [], clients: [], agents: {}, campaigns: [], requests: [], pieces: [], log: [] };
+export const store = { demo: false, agencia: {}, uso: {}, roster: [], clients: [], agents: {}, campaigns: [], requests: [], pieces: [], log: [] };
 export const byId = (id) => store.roster.find((a) => a.id === id);
 
 export function connect(onChange) {
@@ -27,6 +27,9 @@ export function connect(onChange) {
       else if (type === 'piece') upsert(store.pieces, data);
       else if (type === 'campaign') upsert(store.campaigns, data);
       else if (type === 'client') upsert(store.clients, data);
+      else if (type === 'usage') store.uso = data;
+      else if (type === 'agency') store.agencia = data;
+      paintHeader();
       onChange(type, data);
     };
     ws.onclose = () => {
@@ -113,3 +116,28 @@ export function avatar(look, size = 40) {
 export const JEFE = { camisa: '#2d3436', piel: '#e0ac69', pelo: '#1b1b1b', peinado: 'corto' };
 
 export const usd = (n) => (n ? `$${n < 0.01 ? n.toFixed(4) : n.toFixed(2)}` : '$0');
+
+// Cabecera común: logo de la agencia + indicador de gasto de IA.
+export function paintHeader() {
+  const brand = document.getElementById('brand');
+  if (brand) {
+    const a = store.agencia || {};
+    const key = `${a.tieneLogo}-${a.actualizado}-${a.nombre}`;
+    if (brand.dataset.key !== key) {
+      brand.dataset.key = key;
+      brand.innerHTML = a.tieneLogo
+        ? `<img src="/api/agency/logo?v=${a.actualizado}" alt="${esc(a.nombre || 'Agencia')}">`
+        : `<span>${esc(a.nombre || 'Agencia IA')}</span>`;
+    }
+  }
+  const chip = document.getElementById('usageChip');
+  if (chip) {
+    const u = store.uso || {};
+    const pct = u.presupuesto ? Math.min(100, (u.mes / u.presupuesto) * 100) : null;
+    chip.className = `chip${pct >= 100 ? ' over' : pct >= 80 ? ' warn' : ''}`;
+    chip.title = 'Gasto de IA este mes (aprox.) — ver detalle';
+    chip.innerHTML = store.demo
+      ? '⚡ IA: demo'
+      : `⚡ ${usd(u.mes || 0)}<span class="cb">${u.presupuesto ? ` / ${usd(u.presupuesto)}` : ' este mes'}</span>${pct !== null ? `<span class="bar"><i style="width:${pct}%"></i></span>` : ''}`;
+  }
+}

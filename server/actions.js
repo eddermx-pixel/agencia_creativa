@@ -27,6 +27,25 @@ export function makeActions(agentId, campaign) {
         : `NO AUTORIZADO${r.respuesta ? `. Motivo: ${r.respuesta}` : ''}. No realices esa acción.`;
     },
 
+    // Varias preguntas de una vez, antes de empezar a producir.
+    async cuestionario(intro, preguntas) {
+      const lista = (preguntas || []).slice(0, 8).map((p) => (typeof p === 'string' ? { pregunta: p, opciones: [] } : { pregunta: p.pregunta, opciones: p.opciones || [] }));
+      setAgent(agentId, { estado: 'esperando', burbuja: `Tengo ${lista.length} preguntas antes de empezar` });
+      const r = await askBoss({ tipo: 'cuestionario', agente: agentId, campaignId: cid, texto: intro || 'Antes de empezar necesito aclarar algunas cosas', preguntas: lista });
+      setAgent(agentId, { estado: 'trabajando', burbuja: '¡Gracias! Ya tengo claro el enfoque' });
+      return `Respuestas del jefe:\n${r.respuesta}`;
+    },
+
+    // Presenta la idea creativa; nada se produce hasta que el jefe la apruebe.
+    async concepto(titulo, detalle) {
+      setAgent(agentId, { estado: 'esperando', burbuja: `Concepto: ${titulo}`.slice(0, 140) });
+      const r = await askBoss({ tipo: 'concepto', agente: agentId, campaignId: cid, texto: titulo, detalle });
+      setAgent(agentId, { estado: 'trabajando', burbuja: r.aprobado ? '¡Concepto aprobado! A producir' : 'Ajustando el concepto…' });
+      return r.aprobado
+        ? `CONCEPTO APROBADO${r.respuesta ? `. Comentario del jefe: ${r.respuesta}` : ''}. Ya puedes pasar a producción.`
+        : `CONCEPTO NO APROBADO. Cambios pedidos: ${r.respuesta || '(sin comentario: propón otra dirección)'}. Ajusta el concepto y vuelve a presentarlo antes de producir.`;
+    },
+
     async entregar({ tipo, titulo, descripcion = '', contenido, version = 1 }) {
       setAgent(agentId, { estado: 'entregando', burbuja: `Esperando tu swipe: ${titulo}`.slice(0, 140) });
       const p = await submitPiece({ agente: agentId, campaignId: cid, tipo, titulo, descripcion, contenido, version });

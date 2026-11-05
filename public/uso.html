@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agencia IA — Uso de IA</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .kpi { background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+    .kpi .l { color: var(--muted); font-size: 13px; }
+    .kpi .v { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.01em; margin-top: 2px; }
+    .kpi .s { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .prog { height: 8px; border-radius: 9px; background: #2a2a42; overflow: hidden; margin-top: 8px; }
+    .prog i { display: block; height: 100%; border-radius: 9px; background: #8b7bff; }
+    .prog.warn i { background: var(--warn); } .prog.over i { background: var(--no); }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } }
+    .chart { position: relative; }
+    .chart svg { display: block; width: 100%; height: 220px; overflow: visible; }
+    .tip { position: absolute; pointer-events: none; background: #0b0b12; border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; white-space: nowrap; transform: translate(-50%, -110%); display: none; box-shadow: var(--shadow); }
+    .hb { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; }
+    .hb .nm { width: 120px; flex: none; display: flex; align-items: center; gap: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .hb .track { flex: 1; height: 14px; display: flex; align-items: center; }
+    .hb .track i { display: block; height: 14px; background: #8b7bff; border-radius: 0 4px 4px 0; min-width: 2px; }
+    .hb .val { width: 76px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+    td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+    .note { color: var(--muted); font-size: 13px; }
+    .demo { border: 1px solid rgba(255,181,71,.4); background: rgba(255,181,71,.08); border-radius: 12px; padding: 12px 14px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a>
+    <span class="sp"></span>
+    <a id="usageChip" class="chip" href="uso.html"></a>
+  </header>
+  <main class="wrap">
+    <div id="demoNote" class="demo" hidden>Estás en <b>modo demo</b>: los agentes no usan la API de Claude, así que no hay gasto. Cuando agregues tu <code>ANTHROPIC_API_KEY</code> aquí verás el consumo real.</div>
+    <div class="kpis" id="kpis"></div>
+    <section class="card">
+      <h2>Gasto por día · últimos 30 días (USD)</h2>
+      <div class="chart" id="daily"><svg role="img" aria-label="Gasto diario en dólares, últimos 30 días"></svg><div class="tip"></div></div>
+    </section>
+    <div class="grid2">
+      <section class="card"><h2>Gasto por agente · este mes</h2><div id="agents"></div></section>
+      <section class="card"><h2>Gasto por campaña · este mes</h2><div id="camps"></div></section>
+    </div>
+    <section class="card"><h2>Tokens este mes</h2><div id="tokens"></div></section>
+    <p class="note">Los costos son una estimación calculada con los precios públicos de la API y los tokens que reporta cada llamada. El cobro exacto lo ves en platform.claude.com → Billing. Para poner un presupuesto mensual, agrega la variable <code>MONTHLY_BUDGET</code> (por ejemplo <code>50</code>) en Railway.</p>
+  </main>
+  <script type="module" src="uso.js"></script>
+</body>
+</html>

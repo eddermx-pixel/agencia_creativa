@@ -106,7 +106,21 @@ export async function runCampaign(campaign) {
   const ctx = { tono: client?.tono || 'Cercano y divertido', pal: 0 };
 
   await demoAgent('director', campaign, async () => {
-    await trabajar('director', campaign, ['Leyendo el brief…', 'Armando el plan de la campaña']);
+    await trabajar('director', campaign, ['Leyendo el brief…', 'Anotando lo que falta saber']);
+
+    // FASE 1 · Descubrimiento
+    const preguntas = [
+      { pregunta: '¿Cuál es el objetivo principal de esta campaña?', opciones: ['Vender más esta semana', 'Dar a conocer un producto nuevo', 'Conseguir mensajes por WhatsApp', 'Ganar seguidores'] },
+      { pregunta: '¿Qué piezas necesitas exactamente?', opciones: ['1 post + 1 reel', '3 posts', 'Solo un reel', 'Carrusel de 5 láminas'] },
+      { pregunta: '¿Cuál es la oferta o el mensaje que no puede faltar?', opciones: [] },
+    ];
+    if (!client?.tono) preguntas.push({ pregunta: `¿Qué tono usamos para ${cliente}?`, opciones: ['Cercano y divertido', 'Profesional', 'Premium y elegante'] });
+    const resp = await director.cuestionario('Antes de poner a trabajar al equipo quiero confirmar estos puntos', preguntas);
+    const tonoResp = /4\. .*\n\s*→ (.*)/.exec(resp)?.[1];
+    if (tonoResp && !client?.tono) {
+      ctx.tono = tonoResp;
+      if (!client?.colores?.length) ctx.pal = /premium|elegante/i.test(ctx.tono) ? 2 : /profesional/i.test(ctx.tono) ? 1 : 0;
+    }
 
     await director.estado('Le paso la investigación a Iris');
     await demoAgent('investigador', campaign, async () => {
@@ -116,16 +130,28 @@ export async function runCampaign(campaign) {
       log('investigador', 'Hallazgos: el público responde a reels cortos con humor, ofertas claras y prueba social.', campaign.id);
     });
 
+    // FASE 2 · Concepto (no se produce nada hasta que lo apruebes)
+    await trabajar('director', campaign, ['Armando el concepto creativo']);
+    for (let i = 1; i <= 3; i++) {
+      const titulo = i === 1 ? '"Lo que buscabas ya llegó"' : `"Lo que buscabas ya llegó" (ajuste ${i})`;
+      const r = await director.concepto(titulo, [
+        `Idea central: ${cliente} como la respuesta a lo que tu público ya estaba buscando.`,
+        `Mensaje clave: calidad y buen precio, por tiempo limitado.`,
+        `Tono: ${ctx.tono}.`,
+        '',
+        'Piezas a producir:',
+        '• Copy del post (titular, texto, CTA y hashtags) — Teo',
+        '• Post de feed 4:5 (1080×1350) para Instagram/Facebook — Luna',
+        '• Reel 9:16 de 12 s con gancho en los primeros 2 s — Max',
+      ].join('\n'));
+      if (r.startsWith('CONCEPTO APROBADO')) break;
+      await director.estado('Ajustando el concepto con tus comentarios…');
+      await sleep(2500);
+    }
+
     await director.estado('Teo, te toca el copy');
     await demoAgent('copy', campaign, async () => {
-      const a = await trabajar('copy', campaign, ['Leyendo la investigación', 'Probando titulares']);
-      if (!client?.tono) {
-        const resp = await a.preguntar(`¿Qué tono usamos para ${cliente}?`, ['Cercano y divertido', 'Profesional', 'Premium y elegante']);
-        ctx.tono = resp.replace('El jefe respondió: ', '');
-        if (!client?.colores?.length) ctx.pal = /premium|elegante/i.test(ctx.tono) ? 2 : /profesional/i.test(ctx.tono) ? 1 : 0;
-      } else {
-        await a.estado(`Usando el tono del kit de marca: ${client.tono}`);
-      }
+      const a = await trabajar('copy', campaign, ['Leyendo el concepto aprobado', 'Probando titulares']);
       await trabajar('copy', campaign, [`Escribiendo en tono "${ctx.tono}"`]);
       await entregarHastaAprobar(a, (v) => ({
         tipo: 'texto',
