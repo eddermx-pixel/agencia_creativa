@@ -4,6 +4,8 @@ Una agencia de marketing operada por agentes de Claude, cada uno con su propio r
 
 - **La oficina:** cada agente trabaja en su escritorio con una burbuja que dice qué está haciendo. Cuando está libre se va por un café. Si necesita algo, **camina hasta tu escritorio** y te pregunta o te pide autorización. Cuando entrega una pieza, va al **mural del feed**.
 - **El feed:** todo lo que produce el equipo (artes, reels y textos) llega a un feed estilo Tinder. Deslizas **→ para aprobar** o **← para rechazar**. Si rechazas con un comentario, el agente hace una nueva versión.
+- **Clientes con kit de marca:** colores, logo, tono, público y reglas de cada cliente. Los agentes los usan en cada campaña y el logo real se coloca solo en los artes y videos.
+- **Costo a la vista:** cada campaña muestra cuánto gastó de la API de Claude (aprox.), y el total del mes.
 - **Telegram:** te llegan las preguntas, autorizaciones y piezas con botones ✅ / ❌. Para escribir una respuesta, contesta (reply) al mensaje.
 
 ## El equipo
@@ -44,9 +46,20 @@ Abre http://localhost:3000
 
 El bot solo obedece a tu chat. Los mensajes de cualquier otra persona se ignoran.
 
-## Publicarla en internet
+## Publicarla en internet (Railway)
 
-Debe correr como un servidor siempre encendido. Puede ser Railway, Render, Fly.io o un VPS. Pon `ACCESS_KEY` en `.env` para que solo entre quien tenga el enlace con `?key=TU_CLAVE`. Los datos se guardan en `data/db.json`; en el hosting, usa un disco persistente para no perderlos.
+Así funciona 24/7 sin depender de tu computadora.
+
+1. Entra a https://railway.com con tu cuenta de GitHub.
+2. Pulsa **New Project** → **Deploy from GitHub repo** y elige este repositorio.
+3. En **Variables** agrega:
+   - `ACCESS_KEY`: la clave de tu oficina.
+   - `DATA_FILE`: `/data/db.json`
+4. Clic derecho en el servicio → **Attach Volume** → *Mount path*: `/data`. Ahí se guardan clientes, campañas y piezas.
+5. **Settings → Networking → Generate Domain** te da tu dirección pública. Ponla también en la variable `PUBLIC_URL`.
+6. Abre la dirección y escribe tu clave.
+
+El archivo `railway.json` ya configura cómo arranca la app y su chequeo de salud (`/healthz`). Cada vez que se sube un cambio a GitHub, Railway se actualiza solo.
 
 ## Cómo funciona por dentro
 

@@ -3,7 +3,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaTool } from '@anthropic-ai/sdk/helpers/beta/json-schema';
 import { ROSTER, byId } from './roster.js';
-import { setAgent, log } from './hub.js';
+import { setAgent, log, addUsage, brandText } from './hub.js';
+import { db } from './store.js';
 import { makeActions, withAgent } from './actions.js';
 
 const client = new Anthropic();
@@ -17,7 +18,8 @@ const REGLAS = `Trabajas en una agencia de marketing operada por agentes de IA. 
 - Escribe siempre en español.`;
 
 function systemFor(agent, campaign) {
-  return `${REGLAS}\n\n${agent.prompt}\n\nCampaña actual — Cliente: ${campaign.cliente}\nBrief del jefe:\n${campaign.brief}`;
+  const client = db.clients.find((c) => c.id === campaign.clientId);
+  return `${REGLAS}\n\n${agent.prompt}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(client)}\n\nBrief del jefe:\n${campaign.brief}`;
 }
 
 function toolsFor(agentId, campaign) {
@@ -103,7 +105,7 @@ export async function runAgent(agentId, task, campaign) {
     setAgent(agentId, { estado: 'trabajando', burbuja: 'Empezando…', campaignId: campaign.id });
     log(agentId, `Nueva tarea: ${task.slice(0, 200)}`, campaign.id);
     try {
-      const final = await client.beta.messages.toolRunner({
+      const runner = client.beta.messages.toolRunner({
         model: MODEL,
         max_tokens: 16000,
         output_config: { effort: EFFORT },
@@ -113,6 +115,12 @@ export async function runAgent(agentId, task, campaign) {
         tools: toolsFor(agentId, campaign),
         messages: [{ role: 'user', content: task }],
       });
+      // Cada vuelta del ciclo es una llamada a la API: sumamos su costo.
+      let final;
+      for await (const msg of runner) {
+        addUsage(campaign.id, MODEL, msg.usage);
+        final = msg;
+      }
       if (final.stop_reason === 'refusal') {
         log(agentId, 'No pude completar esta tarea (rechazada por las políticas del modelo).', campaign.id);
         return 'El agente no pudo completar la tarea.';

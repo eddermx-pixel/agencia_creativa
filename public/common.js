@@ -9,7 +9,7 @@ export async function api(path, body) {
 }
 
 // Estado compartido que se mantiene sincronizado con el servidor.
-export const store = { demo: false, roster: [], agents: {}, campaigns: [], requests: [], pieces: [], log: [] };
+export const store = { demo: false, roster: [], clients: [], agents: {}, campaigns: [], requests: [], pieces: [], log: [] };
 export const byId = (id) => store.roster.find((a) => a.id === id);
 
 export function connect(onChange) {
@@ -26,6 +26,7 @@ export function connect(onChange) {
       else if (type === 'request') upsert(store.requests, data, (r) => r.estado === 'pendiente');
       else if (type === 'piece') upsert(store.pieces, data);
       else if (type === 'campaign') upsert(store.campaigns, data);
+      else if (type === 'client') upsert(store.clients, data);
       onChange(type, data);
     };
     ws.onclose = () => {
@@ -110,3 +111,5 @@ export function avatar(look, size = 40) {
 }
 
 export const JEFE = { camisa: '#2d3436', piel: '#e0ac69', pelo: '#1b1b1b', peinado: 'corto' };
+
+export const usd = (n) => (n ? `$${n < 0.01 ? n.toFixed(4) : n.toFixed(2)}` : '$0');

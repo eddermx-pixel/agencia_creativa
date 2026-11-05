@@ -14,7 +14,7 @@ button.primary { background: var(--accent); color: #fff; font-weight: 600; }
 button.ok { background: var(--ok); color: #fff; font-weight: 600; }
 button.no { background: var(--no); color: #fff; font-weight: 600; }
 button:disabled { opacity: .5; cursor: default; }
-input, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
+input, textarea, select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); }
 textarea { min-height: 120px; resize: vertical; }
 a { color: var(--accent); }
 
@@ -71,3 +71,10 @@ dialog label { font-size: 13px; color: var(--muted); display: flex; flex-directi
 
 .toast { position: fixed; right: 16px; bottom: 16px; left: 16px; margin-left: auto; max-width: 380px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); z-index: 40; cursor: pointer; animation: up .25s ease-out; }
 @keyframes up { from { transform: translateY(20px); opacity: 0; } }
+
+select { font: inherit; color: inherit; }
+.camp { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 14px; }
+.camp:last-child { border-bottom: 0; }
+.camp .n { font-weight: 600; } .camp .s { color: var(--muted); font-size: 12px; }
+.camp .usd { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.total { display: flex; justify-content: space-between; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font-size: 14px; }

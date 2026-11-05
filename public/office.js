@@ -1,6 +1,6 @@
 // La oficina: los agentes como personajes que trabajan, toman café,
 // caminan a tu escritorio cuando necesitan algo y al mural cuando entregan.
-import { api, store, byId, connect, drawCharacter, avatar, esc, hace, JEFE } from './common.js';
+import { api, store, byId, connect, drawCharacter, avatar, esc, hace, usd, JEFE } from './common.js';
 
 const W = 480, H = 270;
 const canvas = document.getElementById('office');
@@ -313,8 +313,40 @@ function renderPanels() {
     d.innerHTML = `<b>${esc(who)}:</b> ${esc(l.texto)} <time>${hace(l.t)}</time>`;
     return d;
   }));
+  renderCampaigns();
   if (openAgentId) renderAgent(openAgentId);
 }
+
+const ESTADOS = { en_curso: '🟢 En curso', terminada: '✅ Terminada', interrumpida: '⏸️ Interrumpida', error: '⚠️ Error' };
+function renderCampaigns() {
+  const list = [...store.campaigns].sort((a, b) => b.creada - a.creada).slice(0, 8);
+  const el = $('camps');
+  if (!list.length) { el.innerHTML = '<div class="empty">Aún no hay campañas. Pulsa “＋ Campaña”.</div>'; return; }
+  const mes = new Date(); mes.setDate(1); mes.setHours(0, 0, 0, 0);
+  const totalMes = store.campaigns.filter((c) => c.creada >= mes.getTime()).reduce((s, c) => s + (c.costo || 0), 0);
+  el.innerHTML = list.map((c) => {
+    const piezas = store.pieces.filter((p) => p.campaignId === c.id);
+    const ok = piezas.filter((p) => p.estado === 'aprobada').length;
+    return `<div class="camp"><div><div class="n">${esc(c.cliente)}</div><div class="s">${ESTADOS[c.estado] || esc(c.estado)} · ${ok}/${piezas.length} piezas aprobadas · ${hace(c.creada)}</div></div><div class="usd" title="Costo aproximado de la API de Claude">${store.demo ? 'demo' : usd(c.costo)}</div></div>`;
+  }).join('') + (store.demo ? '' : `<div class="total"><span>Gasto de IA este mes (aprox.)</span><b>${usd(totalMes)}</b></div>`);
+}
+
+function fillClientSelect() {
+  const sel = $('selClient');
+  const prev = sel.value;
+  sel.innerHTML = store.clients.map((c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('') + '<option value="">Otro cliente (sin kit de marca)</option>';
+  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+  syncClientFields();
+}
+function syncClientFields() {
+  const c = store.clients.find((x) => x.id === $('selClient').value);
+  $('lblOtro').hidden = !!c;
+  $('lblOtro').querySelector('input').required = !c;
+  $('kitHint').innerHTML = c
+    ? `Los agentes usarán el kit de marca: ${(c.colores || []).map((h) => `<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${esc(h)};vertical-align:middle"></span>`).join(' ')} ${c.tieneLogo ? '· logo ✓' : ''} ${c.tono ? `· tono ${esc(c.tono)}` : ''}`
+    : '¿Cliente recurrente? Créale un <a href="clientes.html">kit de marca</a> para que los agentes usen sus colores y su logo.';
+}
+$('selClient').addEventListener('change', syncClientFields);
 
 let openAgentId = null;
 const chatHistory = {};
@@ -362,12 +394,12 @@ function renderAgent(id, force = false) {
 }
 
 // Nueva campaña
-$('btnNew').onclick = () => $('dlgNew').showModal();
+$('btnNew').onclick = () => { fillClientSelect(); $('dlgNew').showModal(); };
 $('btnReqs').onclick = () => $('reqCard').scrollIntoView({ behavior: 'smooth' });
 $('formNew').addEventListener('submit', async (e) => {
   if (e.submitter?.value !== 'ok') return;
   const f = new FormData(e.target);
-  try { await api('/api/campaigns', { cliente: f.get('cliente'), brief: f.get('brief') }); e.target.reset(); }
+  try { await api('/api/campaigns', { clientId: f.get('clientId'), cliente: f.get('cliente'), brief: f.get('brief') }); e.target.reset(); }
   catch (err) { e.preventDefault(); alert(err.message); }
 });
 

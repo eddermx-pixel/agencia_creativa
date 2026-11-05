@@ -2,6 +2,7 @@
 // Sirve para ver la oficina, las aprobaciones, Telegram y el feed funcionando.
 import { setAgent, log } from './hub.js';
 import { makeActions, withAgent } from './actions.js';
+import { db } from './store.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -13,13 +14,27 @@ const PALETAS = [
   { fondo1: '#6c5ce7', fondo2: '#a29bfe', texto: '#ffffff', acento: '#ffeaa7' },
 ];
 
-function arteSVG({ cliente, titular, sub, cta, pal }) {
+// Texto oscuro o claro según el fondo, para que siempre se lea.
+const contraste = (hex) => {
+  const n = parseInt(hex.replace('#', '').padEnd(6, '0').slice(0, 6), 16);
+  const lum = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  return lum > 150 ? '#1e1e1e' : '#ffffff';
+};
+function paletasDe(client) {
+  const c = client?.colores || [];
+  if (!c.length) return PALETAS;
+  const propia = { fondo1: c[0], fondo2: c[1] || c[0], texto: contraste(c[0]), acento: c[2] || contraste(c[0]) };
+  const invertida = { fondo1: c[1] || c[0], fondo2: c[0], texto: contraste(c[1] || c[0]), acento: c[2] || c[0] };
+  return [propia, invertida, ...PALETAS];
+}
+
+function arteSVG({ cliente, titular, sub, cta, pal, logo }) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1350" width="1080" height="1350">
 <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${pal.fondo1}"/><stop offset="1" stop-color="${pal.fondo2}"/></linearGradient></defs>
 <rect width="1080" height="1350" fill="url(#g)"/>
 <circle cx="900" cy="230" r="260" fill="${pal.acento}" opacity=".18"/>
 <circle cx="140" cy="1180" r="200" fill="${pal.acento}" opacity=".14"/>
-<text x="90" y="150" font-family="Arial" font-weight="700" font-size="42" letter-spacing="6" fill="${pal.texto}" opacity=".8">${esc(cliente.toUpperCase())}</text>
+${logo ? '<image href="{{LOGO}}" x="90" y="80" width="220" height="110" preserveAspectRatio="xMinYMid meet"/>' : `<text x="90" y="150" font-family="Arial" font-weight="700" font-size="42" letter-spacing="6" fill="${pal.texto}" opacity=".8">${esc(cliente.toUpperCase())}</text>`}
 <text font-family="Impact, Arial Black, Arial" font-size="138" fill="${pal.texto}">
 ${titular.split('\n').map((l, i) => `<tspan x="90" y="${520 + i * 150}">${esc(l)}</tspan>`).join('')}
 </text>
@@ -29,7 +44,7 @@ ${titular.split('\n').map((l, i) => `<tspan x="90" y="${520 + i * 150}">${esc(l)
 </svg>`;
 }
 
-function videoHTML({ cliente, escenas, cta, pal }) {
+function videoHTML({ cliente, escenas, cta, pal, logo }) {
   const n = escenas.length + 1;
   const dur = n * 3;
   const step = 100 / n;
@@ -47,7 +62,7 @@ body{background:linear-gradient(160deg,${pal.fondo1},${pal.fondo2});background-s
 @keyframes bar{from{width:0}to{width:100%}}
 .blob{position:absolute;width:700px;height:700px;border-radius:50%;background:${pal.acento};opacity:.15;animation:blob 6s ease-in-out infinite alternate}
 @keyframes blob{to{transform:translate(300px,900px) scale(1.4)}}
-</style></head><body><div class="blob"></div><div class="brand">${esc(cliente.toUpperCase())}</div>${scenes}<div class="bar"></div></body></html>`;
+</style></head><body><div class="blob"></div><div class="brand">${logo ? '<img src="{{LOGO}}" style="height:140px;max-width:600px;object-fit:contain">' : esc(cliente.toUpperCase())}</div>${scenes}<div class="bar"></div></body></html>`;
 }
 
 async function trabajar(agentId, campaign, pasos) {
@@ -85,7 +100,10 @@ async function entregarHastaAprobar(a, make) {
 export async function runCampaign(campaign) {
   const { cliente } = campaign;
   const director = makeActions('director', campaign);
-  const ctx = { tono: 'Cercano y divertido', pal: 0 };
+  const client = db.clients.find((c) => c.id === campaign.clientId);
+  const pals = paletasDe(client);
+  const logo = !!client?.logo;
+  const ctx = { tono: client?.tono || 'Cercano y divertido', pal: 0 };
 
   await demoAgent('director', campaign, async () => {
     await trabajar('director', campaign, ['Leyendo el brief…', 'Armando el plan de la campaña']);
@@ -101,9 +119,13 @@ export async function runCampaign(campaign) {
     await director.estado('Teo, te toca el copy');
     await demoAgent('copy', campaign, async () => {
       const a = await trabajar('copy', campaign, ['Leyendo la investigación', 'Probando titulares']);
-      const resp = await a.preguntar(`¿Qué tono usamos para ${cliente}?`, ['Cercano y divertido', 'Profesional', 'Premium y elegante']);
-      ctx.tono = resp.replace('El jefe respondió: ', '');
-      ctx.pal = /premium|elegante/i.test(ctx.tono) ? 2 : /profesional/i.test(ctx.tono) ? 1 : 0;
+      if (!client?.tono) {
+        const resp = await a.preguntar(`¿Qué tono usamos para ${cliente}?`, ['Cercano y divertido', 'Profesional', 'Premium y elegante']);
+        ctx.tono = resp.replace('El jefe respondió: ', '');
+        if (!client?.colores?.length) ctx.pal = /premium|elegante/i.test(ctx.tono) ? 2 : /profesional/i.test(ctx.tono) ? 1 : 0;
+      } else {
+        await a.estado(`Usando el tono del kit de marca: ${client.tono}`);
+      }
       await trabajar('copy', campaign, [`Escribiendo en tono "${ctx.tono}"`]);
       await entregarHastaAprobar(a, (v) => ({
         tipo: 'texto',
@@ -125,7 +147,7 @@ export async function runCampaign(campaign) {
           descripcion: `Arte principal de la campaña. Tono ${ctx.tono}.`,
           contenido: arteSVG({
             cliente, titular: 'LO QUE\nBUSCABAS\nYA LLEGÓ', sub: 'Calidad y buen precio, solo esta semana', cta: 'ESCRÍBENOS HOY',
-            pal: PALETAS[(ctx.pal + v - 1) % PALETAS.length],
+            pal: pals[(ctx.pal + v - 1) % pals.length], logo,
           }),
         }));
       }),
@@ -137,7 +159,7 @@ export async function runCampaign(campaign) {
           descripcion: 'Reel de 12 segundos con gancho, mensaje y CTA.',
           contenido: videoHTML({
             cliente, escenas: ['¿Todavía no lo tienes?', 'Llegó lo nuevo', 'Calidad + buen precio'], cta: 'Pídelo hoy',
-            pal: PALETAS[(ctx.pal + v - 1) % PALETAS.length],
+            pal: pals[(ctx.pal + v - 1) % pals.length], logo,
           }),
         }));
       }),

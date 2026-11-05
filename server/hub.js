@@ -86,3 +86,40 @@ export function pieceSummary(p) {
   const { contenido, ...rest } = p;
   return rest;
 }
+
+// ---- Costo de la API de Claude (aprox., USD por millón de tokens) ----
+const PRECIOS = {
+  'claude-opus-5-5': [4, 20, 0.2], 'claude-sonnet-5-5': [2, 10, 0.2], 'claude-haiku-5-5': [0.1, 0.5, 0.01],
+  'claude-fable-5-1': [10, 50, 0.25],
+};
+
+export function addUsage(campaignId, model, usage) {
+  if (!usage) return 0;
+  const [inp, out, cacheRead] = PRECIOS[model] || PRECIOS['claude-opus-5-5'];
+  const usd = ((usage.input_tokens || 0) * inp
+    + (usage.cache_creation_input_tokens || 0) * inp * 1.25
+    + (usage.cache_read_input_tokens || 0) * cacheRead
+    + (usage.output_tokens || 0) * out) / 1e6;
+  const c = db.campaigns.find((x) => x.id === campaignId);
+  if (c) {
+    c.costo = (c.costo || 0) + usd;
+    save();
+    bus.emit('campaign', c);
+  }
+  return usd;
+}
+
+// Texto del kit de marca que leen los agentes.
+export function brandText(client) {
+  if (!client) return '';
+  const l = [`Kit de marca de ${client.nombre}:`];
+  if (client.rubro) l.push(`- Rubro: ${client.rubro}`);
+  if (client.publico) l.push(`- Público: ${client.publico}`);
+  if (client.tono) l.push(`- Tono de voz: ${client.tono}`);
+  if (client.colores?.length) l.push(`- Colores de marca (úsalos siempre): ${client.colores.join(', ')}`);
+  if (client.tipografia) l.push(`- Tipografía preferida: ${client.tipografia} (si no está disponible, usa la fuente del sistema más parecida)`);
+  if (client.notas) l.push(`- Reglas y notas: ${client.notas}`);
+  if (client.logo) l.push('- Logo: SÍ hay logo oficial. Para colocarlo usa exactamente el marcador {{LOGO}} como dirección de la imagen: en SVG <image href="{{LOGO}}" x=".." y=".." width=".." height=".."/> y en HTML <img src="{{LOGO}}">. El sistema lo reemplaza por el logo real. Nunca dibujes ni inventes un logo.');
+  else l.push('- Logo: no hay logo cargado; escribe el nombre de la marca con buena tipografía.');
+  return l.join('\n');
+}

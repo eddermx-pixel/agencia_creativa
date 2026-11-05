@@ -35,11 +35,25 @@ function authorized(req) {
   const url = new URL(req.url, 'http://x');
   return [req.headers['x-access-key'], url.searchParams.get('key'), fromCookie && decodeURIComponent(fromCookie)].includes(KEY);
 }
+const keyCookie = () => `agencia_key=${encodeURIComponent(KEY)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT ? '; Secure' : ''}`;
+
+// Para que el hosting (Railway) sepa que la app está viva. No requiere clave.
+app.get('/healthz', (req, res) => res.json({ ok: true }));
+
+app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
+  if (KEY && req.body?.key === KEY) {
+    res.setHeader('Set-Cookie', keyCookie());
+    return res.redirect(303, '/');
+  }
+  res.redirect(303, '/?error=1');
+});
+
 app.use((req, res, next) => {
   const q = new URL(req.url, 'http://x').searchParams.get('key');
-  if (KEY && q === KEY) res.setHeader('Set-Cookie', `agencia_key=${encodeURIComponent(KEY)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`);
+  if (KEY && q === KEY) res.setHeader('Set-Cookie', keyCookie());
   if (authorized(req)) return next();
-  res.status(401).send('Acceso restringido: abre el enlace con ?key=TU_CLAVE');
+  if (req.method === 'GET' && !req.path.startsWith('/api/')) return res.status(401).sendFile(path.join(here, 'login.html'));
+  res.status(401).json({ error: 'Acceso restringido' });
 });
 
 app.use(express.static(path.join(here, '..', 'public')));
@@ -48,6 +62,7 @@ function snapshot() {
   return {
     demo: DEMO,
     roster: publicRoster(),
+    clients: db.clients.map(clientSummary),
     agents: Object.values(agentState),
     campaigns: db.campaigns.slice(-20),
     requests: db.requests.filter((r) => r.estado === 'pendiente'),
@@ -58,10 +73,52 @@ function snapshot() {
 
 app.get('/api/state', (req, res) => res.json(snapshot()));
 
+// ---- Clientes (kit de marca) ----
+const clientSummary = ({ logo, ...c }) => ({ ...c, tieneLogo: !!logo });
+const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas'];
+
+function cleanClient(body, prev = {}) {
+  const c = { ...prev };
+  for (const f of CLIENT_FIELDS) if (f in body) c[f] = String(body[f] || '').trim().slice(0, 1500);
+  if (Array.isArray(body.colores)) c.colores = body.colores.filter((x) => /^#[0-9a-f]{6}$/i.test(x)).slice(0, 5);
+  if (body.logo === null) delete c.logo;
+  else if (typeof body.logo === 'string' && /^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(body.logo) && body.logo.length < 700_000) c.logo = body.logo;
+  c.actualizado = Date.now();
+  return c;
+}
+
+app.post('/api/clients', (req, res) => {
+  const c = cleanClient(req.body || {}, { id: newId('cl'), creado: Date.now() });
+  if (!c.nombre) return res.status(400).json({ error: 'Falta el nombre del cliente' });
+  db.clients.push(c);
+  save();
+  bus.emit('client', clientSummary(c));
+  res.json(clientSummary(c));
+});
+
+app.post('/api/clients/:id', (req, res) => {
+  const i = db.clients.findIndex((x) => x.id === req.params.id);
+  if (i < 0) return res.status(404).json({ error: 'No existe' });
+  db.clients[i] = cleanClient(req.body || {}, db.clients[i]);
+  save();
+  bus.emit('client', clientSummary(db.clients[i]));
+  res.json(clientSummary(db.clients[i]));
+});
+
+app.get('/api/clients/:id/logo', (req, res) => {
+  const c = db.clients.find((x) => x.id === req.params.id);
+  const m = c?.logo && /^data:([^;]+);base64,(.*)$/.exec(c.logo);
+  if (!m) return res.status(404).end();
+  res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
+  res.type(m[1]).send(Buffer.from(m[2], 'base64'));
+});
+
 app.post('/api/campaigns', (req, res) => {
-  const { cliente, brief } = req.body || {};
+  const { clientId, brief } = req.body || {};
+  const cl = db.clients.find((x) => x.id === clientId);
+  const cliente = cl?.nombre || req.body?.cliente;
   if (!cliente?.trim() || !brief?.trim()) return res.status(400).json({ error: 'Falta cliente o brief' });
-  const c = { id: newId('c'), cliente: cliente.trim(), brief: brief.trim(), estado: 'en_curso', creada: Date.now() };
+  const c = { id: newId('c'), clientId: cl?.id || null, cliente: cliente.trim(), brief: brief.trim(), estado: 'en_curso', creada: Date.now(), costo: 0 };
   db.campaigns.push(c);
   save();
   log('jefe', `Nueva campaña: ${c.cliente}`, c.id);
@@ -89,8 +146,12 @@ app.get('/api/pieces/:id/render', (req, res) => {
   const p = db.pieces.find((x) => x.id === req.params.id);
   if (!p) return res.status(404).end();
   res.setHeader('Content-Security-Policy', "sandbox allow-scripts; default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:");
-  if (p.tipo === 'arte') res.type('image/svg+xml').send(p.contenido);
-  else if (p.tipo === 'video') res.type('text/html').send(p.contenido);
+  // El marcador {{LOGO}} se reemplaza por el logo real del cliente.
+  const camp = db.campaigns.find((x) => x.id === p.campaignId);
+  const logo = db.clients.find((x) => x.id === camp?.clientId)?.logo || '';
+  const body = p.tipo === 'texto' ? p.contenido : p.contenido.replaceAll('{{LOGO}}', logo);
+  if (p.tipo === 'arte') res.type('image/svg+xml').send(body);
+  else if (p.tipo === 'video') res.type('text/html').send(body);
   else res.type('text/plain; charset=utf-8').send(p.contenido);
 });
 
@@ -130,6 +191,7 @@ bus.on('log', (l) => broadcast('log', l));
 bus.on('request', (r) => broadcast('request', r));
 bus.on('piece', (p) => broadcast('piece', pieceSummary(p)));
 bus.on('campaign', (c) => broadcast('campaign', c));
+bus.on('client', (c) => broadcast('client', c));
 
 startTelegram();
 server.listen(PORT, () => {
