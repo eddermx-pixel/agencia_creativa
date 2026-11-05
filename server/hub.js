@@ -235,3 +235,35 @@ export function memoryText(clientId, campaignId) {
   }
   return out.join('\n\n');
 }
+
+// ---- Juntas creativas: todo el equipo aporta ideas en la mesa de juntas ----
+export function startMeeting({ campaignId, tema, contexto = '', convoca = 'director', key = null }) {
+  let m = key && db.meetings.find((x) => x.key === key);
+  if (!m) {
+    const n = db.meetings.filter((x) => x.campaignId === campaignId).length + 1;
+    m = { id: newId('mt'), key, campaignId, numero: n, tema: String(tema).slice(0, 300), contexto: String(contexto).slice(0, 3000), convoca, aportes: [], estado: 'en_curso', creada: Date.now() };
+    db.meetings.push(m);
+    log(convoca, `🗣️ Convoca la junta creativa #${n}: ${m.tema}`, campaignId);
+  }
+  m.estado = 'en_curso';
+  save();
+  bus.emit('meeting', m);
+  return m;
+}
+
+export function addAporte(m, agente, texto) {
+  m.aportes = m.aportes.filter((a) => a.agente !== agente);
+  m.aportes.push({ agente, texto: String(texto).trim().slice(0, 1500), t: Date.now() });
+  save();
+  log(agente, `💬 En la junta: ${texto}`, m.campaignId);
+  bus.emit('meeting', m);
+}
+
+export function endMeeting(m) {
+  m.estado = 'terminada';
+  m.terminada = Date.now();
+  save();
+  bus.emit('meeting', m);
+}
+
+export const meetingTranscript = (m, nombre) => m.aportes.map((a) => `${nombre(a.agente)}: ${a.texto}`).join('\n\n');

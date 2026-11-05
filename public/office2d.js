@@ -1,7 +1,7 @@
 // Oficina 2D en una estación espacial: astronautas que trabajan, flotan hasta la
 // máquina de comida, van a tu escritorio cuando te necesitan y al muro del feed
 // cuando entregan. Dibujo vectorial suave (sin pixeles gruesos) a 60 fps.
-import { store, byId, esc, drawAstronaut } from './common.js';
+import { store, byId, esc, drawCrew, JEFE } from './common.js';
 
 const W = 1600, H = 1000;
 const CORRIDOR = 505;
@@ -17,6 +17,12 @@ const FEED_SPOTS = [{ x: 1335, y: 300 }, { x: 1415, y: 305 }, { x: 1495, y: 300 
 const FOOD_SPOTS = [{ x: 150, y: 335 }, { x: 150, y: 430 }, { x: 150, y: 470 }];
 const WINDOWS = [{ x: 60, w: 270 }, { x: 370, w: 270 }, { x: 960, w: 270 }];
 const LOGO = { x: 660, y: 50, w: 280, h: 140 };
+// Mesa de juntas creativas (abajo a la izquierda)
+const TABLE = { x: 330, y: 905, rx: 125, ry: 36 };
+const SEATS = [
+  { x: 330, y: 864, face: 0 }, { x: 205, y: 870, face: 0 }, { x: 455, y: 870, face: 0 },
+  { x: 130, y: 918, face: 1 }, { x: 530, y: 918, face: -1 }, { x: 245, y: 968, face: 'back' }, { x: 415, y: 968, face: 'back' },
+];
 
 const pendingReqs = (id) => store.requests.filter((r) => r.agente === id && r.estado === 'pendiente');
 const pendingPieces = (id) => store.pieces.filter((p) => p.agente === id && p.estado === 'pendiente');
@@ -93,6 +99,13 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
       const s = FEED_SPOTS[i % FEED_SPOTS.length];
       return { kind: 'feed', x: s.x, y: s.y, via: [{ x: s.x, y: CORRIDOR }], face: 'back' };
     }
+    if (st.estado === 'junta') {
+      const ids = store.roster.map((a) => a.id);
+      const s = SEATS[Math.max(0, ids.indexOf(ch.id)) % SEATS.length];
+      const front = s.y > TABLE.y + 20;
+      const via = [{ x: 700, y: CORRIDOR }, { x: 700, y: 790 }, ...(front ? [{ x: 600, y: 790 }, { x: 600, y: s.y }] : [{ x: s.x, y: 790 }])];
+      return { kind: 'junta', x: s.x, y: s.y, via, face: s.face };
+    }
     const now = performance.now();
     if (!st.estado || st.estado === 'libre') {
       if (now > ch.nextSnack && !ch.snackUntil) { ch.snackUntil = now + 9000; ch.nextSnack = now + 35000 + Math.random() * 40000; }
@@ -125,7 +138,7 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
       if (wp) {
         const dx = wp.x - ch.x, dy = wp.y - ch.y, d = Math.hypot(dx, dy);
         // Acelera y frena suave en cada punto
-        ch.v = Math.min(190, (ch.v || 0) + 600 * dt);
+        ch.v = Math.min(240, (ch.v || 0) + 700 * dt);
         const v = Math.min(ch.v, 60 + d * 4) * dt;
         if (d <= v || d < 0.5) { ch.x = wp.x; ch.y = wp.y; ch.path.shift(); }
         else { ch.x += (dx / d) * v; ch.y += (dy / d) * v; }
@@ -234,11 +247,12 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
     rr(ctx, 46, 340, 48, 40, 8, '#262a44');
     ctx.fillStyle = '#c9c7da'; ctx.font = '700 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText('SNACKS', 70, 395);
 
-    // Sala de descanso: cápsulas y plantas con luz
-    ctx.fillStyle = 'rgba(139,123,255,.08)'; ctx.beginPath(); ctx.ellipse(330, 905, 230, 70, 0, 0, Math.PI * 2); ctx.fill();
-    rr(ctx, 170, 860, 320, 70, 34, '#4b3fb3');
-    rr(ctx, 170, 845, 320, 30, 15, '#5b4bd6');
-    rr(ctx, 300, 900, 60, 26, 10, '#262a44');
+    // Zona de juntas: alfombra de luz
+    const enJunta = Object.values(store.agents).some((a) => a.estado === 'junta');
+    ctx.fillStyle = enJunta ? `rgba(139,123,255,${0.12 + 0.05 * Math.sin(time / 400)})` : 'rgba(139,123,255,.06)';
+    ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y + 10, 250, 90, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(201,199,218,.55)'; ctx.font = '700 13px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('SALA DE JUNTAS', 90, 820);
     for (const [x, y] of [[40, 960], [1560, 960], [1560, 440], [960, 300]]) plant(x, y, time);
   }
 
@@ -249,6 +263,30 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
     ctx.fillStyle = '#3ccf8e';
     for (let i = 0; i < 5; i++) {
       ctx.beginPath(); ctx.ellipse(x + (i - 2) * 9 + sway * (i / 4), y - 48 - (i % 2) * 14, 9, 22, (i - 2) * 0.35, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  function drawTable(time) {
+    const enJunta = Object.values(store.agents).some((a) => a.estado === 'junta');
+    rr(ctx, TABLE.x - 22, TABLE.y, 44, 46, 10, '#262a44');
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y + 48, 90, 12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2f3352'; ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y + 8, TABLE.rx, TABLE.ry, 0, 0, Math.PI * 2); ctx.fill();
+    const g = ctx.createLinearGradient(0, TABLE.y - TABLE.ry, 0, TABLE.y + TABLE.ry);
+    g.addColorStop(0, '#565d8c'); g.addColorStop(1, '#3a4070');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y, TABLE.rx, TABLE.ry, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = enJunta ? `rgba(139,123,255,${0.6 + 0.3 * Math.sin(time / 300)})` : 'rgba(139,123,255,.35)';
+    ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y, TABLE.rx - 10, TABLE.ry - 6, 0, 0, Math.PI * 2); ctx.stroke();
+    if (enJunta) {
+      // Holograma: una idea que gira sobre la mesa
+      const hy = TABLE.y - 48 + Math.sin(time / 500) * 4;
+      const beam = ctx.createLinearGradient(0, hy, 0, TABLE.y);
+      beam.addColorStop(0, 'rgba(139,123,255,0)'); beam.addColorStop(1, 'rgba(139,123,255,.35)');
+      ctx.fillStyle = beam; ctx.beginPath(); ctx.moveTo(TABLE.x - 14, TABLE.y); ctx.lineTo(TABLE.x + 14, TABLE.y); ctx.lineTo(TABLE.x + 40, hy); ctx.lineTo(TABLE.x - 40, hy); ctx.closePath(); ctx.fill();
+      ctx.save(); ctx.translate(TABLE.x, hy - 10); ctx.scale(Math.cos(time / 700), 1);
+      ctx.font = '34px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('💡', 0, 0);
+      ctx.restore();
+      ctx.fillStyle = '#fff'; ctx.font = '800 15px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#8b7bff'; ctx.shadowBlur = 12;
+      ctx.fillText('JUNTA CREATIVA', TABLE.x, TABLE.y - 150); ctx.shadowBlur = 0;
     }
   }
 
@@ -318,6 +356,13 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
           const icon = { autorizacion: '🔐', cuestionario: '📝', concepto: '💡' }[req.tipo] || '❓';
           bub = `<b>${icon}</b> ${esc(small ? '' : req.texto)}`; cls = 'alert';
         } else if (pendingPieces(it.id).length) { bub = small ? '📱' : '📱 Esperando tu swipe'; cls = 'feed'; }
+        else if (st.estado === 'junta') {
+          // En la mesa solo habla (con burbuja completa) quien acaba de aportar; el resto muestra 💬
+          const m = [...(store.meetings || [])].reverse().find((x) => x.estado === 'en_curso');
+          const ultimo = m?.aportes?.at(-1)?.agente;
+          bub = it.id === ultimo && !small ? esc(st.burbuja) : st.burbuja?.startsWith('🤔') ? '🤔' : '💬';
+          cls = 'junta';
+        }
         else if (st.estado === 'trabajando' && st.burbuja) { bub = small ? '💬' : esc(st.burbuja); cls = 'work'; }
         else if (!st.estado || st.estado === 'libre') cls = 'idle';
       }
@@ -369,13 +414,14 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
     for (const [id, ch] of Object.entries(chars)) {
       const d = ch.desk, a = byId(id), working = store.agents[id]?.estado === 'trabajando';
       items.push({ y: d.y - 1, draw: () => drawChair(d) });
-      items.push({ y: d.y + 30, draw: () => drawDesk(d, working, a?.look.camisa || '#8b7bff', now) });
-      items.push({ y: ch.y, draw: () => drawAstronaut(ctx, ch.x, ch.y, a.look, { t: ch.t, walking: ch.walking, facing: ch.facing, sitting: ch.seated, typing: ch.seated && working, wave: !ch.walking && ch.target?.kind === 'boss', glow: working || pendingReqs(id).length > 0, scale: 1.15 }) });
+      items.push({ y: d.y + 30, draw: () => drawDesk(d, working, a?.color || '#8b7bff', now) });
+      items.push({ y: ch.y, draw: () => drawCrew(ctx, ch.x, ch.y, a, { t: ch.t, walking: ch.walking, facing: ch.facing, sitting: ch.seated, typing: ch.seated && working, wave: !ch.walking && (ch.target?.kind === 'boss' || (ch.target?.kind === 'junta' && [...(store.meetings || [])].reverse().find((x) => x.estado === 'en_curso')?.aportes?.at(-1)?.agente === id)), glow: working || pendingReqs(id).length > 0, scale: 1.15 }) });
       if (!ch.walking && pendingReqs(id).length) items.push({ y: ch.y - 0.5, draw: () => { ctx.strokeStyle = `rgba(255,181,71,${0.5 + 0.4 * Math.sin(now / 180)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(ch.x, ch.y, 34, 10, 0, 0, Math.PI * 2); ctx.stroke(); } });
     }
+    items.push({ y: TABLE.y + 6, draw: () => drawTable(now) });
     const alert = store.requests.some((r) => r.estado === 'pendiente');
     items.push({ y: BOSS.y - 1, draw: () => drawChair(BOSS, true) });
-    items.push({ y: BOSS.y + 24, draw: () => drawAstronaut(ctx, BOSS.x, BOSS.y + 24, { camisa: '#8b7bff', piel: '#e0ac69', pelo: '#1b1b1b', peinado: 'corto' }, { t: now / 1000, sitting: true, typing: true, glow: alert, scale: 1.15 }) });
+    items.push({ y: BOSS.y + 24, draw: () => drawCrew(ctx, BOSS.x, BOSS.y + 24, JEFE, { t: now / 1000, sitting: true, typing: true, glow: alert, scale: 1.15 }) });
     items.push({ y: BOSS.y + 30, draw: () => drawDesk(BOSS, alert, alert ? '#ffb547' : '#8b7bff', now, true) });
     items.sort((a, b) => a.y - b.y).forEach((i) => i.draw());
     placeTags();

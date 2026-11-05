@@ -27,6 +27,7 @@ export function connect(onChange) {
       else if (type === 'piece') upsert(store.pieces, data);
       else if (type === 'campaign') upsert(store.campaigns, data);
       else if (type === 'client') upsert(store.clients, data);
+      else if (type === 'meeting') { store.meetings ||= []; upsert(store.meetings, data); }
       else if (type === 'usage') store.uso = data;
       else if (type === 'agency') store.agencia = data;
       paintHeader();
@@ -56,122 +57,193 @@ export const hace = (t) => {
   return new Date(t).toLocaleDateString();
 };
 
-// ---------- Astronautas ----------
-// (x, y) = punto entre los pies. Mide ~125 unidades de alto.
-// facing: 1 derecha · -1 izquierda · 0 de frente · 'back' de espaldas
-export function drawAstronaut(ctx, x, y, look, o = {}) {
+// ---------- Tripulación (estilo de la mascota Pixel) ----------
+// Traje blanco con contorno azul marino, casco redondo con visor oscuro,
+// parche en el pecho con el icono de cada agente. Sin antena.
+// p = { tipo: 'astronauta'|'alien'|'robot'|'perro', icono, color }
+// facing: 0 de frente · 1 / -1 tres cuartos (derecha / izquierda) · 'back' de espaldas
+const NAVY = '#24246a', WHITE = '#f6f6fd', SHADE = '#dcdcef', SHADE2 = '#c9c9e6';
+
+export function drawCrew(ctx, x, y, p, o = {}) {
   const { t = 0, walking = false, facing = 0, typing = false, sitting = false, wave = false, glow = false, scale = 1, shadow = true } = o;
-  const suit = '#eef1f8', shade = '#c3c9db', line = '#a9b0c6', dark = '#2a2e45';
-  const accent = look.camisa;
+  const tipo = p?.tipo || 'astronauta';
   const back = facing === 'back';
-  const fx = back ? 0 : facing;
-  const rr = (px, py, w, h, r, fill) => { ctx.beginPath(); ctx.roundRect(px, py, w, h, r); ctx.fillStyle = fill; ctx.fill(); };
+  const dir = back ? 0 : (facing || 0);
+  const q = dir !== 0; // vista de tres cuartos
+  const LW = 3.2;
+  const shape = (fn, fill, stroke = true) => { ctx.beginPath(); fn(); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.lineWidth = LW; ctx.strokeStyle = NAVY; ctx.lineJoin = 'round'; ctx.stroke(); } };
+  const rr = (px, py, w, h, r, fill, stroke = true) => shape(() => ctx.roundRect(px, py, w, h, r), fill, stroke);
+  const circ = (cx, cy, r, fill, stroke = true) => shape(() => ctx.arc(cx, cy, r, 0, Math.PI * 2), fill, stroke);
 
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale, scale);
-  // Flotación: en gravedad cero se mecen suavemente
-  const float = sitting ? Math.sin(t * 1.6) * 1.2 : walking ? -Math.abs(Math.sin(t * 8)) * 5 : -4 + Math.sin(t * 2.2) * 3;
+  const float = sitting ? Math.sin(t * 1.6) * 1 : walking ? -Math.abs(Math.sin(t * 8)) * 4 : -3 + Math.sin(t * 2.2) * 2.5;
   if (shadow && !sitting) {
-    ctx.fillStyle = `rgba(0,0,0,${0.32 + float * 0.02})`;
-    ctx.beginPath(); ctx.ellipse(0, 0, 24 + float * 0.6, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.28)';
+    ctx.beginPath(); ctx.ellipse(0, 0, 26 + float * 0.5, 6, 0, 0, Math.PI * 2); ctx.fill();
   }
   ctx.translate(0, float);
-  if (walking) ctx.rotate(fx * 0.06);
+  if (q) ctx.scale(dir, 1); // dibujamos mirando a la derecha y reflejamos si va a la izquierda
 
-  // Mochila (se ve de lado o de espaldas)
-  if (!back) rr(-21 - fx * 5, -72, 42, 42, 10, shade);
+  const hy = -96; // centro de la cabeza
 
-  // Piernas
+  // Mochila (detrás del cuerpo)
+  if (!back) rr(q ? -34 : -30, -70, q ? 26 : 60, 40, 9, SHADE);
+
+  // Piernas cortas con bota
   if (!sitting) {
-    const sw = walking ? Math.sin(t * 8) * 7 : 0;
-    for (const [lx, d] of [[-13, 1], [3, -1]]) {
-      rr(lx + sw * d * 0.4, -34 - Math.max(0, sw * d) * 0.5, 11, 30, 5, suit);
-      rr(lx - 1 + sw * d * 0.4, -10 - Math.max(0, sw * d) * 0.5, 13, 10, 4, dark);
+    const sw = walking ? Math.sin(t * 8) * 5 : 0;
+    for (const [lx, d] of [[-19, 1], [2, -1]]) {
+      const lift = Math.max(0, sw * d);
+      const ox = q ? 3 : 0;
+      rr(lx + ox, -26 - lift, 17, 22, 7, WHITE);
+      rr(lx + ox - 1, -9 - lift, 19, 9, 4, WHITE);
+      ctx.fillStyle = NAVY; ctx.fillRect(lx + ox, -12 - lift, 17, 3.5);
     }
   }
 
   // Cuerpo
-  rr(-21, -68, 42, 40, 14, suit);
-  ctx.strokeStyle = line; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect(-21, -68, 42, 40, 14); ctx.stroke();
-  rr(-21, -38, 42, 6, 3, shade);
+  rr(-25, -68, 50, 46, 18, WHITE);
+  ctx.save(); ctx.beginPath(); ctx.roundRect(-25, -68, 50, 46, 18); ctx.clip();
+  ctx.fillStyle = SHADE; ctx.fillRect(q ? -25 : 14, -68, 11, 46); ctx.restore();
+  ctx.lineWidth = LW; ctx.strokeStyle = NAVY; ctx.beginPath(); ctx.roundRect(-25, -68, 50, 46, 18); ctx.stroke();
+
   if (back) {
-    rr(-17, -70, 34, 36, 9, shade);
-    rr(-11, -62, 22, 6, 3, accent);
+    rr(-21, -66, 42, 36, 8, '#ececf8');
+    ctx.strokeStyle = SHADE2; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(-16, -61, 32, 26, 6); ctx.stroke();
   } else {
-    rr(-11 + fx * 3, -60, 22, 14, 4, accent);
-    ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 3; i++) { ctx.globalAlpha = (glow && Math.sin(t * 6 + i) > 0) ? 1 : 0.55; ctx.beginPath(); ctx.arc(-6 + i * 6 + fx * 3, -53, 1.8, 0, Math.PI * 2); ctx.fill(); }
-    ctx.globalAlpha = 1;
+    // Parche del pecho con el icono del agente
+    const bx = q ? -6 : -16, bw = q ? 27 : 32;
+    const pulse = glow ? 0.5 + 0.5 * Math.sin(t * 5) : 0;
+    rr(bx, -58, bw, 21, 6, WHITE);
+    if (p?.color) { ctx.save(); ctx.globalAlpha = 0.18 + pulse * 0.35; ctx.fillStyle = p.color; ctx.beginPath(); ctx.roundRect(bx + 1.5, -56.5, bw - 3, 18, 5); ctx.fill(); ctx.restore(); }
+    if (glow && p?.color) { ctx.save(); ctx.strokeStyle = p.color; ctx.globalAlpha = pulse; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.roundRect(bx - 3, -61, bw + 6, 27, 8); ctx.stroke(); ctx.restore(); }
+    ctx.save();
+    if (q) ctx.scale(dir, 1); // el emoji no se refleja
+    ctx.font = '13px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(p?.icono || '★', (bx + bw / 2) * (q ? dir : 1), -47);
+    ctx.restore();
   }
 
-  // Brazos
-  const arm = (side, ang) => {
+  // Brazos (manga + puño azul + guante)
+  const arm = (side, ang, front = true) => {
     ctx.save();
-    ctx.translate(side * 20, -62);
+    ctx.translate(side * (q ? 19 : 23), -60);
     ctx.rotate(ang);
-    rr(-5.5, -3, 11, 27, 5.5, suit);
-    ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(-5.5, -3, 11, 27, 5.5); ctx.stroke();
-    ctx.beginPath(); ctx.arc(0, 25, 6, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.fill();
+    rr(-7, -4, 14, 28, 7, WHITE);
+    ctx.fillStyle = NAVY; ctx.fillRect(-7, 17, 14, 4);
+    circ(0, 27, 8.5, WHITE);
+    if (front) circ(side * -5, 24, 3.5, WHITE);
     ctx.restore();
   };
   const swing = walking ? Math.sin(t * 8) * 0.5 : 0;
   const tap = typing ? Math.sin(t * 16) * 0.15 : 0;
-  arm(-1, typing ? 0.95 + tap : 0.12 + swing + Math.sin(t * 1.3) * 0.04);
-  arm(1, wave ? -2.7 + Math.sin(t * 8) * 0.35 : typing ? -0.95 - tap : -0.12 - swing - Math.sin(t * 1.3) * 0.04);
+  arm(-1, typing ? 0.9 + tap : 0.18 + swing + Math.sin(t * 1.3) * 0.04, !back);
+  arm(1, wave ? -2.6 + Math.sin(t * 8) * 0.35 : typing ? -0.9 - tap : -0.18 - swing - Math.sin(t * 1.3) * 0.04, !back);
 
-  // Casco
-  const hy = -92;
-  ctx.beginPath(); ctx.arc(0, hy, 26, 0, Math.PI * 2); ctx.fillStyle = suit; ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = line; ctx.stroke();
-  // Antena con luz
-  ctx.strokeStyle = shade; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(9, hy - 24); ctx.lineTo(13, hy - 38); ctx.stroke();
-  const on = glow ? 0.6 + 0.4 * Math.sin(t * 7) : 0.5;
-  ctx.beginPath(); ctx.arc(13, hy - 40, 4.5, 0, Math.PI * 2); ctx.fillStyle = accent; ctx.globalAlpha = on; ctx.fill();
-  if (glow) { ctx.globalAlpha = 0.25 * on; ctx.beginPath(); ctx.arc(13, hy - 40, 10, 0, Math.PI * 2); ctx.fill(); }
-  ctx.globalAlpha = 1;
+  // Cuello azul
+  rr(-20, -72, 40, 9, 4.5, NAVY, false);
 
-  if (!back) {
-    // Visor: se ve la cara detrás del vidrio
-    const vx = fx * 6;
-    ctx.save();
-    ctx.beginPath(); ctx.ellipse(vx, hy + 2, 19, 16, 0, 0, Math.PI * 2); ctx.clip();
-    ctx.fillStyle = look.piel; ctx.fillRect(vx - 20, hy - 15, 40, 34);
-    ctx.fillStyle = look.pelo;
-    ctx.beginPath(); ctx.ellipse(vx, hy - 13, 20, 9, 0, 0, Math.PI * 2); ctx.fill();
-    if (look.peinado === 'largo') { ctx.fillRect(vx - 20, hy - 12, 6, 30); ctx.fillRect(vx + 14, hy - 12, 6, 30); }
-    if (look.peinado === 'rizado') for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.arc(vx + i * 7, hy - 9, 4, 0, Math.PI * 2); ctx.fill(); }
-    if (look.peinado === 'gorra') { ctx.fillStyle = '#e17055'; ctx.fillRect(vx - 20, hy - 22, 40, 12); }
-    const blink = (t % 4) < 0.12;
-    ctx.fillStyle = '#1a1a24';
-    for (const ex of [-6, 6]) { ctx.beginPath(); ctx.ellipse(vx + ex + fx * 3, hy + 2, 2.6, blink ? 0.6 : 3, 0, 0, Math.PI * 2); ctx.fill(); }
-    ctx.beginPath(); ctx.arc(vx + fx * 3, hy + 8, 3.5, 0.15 * Math.PI, 0.85 * Math.PI); ctx.strokeStyle = '#1a1a24'; ctx.lineWidth = 1.6; ctx.stroke();
-    // Vidrio con reflejo
-    const g = ctx.createLinearGradient(vx - 19, hy - 16, vx + 19, hy + 18);
-    g.addColorStop(0, 'rgba(140,170,255,.45)'); g.addColorStop(0.5, 'rgba(40,50,110,.18)'); g.addColorStop(1, 'rgba(20,20,60,.45)');
-    ctx.fillStyle = g; ctx.fillRect(vx - 20, hy - 17, 40, 36);
-    ctx.restore();
-    ctx.beginPath(); ctx.ellipse(vx, hy + 2, 19, 16, 0, 0, Math.PI * 2); ctx.strokeStyle = accent; ctx.lineWidth = 2.5; ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(vx - 7, hy - 6, 6, 3, -0.6, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fill();
-  } else {
-    ctx.beginPath(); ctx.arc(0, hy, 20, 0.15 * Math.PI, 0.85 * Math.PI); ctx.strokeStyle = shade; ctx.lineWidth = 3; ctx.stroke();
-  }
+  // Cabeza según el personaje
+  if (tipo === 'alien') drawAlienHead(ctx, hy, back, q, t, circ, shape);
+  else if (tipo === 'robot') drawRobotHead(ctx, hy, back, q, t, rr, circ, p?.color || '#36e2c8');
+  else drawHelmet(ctx, hy, back, q, tipo === 'perro', circ, shape);
+
   ctx.restore();
 }
 
-export function avatar(look, size = 40) {
+function visorShine(ctx, cx, cy, rx, ry) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,.55)';
+  ctx.beginPath(); ctx.ellipse(cx - rx * 0.42, cy - ry * 0.42, rx * 0.28, ry * 0.16, -0.7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.35)';
+  ctx.beginPath(); ctx.arc(cx + rx * 0.45, cy + ry * 0.45, rx * 0.08, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawHelmet(ctx, hy, back, q, perro, circ, shape) {
+  // Orejeras laterales
+  if (!q || back) { circ(-33, hy + 2, 7, WHITE); circ(33, hy + 2, 7, WHITE); }
+  else circ(-31, hy + 2, 9, WHITE);
+  circ(0, hy, 33, WHITE);
+  ctx.save(); ctx.beginPath(); ctx.arc(0, hy, 33, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = SHADE; ctx.beginPath(); ctx.arc(q ? -26 : 22, hy + 6, 18, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  ctx.lineWidth = 3.2; ctx.strokeStyle = NAVY; ctx.beginPath(); ctx.arc(0, hy, 33, 0, Math.PI * 2); ctx.stroke();
+  if (back) return;
+  const vx = q ? 9 : 0, rx = q ? 21 : 25, ry = 23;
+  if (perro) {
+    // Visor transparente: se ve la cara del perrito
+    ctx.save(); ctx.beginPath(); ctx.ellipse(vx, hy + 2, rx, ry, 0, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = '#bfd3ff'; ctx.fillRect(vx - rx, hy - ry, rx * 2, ry * 2 + 4);
+    ctx.fillStyle = '#c98b4f'; ctx.beginPath(); ctx.ellipse(vx + (q ? 3 : 0), hy + 5, 17, 17, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#7a4a24';
+    ctx.beginPath(); ctx.ellipse(vx - 15, hy + 6, 6, 12, 0.3, 0, Math.PI * 2); ctx.fill();
+    if (!q) { ctx.beginPath(); ctx.ellipse(vx + 15, hy + 6, 6, 12, -0.3, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#f3dfc6'; ctx.beginPath(); ctx.ellipse(vx + (q ? 7 : 0), hy + 12, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1b1b2a';
+    ctx.beginPath(); ctx.ellipse(vx + (q ? 9 : 0), hy + 9, 3.6, 2.6, 0, 0, Math.PI * 2); ctx.fill();
+    for (const ex of q ? [1, 11] : [-6, 6]) { ctx.beginPath(); ctx.arc(vx + ex, hy + 1, 2.4, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#ff7a9a'; ctx.beginPath(); ctx.ellipse(vx + (q ? 8 : 0), hy + 17, 2.6, 3.4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(60,90,200,.22)'; ctx.fillRect(vx - rx, hy - ry, rx * 2, ry * 2 + 4);
+    ctx.restore();
+  } else {
+    shape(() => ctx.ellipse(vx, hy + 2, rx, ry, 0, 0, Math.PI * 2), (() => {
+      const g = ctx.createLinearGradient(vx - rx, hy - ry, vx + rx, hy + ry);
+      g.addColorStop(0, '#2a46b3'); g.addColorStop(0.55, '#13246e'); g.addColorStop(1, '#0b1550');
+      return g;
+    })(), false);
+  }
+  ctx.lineWidth = 3.2; ctx.strokeStyle = NAVY; ctx.beginPath(); ctx.ellipse(vx, hy + 2, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+  visorShine(ctx, vx, hy + 2, rx, ry);
+}
+
+function drawAlienHead(ctx, hy, back, q, t, circ, shape) {
+  const skin = '#bdf0df';
+  shape(() => ctx.ellipse(0, hy - 2, 31, 34, 0, 0, Math.PI * 2), skin);
+  ctx.save(); ctx.beginPath(); ctx.ellipse(0, hy - 2, 31, 34, 0, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = 'rgba(40,120,110,.18)'; ctx.beginPath(); ctx.arc(q ? -24 : 22, hy + 6, 20, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  ctx.lineWidth = 3.2; ctx.strokeStyle = NAVY; ctx.beginPath(); ctx.ellipse(0, hy - 2, 31, 34, 0, 0, Math.PI * 2); ctx.stroke();
+  if (back) return;
+  const blink = (t % 5) < 0.12;
+  const ox = q ? 8 : 0;
+  const eyes = q ? [[ox - 6, hy - 4, 7], [ox + 12, hy - 4, 7], [ox + 3, hy - 18, 5]] : [[-12, hy - 2, 8], [12, hy - 2, 8], [0, hy - 18, 6]];
+  for (const [ex, ey, r] of eyes) {
+    shape(() => ctx.ellipse(ex, ey, r, blink ? 1 : r * 1.15, 0, 0, Math.PI * 2), NAVY, false);
+    if (!blink) { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex - r * 0.3, ey - r * 0.4, r * 0.32, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.strokeStyle = NAVY; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(ox, hy + 12, 7, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+}
+
+function drawRobotHead(ctx, hy, back, q, t, rr, circ, color) {
+  circ(q ? -31 : -32, hy + 2, 6, SHADE);
+  if (!q) circ(32, hy + 2, 6, SHADE);
+  rr(-30, hy - 28, 60, 56, 18, WHITE);
+  if (back) { ctx.strokeStyle = SHADE2; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect(-18, hy - 16, 36, 30, 8); ctx.stroke(); return; }
+  const sx = q ? -14 : -22, sw = q ? 40 : 44;
+  rr(sx, hy - 16, sw, 32, 10, '#0e1a52', false);
+  ctx.lineWidth = 3.2; ctx.strokeStyle = NAVY; ctx.beginPath(); ctx.roundRect(sx, hy - 16, sw, 32, 10); ctx.stroke();
+  const blink = (t % 4) < 0.15;
+  ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 8;
+  const cx = sx + sw / 2;
+  for (const ex of [-9, 9]) { ctx.beginPath(); ctx.roundRect(cx + ex - 4, hy - (blink ? 1 : 6), 8, blink ? 2 : 11, 4); ctx.fill(); }
+  ctx.shadowBlur = 0;
+  visorShine(ctx, cx, hy, sw / 2, 16);
+}
+
+export function avatar(p, size = 40) {
   const c = document.createElement('canvas');
   const dpr = window.devicePixelRatio || 1;
   c.width = c.height = size * dpr;
   c.style.width = c.style.height = `${size}px`;
   c.className = 'avatar';
   const ctx = c.getContext('2d');
-  const s = (size * dpr) / 88;
-  if (look) drawAstronaut(ctx, (size * dpr) / 2, s * 130, look, { scale: s, shadow: false, t: 1 });
+  const s = (size * dpr) / 86;
+  if (p) drawCrew(ctx, (size * dpr) / 2, s * 136, p, { scale: s, shadow: false, t: 1 });
   return c;
 }
 
-export const JEFE = { camisa: '#8b7bff', piel: '#e0ac69', pelo: '#1b1b1b', peinado: 'corto' };
+export const JEFE = { tipo: 'astronauta', icono: '⭐', color: '#8b7bff', nombre: 'Tú' };
 
 export const usd = (n) => (n ? `$${n < 0.01 ? n.toFixed(4) : n.toFixed(2)}` : '$0');
 

@@ -16,7 +16,7 @@ function reqElement(r) {
   const el = document.createElement('div');
   el.className = `req req-${r.tipo}`;
   el.innerHTML = `<div class="who"></div><div class="txt">${esc(r.texto)}</div>${r.detalle ? `<div class="det">${esc(r.detalle)}</div>` : ''}<div class="row"></div>`;
-  el.querySelector('.who').append(avatar(a?.look, 28), `${a?.nombre || r.agente} · ${TIPOS[r.tipo] || r.tipo}`);
+  el.querySelector('.who').append(avatar(a, 28), `${a?.nombre || r.agente} · ${TIPOS[r.tipo] || r.tipo}`);
   const row = el.querySelector('.row');
   const send = async (body) => { el.querySelectorAll('button').forEach((b) => (b.disabled = true)); try { await api(`/api/requests/${r.id}`, body); } catch (e) { alert(e.message); el.querySelectorAll('button').forEach((b) => (b.disabled = false)); } };
   const mk = (tag, props = {}) => Object.assign(document.createElement(tag), props);
@@ -63,7 +63,32 @@ function reqElement(r) {
   return el;
 }
 
+function renderJunta() {
+  const ms = [...(store.meetings || [])].sort((a, b) => a.creada - b.creada);
+  const m = [...ms].reverse().find((x) => x.estado === 'en_curso') || ms.filter((x) => Date.now() - (x.terminada || x.creada) < 10 * 60 * 1000).at(-1);
+  $('juntaCard').hidden = !m;
+  if (!m) return;
+  $('juntaLive').textContent = m.estado === 'en_curso' ? 'EN VIVO' : 'TERMINADA';
+  $('juntaLive').className = `live${m.estado === 'en_curso' ? '' : ' off'}`;
+  const camp = store.campaigns.find((c) => c.id === m.campaignId);
+  const key = `${m.id}|${m.aportes.length}|${m.estado}`;
+  if ($('juntaBody').dataset.key === key) return;
+  $('juntaBody').dataset.key = key;
+  const head = Object.assign(document.createElement('div'), { className: 'jt', innerHTML: `#${m.numero} · ${esc(camp?.cliente || '')} · <b>${esc(m.tema)}</b>` });
+  const rows = m.aportes.map((ap) => {
+    const a = byId(ap.agente);
+    const el = document.createElement('div');
+    el.className = 'ap';
+    el.innerHTML = `<div style="min-width:0"><div class="who">${esc(a?.nombre || ap.agente)} <span>· ${esc(a?.rol || '')}</span></div><div class="tx">${esc(ap.texto)}</div></div>`;
+    el.prepend(avatar(a, 34));
+    return el;
+  });
+  const wait = m.estado === 'en_curso' ? [Object.assign(document.createElement('div'), { className: 'empty', textContent: m.aportes.length ? 'Los demás siguen pensando…' : 'El equipo se está reuniendo en la mesa…' })] : [];
+  $('juntaBody').replaceChildren(head, ...rows, ...wait);
+}
+
 function renderPanels() {
+  renderJunta();
   $('demoTag').hidden = !store.demo;
   const reqs = store.requests.filter((r) => r.estado === 'pendiente');
   for (const id of ['reqCount', 'reqCount2']) { $(id).textContent = reqs.length || ''; $(id).dataset.n = reqs.length; }
@@ -84,7 +109,7 @@ function renderPanels() {
     const espera = pendingReqs(a.id).length ? 'esperando' : pendingPieces(a.id).length ? 'entregando' : st.estado;
     const texto = pendingReqs(a.id)[0]?.texto || (pendingPieces(a.id).length ? 'Esperando tu swipe en el feed 📱' : st.burbuja) || (st.estado === 'libre' || !st.estado ? 'Libre' : st.estado);
     el.innerHTML = `<div class="info"><div class="name">${esc(a.nombre)} <span style="color:var(--muted);font-weight:400">· ${esc(a.rol)}</span></div><div class="st">${esc(texto)}</div></div><span class="dot ${espera}"></span>`;
-    el.prepend(avatar(a.look, 36));
+    el.prepend(avatar(a, 36));
     el.onclick = () => openAgent(a.id);
     return el;
   }));
@@ -169,13 +194,14 @@ function renderAgent(id, force = false) {
   if (body.contains(document.activeElement) && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) && !force) return;
   body.dataset.sig = sig;
   body.innerHTML = `
-    <div class="head"><div id="agAv"></div><div><h3>${esc(a.nombre)}</h3><div class="sub">${esc(a.rol)}</div></div><span class="sp" style="flex:1"></span><button id="agClose">✕</button></div>
+    <div class="head"><div id="agAv"></div><div><h3>${esc(a.nombre)} <span style="font-size:20px">${a.icono || ''}</span></h3><div class="sub">${esc(a.rol)} · <a href="equipo.html#${a.id}">📄 Ver currículum</a></div></div><span class="sp" style="flex:1"></span><button id="agClose">✕</button></div>
     <div><b>Ahora:</b> ${esc(st.burbuja || (st.estado === 'libre' || !st.estado ? 'Libre, esperando trabajo' : st.estado))}</div>
+    <div class="empty" style="font-size:13px">${esc(a.personalidad || '')}</div>
     <div id="agReqs"></div>
     <div class="card" style="box-shadow:none"><h2>Chat</h2><div class="log" id="agChat" style="max-height:180px;flex-direction:column"></div>
       <div class="row" style="display:flex;gap:8px;margin-top:8px"><input id="agMsg" placeholder="Habla con ${esc(a.nombre)}…"><button class="primary" id="agSend">Enviar</button></div></div>
     <div class="card" style="box-shadow:none"><h2>Lo último que hizo</h2><div class="log" id="agLog"></div></div>`;
-  body.querySelector('#agAv').append(avatar(a.look, 64));
+  body.querySelector('#agAv').append(avatar(a, 64));
   body.querySelector('#agClose').onclick = () => $('dlgAgent').close();
   body.querySelector('#agReqs').append(...reqs.map(reqElement));
   body.querySelector('#agChat').replaceChildren(...(chatHistory[id] || []).map(([who, t]) => Object.assign(document.createElement('div'), { innerHTML: `<b>${who === 'yo' ? 'Tú' : esc(a.nombre)}:</b> ${esc(t)}` })));

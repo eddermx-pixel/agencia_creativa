@@ -66,6 +66,7 @@ function snapshot() {
     agencia: { nombre: db.agency.nombre || '', tieneLogo: !!db.agency.logo, actualizado: db.agency.actualizado || 0 },
     uso: usageSummary(),
     roster: publicRoster(),
+    meetings: db.meetings.slice(-30),
     clients: db.clients.map(clientSummary),
     agents: Object.values(agentState),
     campaigns: db.campaigns.slice(-20),
@@ -77,6 +78,28 @@ function snapshot() {
 
 app.get('/api/state', (req, res) => res.json(snapshot()));
 app.get('/api/usage', (req, res) => res.json(usageReport()));
+
+// Currículum + estadísticas reales de cada agente.
+app.get('/api/team', (req, res) => {
+  const uso = usageReport().porAgente;
+  res.json(publicRoster().map((a) => {
+    const piezas = db.pieces.filter((p) => p.agente === a.id);
+    const juzgadas = piezas.filter((p) => ['aprobada', 'rechazada'].includes(p.estado));
+    const campanas = new Set([...db.jobs.filter((j) => j.agentId === a.id).map((j) => j.campaignId), ...piezas.map((p) => p.campaignId), ...db.meetings.filter((m) => m.aportes.some((x) => x.agente === a.id)).map((m) => m.campaignId)]);
+    return {
+      ...a,
+      stats: {
+        campanas: campanas.size,
+        entregadas: piezas.length,
+        aprobadas: piezas.filter((p) => p.estado === 'aprobada').length,
+        aprobacion: juzgadas.length ? Math.round((piezas.filter((p) => p.estado === 'aprobada').length / juzgadas.length) * 100) : null,
+        aportes: db.meetings.reduce((n, m) => n + m.aportes.filter((x) => x.agente === a.id).length, 0),
+        memorias: db.memories.filter((m) => m.agente === a.id).length,
+        costoMes: uso.find((u) => u.id === a.id)?.usd || 0,
+      },
+    };
+  }));
+});
 
 // ---- Clientes (kit de marca) ----
 const clientSummary = ({ logo, ...c }) => ({ ...c, tieneLogo: !!logo });
@@ -310,6 +333,7 @@ bus.on('client', (c) => broadcast('client', c));
 bus.on('usage', (u) => broadcast('usage', u));
 bus.on('agency', (a) => broadcast('agency', a));
 bus.on('memory', (m) => broadcast('memory', { id: m.id, borrada: !!m.borrada }));
+bus.on('meeting', (m) => broadcast('meeting', m));
 
 startTelegram();
 // Retoma lo que estaba en curso antes del reinicio.

@@ -94,7 +94,7 @@ function hbars(el, rows, label) {
 function renderAgents() {
   hbars($('agents'), rep.porAgente, (el, r) => {
     const a = byId(r.id);
-    if (a) el.append(avatar(a.look, 24));
+    if (a) el.append(avatar(a, 24));
     el.append(a ? a.nombre : r.id === 'chat' ? 'Chat' : r.id);
   });
 }

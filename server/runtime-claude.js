@@ -5,8 +5,8 @@
 // una mejora a Railway), los trabajos pendientes se retoman donde se quedaron:
 // las preguntas que ya te hicieron siguen esperando tu respuesta y no se repiten.
 import Anthropic from '@anthropic-ai/sdk';
-import { ROSTER, byId } from './roster.js';
-import { setAgent, log, addUsage, brandText, memoryText, setPhase } from './hub.js';
+import { ROSTER, byId, personaText } from './roster.js';
+import { setAgent, log, addUsage, brandText, memoryText, setPhase, agentState, startMeeting, addAporte, endMeeting, meetingTranscript } from './hub.js';
 import { db, save, newId } from './store.js';
 import { makeActions, withAgent } from './actions.js';
 
@@ -25,7 +25,7 @@ const REGLAS = `Trabajas en una agencia de marketing operada por agentes de IA. 
 function systemFor(agent, campaign) {
   const cl = db.clients.find((c) => c.id === campaign.clientId);
   const mem = memoryText(campaign.clientId, campaign.id);
-  return `${REGLAS}\n\n${agent.prompt}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${mem ? `\n\n${mem}` : ''}`;
+  return `${REGLAS}\n\n${agent.prompt}\n\n${personaText(agent)}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${mem ? `\n\n${mem}` : ''}`;
 }
 
 // ---------- Herramientas (definición para la API) ----------
@@ -54,6 +54,13 @@ const TOOLS = {
       version: { type: 'integer' },
     }, ['tipo', 'titulo', 'contenido']),
   },
+  junta_creativa: {
+    description: 'Reúne a TODO el equipo en la mesa de juntas: cada uno propone ideas desde su especialidad y personalidad. Devuelve lo que dijo cada quien. Úsala para crear el concepto y SIEMPRE que el jefe rechace un concepto.',
+    input_schema: obj({
+      tema: { type: 'string', description: 'Qué se va a idear (una frase)' },
+      contexto: { type: 'string', description: 'Brief resumido, respuestas del jefe, comentarios/rechazos previos y restricciones' },
+    }, ['tema', 'contexto']),
+  },
   hacer_preguntas: {
     description: 'FASE 1: hace al jefe varias preguntas de una vez (un formulario) antes de planear la campaña. Espera sus respuestas.',
     input_schema: obj({
@@ -75,7 +82,7 @@ function toolDefs(agentId) {
   if (byId[agentId].puedeEntregar) names.push('entregar_pieza');
   const defs = names.map((name) => ({ name, ...TOOLS[name] }));
   if (agentId === 'director') {
-    defs.push({ name: 'hacer_preguntas', ...TOOLS.hacer_preguntas }, { name: 'presentar_concepto', ...TOOLS.presentar_concepto });
+    defs.push({ name: 'hacer_preguntas', ...TOOLS.hacer_preguntas }, { name: 'junta_creativa', ...TOOLS.junta_creativa }, { name: 'presentar_concepto', ...TOOLS.presentar_concepto });
     const equipo = ROSTER.filter((x) => x.id !== 'director');
     defs.push({
       name: 'asignar_tarea',
@@ -100,6 +107,7 @@ async function runTool(job, block, campaign) {
     case 'hacer_preguntas': return a.cuestionario(i.intro, i.preguntas);
     case 'presentar_concepto': return a.concepto(i.titulo || 'Concepto', i.detalle || '');
     case 'asignar_tarea': return delegate(job, block.id, i.agente, i.instrucciones || '', campaign);
+    case 'junta_creativa': return junta(block.id, i.tema || 'Ideas para la campaña', i.contexto || '', campaign);
     default: throw new Error(`Herramienta desconocida: ${block.name}`);
   }
 }
@@ -149,7 +157,16 @@ async function loop(job) {
       const last = job.messages.at(-1);
       if (last.role === 'assistant') {
         const uses = last.content.filter((b) => b.type === 'tool_use');
-        if (!uses.length) return finish(job, textOf(last.content));
+        if (!uses.length) {
+          const falta = pendingWork(job, campaign);
+          if (falta && (job.empujones || 0) < 3) {
+            job.empujones = (job.empujones || 0) + 1;
+            job.messages.push({ role: 'user', content: `[Sistema] Todavía no terminas: ${falta} No te detengas.` });
+            save();
+            log(job.agentId, '↪️ Sigo trabajando: aún falta completar la campaña.', campaign.id);
+          } else return finish(job, textOf(last.content));
+        }
+        if (uses.length) {
         // Ejecuta las herramientas pedidas (en paralelo) y devuelve TODOS los resultados juntos.
         const results = await Promise.all(uses.map(async (b) => {
           if (job.cortado) return { type: 'tool_result', tool_use_id: b.id, content: 'Tu respuesta se cortó por ser demasiado larga; vuelve a intentarlo con un contenido más compacto.', is_error: true };
@@ -163,6 +180,7 @@ async function loop(job) {
         job.cortado = false;
         save();
         setAgent(job.agentId, { estado: 'trabajando', campaignId: campaign.id });
+        }
       }
 
       const resp = await client.beta.messages.create({
@@ -195,6 +213,69 @@ async function loop(job) {
     setAgent(job.agentId, { estado: 'libre', burbuja: '', campaignId: null });
   }
 }
+
+// ¿Qué le falta a la directora antes de poder cerrar la campaña?
+function pendingWork(job, campaign) {
+  if (job.agentId !== 'director' || job.parentJobId) return null;
+  if (!campaign.concepto) return 'el concepto no está aprobado. Convoca una nueva junta_creativa con los comentarios del jefe y presenta un concepto NUEVO y diferente con presentar_concepto.';
+  const piezas = db.pieces.filter((p) => p.campaignId === campaign.id);
+  if (!piezas.some((p) => p.estado === 'aprobada')) return 'el concepto ya está aprobado pero no hay ninguna pieza aprobada. Asigna la producción con asignar_tarea.';
+  return null;
+}
+
+// ---------- Junta creativa ----------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function junta(key, tema, contexto, campaign) {
+  const m = startMeeting({ campaignId: campaign.id, tema, contexto, key });
+  if (m.estado === 'terminada' && m.aportes.length) return transcriptFor(m);
+  const equipo = ROSTER.filter((a) => a.id !== 'director');
+  const antes = Object.fromEntries(ROSTER.map((a) => [a.id, { ...agentState[a.id] }]));
+  for (const a of ROSTER) setAgent(a.id, { estado: 'junta', burbuja: a.id === 'director' ? `Tema: ${tema}`.slice(0, 140) : '🤔 Pensando…', campaignId: campaign.id });
+  const cl = db.clients.find((c) => c.id === campaign.clientId);
+  const mem = memoryText(campaign.clientId, campaign.id);
+  try {
+    await Promise.all(equipo.filter((a) => !m.aportes.some((x) => x.agente === a.id)).map(async (a) => {
+      const res = await client.messages.create({
+        model: MODEL,
+        max_tokens: 1500,
+        output_config: { effort: 'low' },
+        system: `${REGLAS}
+
+Eres ${a.nombre}, ${a.rol} de la agencia.
+${personaText(a)}
+
+Campaña: ${campaign.cliente}
+${brandText(cl)}
+Brief: ${campaign.brief}${mem ? `
+
+${mem}` : ''}`,
+        messages: [{ role: 'user', content: `JUNTA CREATIVA convocada por Dani.
+Tema: ${tema}
+Contexto: ${contexto}
+
+Desde tu especialidad y con tu personalidad, propone 2 ideas concretas y distintas (una frase cada una) y di un riesgo o crítica honesta. Si hay comentarios del jefe, respétalos. Máximo 90 palabras, sin saludos ni presentación.` }],
+      });
+      addUsage(campaign.id, MODEL, res.usage, a.id);
+      const texto = textOf(res.content) || '(sin ideas)';
+      addAporte(m, a.id, texto);
+      setAgent(a.id, { burbuja: texto.replace(/\s+/g, ' ').slice(0, 140) });
+    }));
+    endMeeting(m);
+    await sleep(6000); // que se alcancen a leer las burbujas en la mesa
+    return transcriptFor(m);
+  } finally {
+    for (const a of ROSTER) {
+      const prev = antes[a.id];
+      setAgent(a.id, prev.estado === 'junta' ? { estado: 'libre', burbuja: '', campaignId: null } : prev);
+    }
+    setAgent('director', { estado: 'trabajando', burbuja: 'Armando el concepto con las ideas del equipo', campaignId: campaign.id });
+  }
+}
+const transcriptFor = (m) => `Ideas de la junta creativa #${m.numero}:
+
+${meetingTranscript(m, (id) => `${byId[id]?.nombre} (${byId[id]?.rol})`)}
+
+Ahora sintetiza el mejor concepto (combina ideas y menciona de quién viene cada una) y preséntalo con presentar_concepto.`;
 
 function finish(job, text) {
   job.estado = 'terminado';

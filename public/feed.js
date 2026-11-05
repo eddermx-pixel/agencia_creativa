@@ -43,7 +43,7 @@ function cardEl(p, back) {
     <div class="who"><div><div class="n">${esc(a?.nombre || p.agente)} · ${esc(a?.rol || '')}</div><div class="c">${esc(c?.cliente || '')} · ${hace(p.creada)}</div></div><span class="v">${{ arte: '🎨 Arte', video: '🎬 Video', texto: '✍️ Texto' }[p.tipo] || p.tipo} · v${p.version || 1}</span></div>
     <div class="media">${mediaHTML(p)}</div>
     <div class="meta"><h3>${esc(p.titulo)}</h3><p>${esc(p.descripcion || '')}</p></div>`;
-  el.querySelector('.who').prepend(avatar(a?.look, 40));
+  el.querySelector('.who').prepend(avatar(a, 40));
   if (p.tipo === 'texto') fetch(`/api/pieces/${p.id}/render`).then((r) => r.text()).then((t) => (el.querySelector('pre').textContent = t));
   return el;
 }

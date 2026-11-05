@@ -1,6 +1,7 @@
 // Modo demo: el equipo trabaja con guiones de ejemplo (sin gastar API).
 // Sirve para ver la oficina, las aprobaciones, Telegram y el feed funcionando.
-import { setAgent, log } from './hub.js';
+import { setAgent, log, startMeeting, addAporte, endMeeting } from './hub.js';
+import { ROSTER } from './roster.js';
 import { makeActions, withAgent } from './actions.js';
 import { db, expirePending } from './store.js';
 
@@ -97,13 +98,73 @@ async function entregarHastaAprobar(a, make) {
   return null;
 }
 
+// Conceptos de ejemplo: si rechazas uno, el equipo propone otro distinto.
+const CONCEPTOS = [
+  { titulo: 'Lo que buscabas ya llegó', idea: '{cliente} como la respuesta a lo que tu público ya estaba buscando.', mensaje: 'Calidad y buen precio, por tiempo limitado.',
+    credito: 'titular de Teo, paleta cálida de Luna, gancho de pregunta de Max.', titular: 'LO QUE\nBUSCABAS\nYA LLEGÓ', sub: 'Calidad y buen precio, solo esta semana', cta: 'ESCRÍBENOS HOY',
+    escenas: ['¿Todavía no lo tienes?', 'Llegó lo nuevo', 'Calidad + buen precio'], ctaVideo: 'Pídelo hoy' },
+  { titulo: 'El ritual de la semana', idea: 'Convertir la promoción en un ritual que la gente espera cada semana, con cuenta regresiva.', mensaje: 'Tu cita favorita de la semana ya tiene día.',
+    credito: 'insight de Iris (la gente repite lo que se vuelve costumbre), cuenta regresiva de Max, copy de Teo.', titular: 'TU CITA\nFAVORITA\nDE LA SEMANA', sub: 'Aparta el día: la promo vuelve cada semana', cta: 'APÁRTALO YA',
+    escenas: ['3…', '2…', '1…', '¡Hoy es el día!'], ctaVideo: 'Te esperamos' },
+  { titulo: 'Detrás del mostrador', idea: 'Mostrar el proceso y a las personas detrás del producto: honestidad y cercanía.', mensaje: 'Hecho a mano, hecho hoy, hecho para ti.',
+    credito: 'idea de Luna (fotos de proceso en ilustración), testimonio de Iris, revisión de claims de Rita.', titular: 'HECHO HOY,\nHECHO PARA\nTI', sub: 'Así se prepara lo que te llevas a casa', cta: 'VEN A PROBARLO',
+    escenas: ['5:00 a.m.', 'Manos a la obra', 'Recién hecho', 'Para ti'], ctaVideo: 'Ven hoy' },
+];
+
+const IDEAS = {
+  investigador: [
+    'El público responde a reels cortos con humor y ofertas claras. Idea: usar comentarios reales de clientes. Riesgo: prometer de más.',
+    'Lo que se vuelve costumbre se repite: un día fijo de promo genera hábito. Idea: "el día de…". Riesgo: que canse si no cambia el contenido.',
+    'Se confía más en lo que se ve hacer. Idea: mostrar el proceso real. Riesgo: que parezca improvisado.',
+  ],
+  copy: [
+    'Titular: "Lo que buscabas ya llegó". Alterno: "No es antojo, es destino". Riesgo: sonar genérico si no decimos qué es.',
+    'Titular: "Tu cita favorita de la semana". Alterno: "Martes de los buenos". Me encanta el juego de palabras con la cita.',
+    'Titular: "Hecho hoy, hecho para ti". Alterno: "Del horno a tu mesa". Corto y honesto.',
+  ],
+  disenador: [
+    'Paleta cálida con el color de la marca, titular gigante y mucho aire. Nada de saturar con estrellas y sellos.',
+    'Calendario visual con el día marcado en grande; tipografía bold y un solo color de acento.',
+    'Ilustraciones del proceso en línea fina, fondo crema y el logo pequeño pero claro.',
+  ],
+  video: [
+    '¡Gancho con pregunta en el segundo 1! "¿Todavía no lo tienes?" y cortes rápidos al ritmo. Tendencia: texto que rebota.',
+    'Cuenta regresiva 3-2-1 con zoom en cada número. ¡Engancha seguro! Riesgo: que el mensaje llegue tarde.',
+    'Timelapse estilizado del proceso de 5 s y cierre con la persona sonriendo. Ritmo lento-rápido.',
+  ],
+  calidad: [
+    'Revisar que "buen precio" no suene a "barato". CTA claro y un solo mensaje por pieza.',
+    'Si decimos "cada semana" hay que cumplirlo. Verificar fechas y condiciones de la promo.',
+    'Claim "hecho hoy" debe ser verdadero. Ortografía: "recién" lleva acento.',
+  ],
+};
+
+async function juntaDemo(campaign, ronda, comentario, cliente) {
+  const tema = ronda ? `Nueva propuesta tras tus comentarios${comentario ? `: "${comentario}"` : ''}` : `Concepto para ${cliente}`;
+  const m = startMeeting({ campaignId: campaign.id, tema, contexto: campaign.brief });
+  const equipo = ROSTER.filter((a) => a.id !== 'director');
+  for (const a of ROSTER) setAgent(a.id, { estado: 'junta', burbuja: a.id === 'director' ? `Junta: ${tema}`.slice(0, 140) : '🤔 Pensando…', campaignId: campaign.id });
+  await sleep(4500); // tiempo para que lleguen a la mesa
+  for (const a of equipo) {
+    const idea = IDEAS[a.id]?.[ronda % 3] || 'Me sumo a la idea del equipo.';
+    const texto = comentario && a.id === 'copy' ? `${idea} (Considerando lo que pidió el jefe: ${comentario}.)` : idea;
+    addAporte(m, a.id, texto);
+    setAgent(a.id, { burbuja: texto.slice(0, 140) });
+    await sleep(2200);
+  }
+  endMeeting(m);
+  await sleep(4000);
+  for (const a of equipo) setAgent(a.id, { estado: 'libre', burbuja: '', campaignId: null });
+  setAgent('director', { estado: 'trabajando', burbuja: 'Armando el concepto con las ideas del equipo', campaignId: campaign.id });
+}
+
 export async function runCampaign(campaign) {
   const { cliente } = campaign;
   const director = makeActions('director', campaign);
   const client = db.clients.find((c) => c.id === campaign.clientId);
   const pals = paletasDe(client);
   const logo = !!client?.logo;
-  const ctx = { tono: client?.tono || 'Cercano y divertido', pal: 0 };
+  const ctx = { tono: client?.tono || 'Cercano y divertido', pal: 0, titular: '' };
 
   await demoAgent('director', campaign, async () => {
     await trabajar('director', campaign, ['Leyendo el brief…', 'Anotando lo que falta saber']);
@@ -130,24 +191,30 @@ export async function runCampaign(campaign) {
       log('investigador', 'Hallazgos: el público responde a reels cortos con humor, ofertas claras y prueba social.', campaign.id);
     });
 
-    // FASE 2 · Concepto (no se produce nada hasta que lo apruebes)
-    await trabajar('director', campaign, ['Armando el concepto creativo']);
-    for (let i = 1; i <= 3; i++) {
-      const titulo = i === 1 ? '"Lo que buscabas ya llegó"' : `"Lo que buscabas ya llegó" (ajuste ${i})`;
-      const r = await director.concepto(titulo, [
-        `Idea central: ${cliente} como la respuesta a lo que tu público ya estaba buscando.`,
-        `Mensaje clave: calidad y buen precio, por tiempo limitado.`,
+    // FASE 2 · Junta creativa + concepto. Si lo rechazas, nueva junta y una idea distinta.
+    let comentario = '';
+    for (let ronda = 0; ronda < CONCEPTOS.length; ronda++) {
+      const c = CONCEPTOS[ronda];
+      await juntaDemo(campaign, ronda, comentario, cliente);
+      await trabajar('director', campaign, ['Armando el concepto con las ideas del equipo']);
+      const r = await director.concepto(c.titulo, [
+        ronda && comentario ? `Tomé en cuenta tu comentario: "${comentario}".\n` : '',
+        `Idea central: ${c.idea.replace('{cliente}', cliente)}`,
+        `Mensaje clave: ${c.mensaje}`,
         `Tono: ${ctx.tono}.`,
+        `Ideas del equipo: ${c.credito}`,
         '',
         'Piezas a producir:',
         '• Copy del post (titular, texto, CTA y hashtags) — Teo',
         '• Post de feed 4:5 (1080×1350) para Instagram/Facebook — Luna',
         '• Reel 9:16 de 12 s con gancho en los primeros 2 s — Max',
-      ].join('\n'));
-      if (r.startsWith('CONCEPTO APROBADO')) break;
-      await director.estado('Ajustando el concepto con tus comentarios…');
-      await sleep(2500);
+      ].filter((x, i) => i || x).join('\n'));
+      if (r.startsWith('CONCEPTO APROBADO')) { Object.assign(ctx, c); break; }
+      comentario = (/Cambios pedidos: (.*?)\. Ajusta/.exec(r)?.[1] || '').replace(/^\(sin comentario.*\)$/, '');
+      await director.estado('Entendido. Convoco otra junta con tus comentarios…');
+      await sleep(2000);
     }
+    if (!ctx.titular) Object.assign(ctx, CONCEPTOS[0]);
 
     await director.estado('Teo, te toca el copy');
     await demoAgent('copy', campaign, async () => {
@@ -172,7 +239,7 @@ export async function runCampaign(campaign) {
           titulo: `Post feed 4:5 v${v}`,
           descripcion: `Arte principal de la campaña. Tono ${ctx.tono}.`,
           contenido: arteSVG({
-            cliente, titular: 'LO QUE\nBUSCABAS\nYA LLEGÓ', sub: 'Calidad y buen precio, solo esta semana', cta: 'ESCRÍBENOS HOY',
+            cliente, titular: ctx.titular, sub: ctx.sub, cta: ctx.cta,
             pal: pals[(ctx.pal + v - 1) % pals.length], logo,
           }),
         }));
@@ -184,7 +251,7 @@ export async function runCampaign(campaign) {
           titulo: `Reel 9:16 v${v}`,
           descripcion: 'Reel de 12 segundos con gancho, mensaje y CTA.',
           contenido: videoHTML({
-            cliente, escenas: ['¿Todavía no lo tienes?', 'Llegó lo nuevo', 'Calidad + buen precio'], cta: 'Pídelo hoy',
+            cliente, escenas: ctx.escenas, cta: ctx.ctaVideo,
             pal: pals[(ctx.pal + v - 1) % pals.length], logo,
           }),
         }));

@@ -15,14 +15,18 @@ Una agencia de marketing operada por agentes de Claude, cada uno con su propio r
 
 ## El equipo
 
-| Personaje | Rol | Entrega |
-|---|---|---|
-| Dani | Director de cuentas | Reparte el trabajo y coordina |
-| Iris | Investigadora | Información sobre el público, la competencia y las tendencias |
-| Teo | Copywriter | Textos (al feed) |
-| Luna | Diseñadora | Artes 1080×1350 en SVG (al feed) |
-| Max | Video / motion | Reels 1080×1920 animados en HTML (al feed) |
-| Rita | Control de calidad | Revisión final |
+| Personaje | Tipo | Rol | Personalidad |
+|---|---|---|---|
+| 🚀 Dani | Astronauta | Directora de cuentas | Líder serena; convierte ideas en un plan y nunca se rinde ante un "no" |
+| 🔭 Iris | Alienígena | Investigadora | Curiosa, pregunta "¿y por qué?" y trae datos |
+| ✍️ Teo | Astronauta | Copywriter | Ingenioso y juguetón, ama los juegos de palabras |
+| 🎨 Luna | Astronauta | Diseñadora | Perfeccionista, audaz con el color, odia lo saturado |
+| 🎬 Max | Perro espacial | Video / motion | Energético, vive en TikTok, gancho en 2 segundos |
+| ✅ Rita | Robot | Control de calidad | Meticulosa y directa, no perdona una falta |
+
+Cada uno tiene su **currículum** (☰ → 👩‍🚀 El equipo) con habilidades, personalidad e historial real (campañas, ideas en juntas, piezas aprobadas).
+
+**Junta creativa:** después de tus respuestas, Dani reúne a todo el equipo en la mesa de juntas de la estación. Cada uno propone ideas desde su personalidad, las ves en vivo en el panel 🗣️ y Dani arma el concepto con lo mejor. Si rechazas el concepto, hay una junta nueva con tus comentarios y un concepto distinto, hasta que lo apruebes.
 
 Para cambiar personajes, sus instrucciones o agregar más, edita `server/roster.js`.
 

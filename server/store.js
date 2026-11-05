@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const FILE = path.resolve(process.env.DATA_FILE || 'data/db.json');
-const EMPTY = { agency: {}, clients: [], campaigns: [], pieces: [], requests: [], log: [], usage: [], jobs: [], memories: [] };
+const EMPTY = { agency: {}, clients: [], campaigns: [], pieces: [], requests: [], log: [], usage: [], jobs: [], memories: [], meetings: [] };
 
 function load() {
   try {
