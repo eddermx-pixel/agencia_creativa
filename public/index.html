@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agencia IA — Oficina</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <h1>🏢 Agencia IA</h1>
+    <span class="tag" id="demoTag" hidden>DEMO</span>
+    <span class="sp"></span>
+    <button id="btnReqs" title="Solicitudes pendientes">🔔 <span class="badge" id="reqCount"></span></button>
+    <a href="feed.html"><button>📱<span class="lbl"> Feed</span> <span class="badge" id="feedCount"></span></button></a>
+    <button class="primary" id="btnNew">＋<span class="lbl"> Campaña</span></button>
+  </header>
+
+  <main class="layout">
+    <section>
+      <div class="stage"><canvas id="office" aria-label="Oficina con los agentes"></canvas></div>
+    </section>
+    <aside class="side">
+      <div class="card" id="reqCard">
+        <h2>🔔 Te necesitan <span class="badge" id="reqCount2"></span></h2>
+        <div id="reqList"></div>
+      </div>
+      <div class="card">
+        <h2>👥 Equipo</h2>
+        <div class="team" id="team"></div>
+      </div>
+      <div class="card">
+        <h2>📜 Bitácora</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+  </main>
+
+  <dialog id="dlgNew">
+    <form method="dialog" class="body" id="formNew">
+      <div class="head"><h3>Nueva campaña</h3></div>
+      <label>Cliente<input name="cliente" required placeholder="Ej. Panadería La Espiga"></label>
+      <label>Brief (qué necesitas, objetivo, público, promociones, colores…)
+        <textarea name="brief" required placeholder="Ej. Lanzamos el pan de muerto. Público: familias de la zona. Promo 2x1 los martes. Colores: naranja y café. Necesito 1 post y 1 reel."></textarea>
+      </label>
+      <div class="actions">
+        <button value="cancel" formnovalidate>Cancelar</button>
+        <button class="primary" value="ok">Arrancar al equipo 🚀</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlgAgent"><div class="body" id="agentBody"></div></dialog>
+
+  <script type="module" src="office.js"></script>
+</body>
+</html>
