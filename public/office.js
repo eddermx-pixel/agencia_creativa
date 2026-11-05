@@ -1,6 +1,6 @@
-// La oficina: escena 3D + paneles (solicitudes, campañas, equipo, bitácora).
+// La oficina: estación espacial 2D + paneles (solicitudes, campañas, equipo, bitácora).
 import { api, store, byId, connect, avatar, esc, hace, usd } from './common.js';
-import { createOffice } from './office3d.js';
+import { createOffice } from './office2d.js';
 
 const pendingReqs = (id) => store.requests.filter((r) => r.agente === id && r.estado === 'pendiente');
 const pendingPieces = (id) => store.pieces.filter((p) => p.agente === id && p.estado === 'pendiente');
@@ -207,7 +207,7 @@ connect((type, data) => {
       });
     } catch (e) {
       console.error(e);
-      $('office').innerHTML = '<div class="empty" style="padding:24px">Tu navegador no pudo mostrar la oficina 3D (WebGL). Todo lo demás funciona normal.</div>';
+      $('office').innerHTML = '<div class="empty" style="padding:24px">Tu navegador no pudo mostrar la oficina. Todo lo demás funciona normal.</div>';
     }
   }
   office?.refresh();

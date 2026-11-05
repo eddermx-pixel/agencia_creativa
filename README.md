@@ -2,7 +2,7 @@
 
 Una agencia de marketing operada por agentes de Claude, cada uno con su propio rol. Los ves trabajar como personajes de videojuego en una oficina.
 
-- **Oficina en 3D:** los agentes son personajes que trabajan en su escritorio con una burbuja que dice qué hacen. Cuando están libres van por café. Si necesitan algo, **caminan a tu escritorio** y levantan la mano; cuando entregan, van al **muro del feed**. Puedes girar y acercar la cámara.
+- **Estación espacial 2D:** los agentes son astronautas que trabajan en su consola con una burbuja que dice qué hacen. Cuando están libres van por snacks. Si necesitan algo, **flotan hasta tu escritorio** y te saludan; cuando entregan, van al **muro del feed**. En el celular arrastras la vista con el dedo.
 - **Primero preguntan, luego producen:** el director te hace un **cuestionario** con las dudas clave del brief y te presenta un **concepto creativo**. Nadie diseña nada hasta que tú apruebas el concepto. Si pides cambios, lo ajusta y te lo vuelve a presentar.
 - **Feed tipo Tinder:** todo lo que produce el equipo (artes, reels y textos) llega aquí. Deslizas **→ para aprobar** o **← para rechazar**. Si rechazas con un comentario, el agente hace una nueva versión.
 - **Clientes con kit de marca:** colores, logo, tono, público y reglas de cada cliente. Los agentes los usan en cada campaña y el logo real se coloca solo en los artes y videos.

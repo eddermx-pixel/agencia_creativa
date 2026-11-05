@@ -28,7 +28,7 @@ header.top { display: flex; align-items: center; gap: 10px; padding: 10px 16px; 
 .chip .bar { width: 46px; height: 6px; border-radius: 9px; background: #2e2e48; overflow: hidden; }
 .chip .bar i { display: block; height: 100%; background: var(--accent2); }
 .chip.warn .bar i { background: var(--warn); } .chip.over .bar i { background: var(--no); }
-@media (max-width: 520px) { .chip .bar, .chip .cb { display: none; } .brand img { max-width: 96px; height: 24px; } .brand { flex-shrink: 0; } }
+@media (max-width: 520px) { #demoTag { display: none; } header.top button { padding: 8px 9px; } header.top { gap: 5px !important; } .chip { padding: 6px 8px; } .chip .bar, .chip .cb { display: none; } .brand img { max-width: 96px; height: 24px; } .brand { flex-shrink: 0; } }
 header.top h1 { font-size: 17px; margin: 0; white-space: nowrap; }
 header.top .sp { flex: 1; }
 header.top button { white-space: nowrap; }

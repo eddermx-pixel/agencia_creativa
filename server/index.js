@@ -57,7 +57,6 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(path.join(here, '..', 'public')));
-app.use('/vendor/three', express.static(path.join(here, '..', 'node_modules', 'three'), { maxAge: '7d' }));
 
 function snapshot() {
   return {
