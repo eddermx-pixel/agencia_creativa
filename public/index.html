@@ -13,7 +13,15 @@
     <span class="sp"></span>
     <a id="usageChip" class="chip" href="uso.html"></a>
     <button id="btnReqs" title="Solicitudes pendientes">🔔 <span class="badge" id="reqCount"></span></button>
-    <a href="clientes.html"><button title="Clientes y kits de marca">🏷️<span class="lbl"> Clientes</span></button></a>
+    <details class="menu">
+      <summary title="Menú">☰<span class="lbl"> Menú</span></summary>
+      <nav>
+        <a href="archivo.html">🗂️ Archivo de piezas</a>
+        <a href="memoria.html">🧠 Memoria del equipo</a>
+        <a href="clientes.html">🏷️ Clientes y mi agencia</a>
+        <a href="uso.html">⚡ Uso de IA y costos</a>
+      </nav>
+    </details>
     <a href="feed.html"><button>📱<span class="lbl"> Feed</span> <span class="badge" id="feedCount"></span></button></a>
     <button class="primary" id="btnNew">＋<span class="lbl"> Campaña</span></button>
   </header>
@@ -28,7 +36,7 @@
         <div id="reqList"></div>
       </div>
       <div class="card">
-        <h2>📂 Campañas</h2>
+        <h2>📋 Pendientes y campañas</h2>
         <div id="camps"></div>
       </div>
       <div class="card">

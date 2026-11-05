@@ -29,9 +29,16 @@ export function log(agente, texto, campaignId = null) {
 const requestWaiters = new Map();
 
 // tipos: 'pregunta' | 'autorizacion' | 'cuestionario' (varias preguntas) | 'concepto' (idea para aprobar)
-export function askBoss({ tipo, agente, campaignId, texto, opciones = [], detalle = '', preguntas = [] }) {
+// `key` identifica la llamada que la originó: si el servidor se reinicia y el
+// agente repite la misma llamada, se reutiliza la solicitud en vez de duplicarla.
+export function askBoss({ tipo, agente, campaignId, texto, opciones = [], detalle = '', preguntas = [], key = null }) {
+  const prev = key && db.requests.find((x) => x.key === key && x.estado !== 'expirada');
+  if (prev) {
+    if (prev.estado !== 'pendiente') return Promise.resolve(prev);
+    return new Promise((resolve) => requestWaiters.set(prev.id, resolve));
+  }
   const r = {
-    id: newId('r'), tipo, agente, campaignId, texto, opciones, detalle, preguntas,
+    id: newId('r'), key, tipo, agente, campaignId, texto, opciones, detalle, preguntas,
     estado: 'pendiente', creada: Date.now(),
   };
   db.requests.push(r);
@@ -54,6 +61,13 @@ export function answerRequest(id, { respuesta = '', aprobado = null, respuestas 
     ? (aprobado ? 'APROBADO' : 'NO / CAMBIOS') + (respuesta ? ` — ${respuesta}` : '')
     : r.tipo === 'cuestionario' ? 'respondió el cuestionario' : respuesta;
   log('jefe', `Respondió a ${r.agente}: ${resumen} (${via})`, r.campaignId);
+  // Lo que el jefe corrige se vuelve memoria del cliente.
+  if (respuesta && ['concepto', 'autorizacion'].includes(r.tipo)) {
+    addMemory({ campaignId: r.campaignId, texto: `${r.tipo === 'concepto' ? 'Sobre el concepto' : 'Sobre una autorización'} «${r.texto.replace(/^["«]|["»]$/g, '')}», el jefe dijo (${aprobado ? 'aprobando' : 'pidiendo cambios'}): ${respuesta}`, origen: 'comentario del jefe' });
+  }
+  const camp = db.campaigns.find((c) => c.id === r.campaignId);
+  if (camp && r.tipo === 'cuestionario') { camp.respuestas = respuesta; bus.emit('campaign', camp); }
+  if (camp && r.tipo === 'concepto' && aprobado) { camp.concepto = { titulo: r.texto, detalle: r.detalle }; camp.fase = 'produccion'; bus.emit('campaign', camp); }
   bus.emit('request', r);
   requestWaiters.get(id)?.(r);
   requestWaiters.delete(id);
@@ -63,9 +77,14 @@ export function answerRequest(id, { respuesta = '', aprobado = null, respuestas 
 // ---- Piezas creativas (feed tipo Tinder) ----
 const pieceWaiters = new Map();
 
-export function submitPiece({ agente, campaignId, tipo, titulo, descripcion, contenido, version = 1 }) {
+export function submitPiece({ agente, campaignId, tipo, titulo, descripcion, contenido, version = 1, key = null }) {
+  const prev = key && db.pieces.find((x) => x.key === key && x.estado !== 'expirada');
+  if (prev) {
+    if (prev.estado !== 'pendiente') return Promise.resolve(prev);
+    return new Promise((resolve) => pieceWaiters.set(prev.id, resolve));
+  }
   const p = {
-    id: newId('p'), agente, campaignId, tipo, titulo, descripcion, contenido, version,
+    id: newId('p'), key, agente, campaignId, tipo, titulo, descripcion, contenido, version,
     estado: 'pendiente', creada: Date.now(),
   };
   db.pieces.push(p);
@@ -81,6 +100,7 @@ export function judgePiece(id, { aprobado, comentario = '', via = 'web' }) {
   Object.assign(p, { estado: aprobado ? 'aprobada' : 'rechazada', comentario, via, juzgada: Date.now() });
   save();
   log('jefe', `${aprobado ? '✅ Aprobó' : '❌ Rechazó'} "${p.titulo}"${comentario ? `: ${comentario}` : ''} (${via})`, p.campaignId);
+  if (comentario) addMemory({ campaignId: p.campaignId, texto: `En la pieza (${p.tipo}) "${p.titulo}", el jefe ${aprobado ? 'la aprobó y comentó' : 'la rechazó y pidió'}: ${comentario}`, origen: 'feed' });
   bus.emit('piece', p);
   pieceWaiters.get(id)?.(p);
   pieceWaiters.delete(id);
@@ -171,4 +191,47 @@ export function brandText(client) {
   if (client.logo) l.push('- Logo: SÍ hay logo oficial. Para colocarlo usa exactamente el marcador {{LOGO}} como dirección de la imagen: en SVG <image href="{{LOGO}}" x=".." y=".." width=".." height=".."/> y en HTML <img src="{{LOGO}}">. El sistema lo reemplaza por el logo real. Nunca dibujes ni inventes un logo.');
   else l.push('- Logo: no hay logo cargado; escribe el nombre de la marca con buena tipografía.');
   return l.join('\n');
+}
+
+// ---- Fase de la campaña (para el panel de pendientes) ----
+export function setPhase(campaignId, fase) {
+  const c = db.campaigns.find((x) => x.id === campaignId);
+  if (!c || c.fase === fase) return;
+  c.fase = fase;
+  save();
+  bus.emit('campaign', c);
+}
+
+// ---- Memoria: lo que la agencia aprende de cada cliente ----
+export function addMemory({ clientId, campaignId, texto, origen = 'agente', agente = null }) {
+  if (arguments[0].key && db.memories.some((m) => m.key === arguments[0].key)) return null;
+  const cid = clientId !== undefined ? clientId : (db.campaigns.find((c) => c.id === campaignId)?.clientId ?? null);
+  const m = { id: newId('m'), key: arguments[0].key || null, clientId: cid || null, campaignId: campaignId || null, texto: String(texto).trim().slice(0, 800), origen, agente, creada: Date.now() };
+  if (!m.texto) return null;
+  db.memories.push(m);
+  if (db.memories.length > 3000) db.memories.splice(0, db.memories.length - 3000);
+  save();
+  bus.emit('memory', m);
+  return m;
+}
+
+const fecha = (t) => new Date(t).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+
+// Memoria + historial que se le da a cada agente al empezar una tarea.
+export function memoryText(clientId, campaignId) {
+  const out = [];
+  const delCliente = clientId ? db.memories.filter((m) => m.clientId === clientId).slice(-30) : [];
+  const generales = db.memories.filter((m) => !m.clientId).slice(-15);
+  if (delCliente.length) out.push('MEMORIA DE ESTE CLIENTE (preferencias y aprendizajes; respétalas):\n' + delCliente.map((m) => `- ${m.texto}`).join('\n'));
+  if (generales.length) out.push('MEMORIA DE LA AGENCIA (reglas generales del jefe):\n' + generales.map((m) => `- ${m.texto}`).join('\n'));
+  if (clientId) {
+    const previas = db.campaigns.filter((c) => c.clientId === clientId && c.id !== campaignId).slice(-5);
+    if (previas.length) {
+      out.push('CAMPAÑAS ANTERIORES DE ESTE CLIENTE:\n' + previas.map((c) => {
+        const ok = db.pieces.filter((p) => p.campaignId === c.id && p.estado === 'aprobada').map((p) => `${p.tipo} "${p.titulo}"`);
+        return `- ${fecha(c.creada)}: ${c.brief.slice(0, 160)}${c.concepto ? ` · Concepto aprobado: ${c.concepto.titulo}` : ''}${ok.length ? ` · Aprobado: ${ok.join(', ')}` : ''}`;
+      }).join('\n'));
+    }
+  }
+  return out.join('\n\n');
 }

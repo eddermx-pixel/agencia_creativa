@@ -112,3 +112,15 @@ select { font: inherit; color: inherit; }
 .atag.boss .nm { background: linear-gradient(135deg, #8b7bff, #6a5cff); }
 .atag.boss.alert .nm { background: #ff5d6c; animation: bob 1s ease-in-out infinite; }
 @keyframes bob { 50% { transform: translateY(-3px); } }
+
+/* Menú desplegable */
+details.menu { position: relative; }
+details.menu summary { list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: 10px; padding: 9px 14px; background: var(--chip); white-space: nowrap; user-select: none; }
+details.menu summary::-webkit-details-marker { display: none; }
+details.menu[open] summary { border-color: var(--accent); }
+details.menu nav { position: absolute; right: 0; top: calc(100% + 6px); background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; padding: 6px; min-width: 240px; box-shadow: var(--shadow); display: flex; flex-direction: column; z-index: 20; }
+details.menu nav a { color: var(--ink); text-decoration: none; padding: 10px 12px; border-radius: 10px; font-size: 14px; }
+details.menu nav a:hover { background: var(--chip); }
+@media (max-width: 520px) { details.menu summary { padding: 8px 9px; } }
+.camp a { color: var(--accent2); text-decoration: none; }
+button.mini { padding: 5px 10px; font-size: 12px; margin-top: 6px; }

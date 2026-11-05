@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const FILE = path.resolve(process.env.DATA_FILE || 'data/db.json');
-const EMPTY = { agency: {}, clients: [], campaigns: [], pieces: [], requests: [], log: [], usage: [] };
+const EMPTY = { agency: {}, clients: [], campaigns: [], pieces: [], requests: [], log: [], usage: [], jobs: [], memories: [] };
 
 function load() {
   try {
@@ -15,10 +15,14 @@ function load() {
 
 export const db = load();
 
-// Al reiniciar, los agentes que estaban esperando ya no existen en memoria.
-for (const r of db.requests) if (r.estado === 'pendiente') r.estado = 'expirada';
-for (const p of db.pieces) if (p.estado === 'pendiente') p.estado = 'expirada';
-for (const c of db.campaigns) if (c.estado === 'en_curso') c.estado = 'interrumpida';
+// Lo pendiente NO se borra al reiniciar: los agentes reales retoman su trabajo
+// (ver runtime-claude.js → boot). El modo demo sí lo marca como interrumpido.
+export function expirePending() {
+  for (const r of db.requests) if (r.estado === 'pendiente') r.estado = 'expirada';
+  for (const p of db.pieces) if (p.estado === 'pendiente') p.estado = 'expirada';
+  for (const c of db.campaigns) if (c.estado === 'en_curso') c.estado = 'interrumpida';
+  save();
+}
 
 let timer = null;
 export function save() {

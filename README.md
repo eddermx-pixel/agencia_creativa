@@ -8,6 +8,9 @@ Una agencia de marketing operada por agentes de Claude, cada uno con su propio r
 - **Clientes con kit de marca:** colores, logo, tono, público y reglas de cada cliente. Los agentes los usan en cada campaña y el logo real se coloca solo en los artes y videos.
 - **Uso de IA y costos:** página con el gasto del mes, de hoy, la proyección, el presupuesto y el gasto por agente y por campaña. El indicador ⚡ de arriba lo muestra siempre.
 - **Tu marca:** en *Clientes → Mi agencia* subes el nombre y el logo de tu agencia (en blanco se ve mejor, porque la interfaz es oscura). Aparece arriba, en la pantalla de acceso y en la pared de la oficina.
+- **No pierde el trabajo:** cada agente guarda su avance paso a paso. Si el servidor se reinicia (por ejemplo, cuando Railway instala una mejora), retoman donde se quedaron, sin repetir preguntas. El panel **📋 Pendientes** muestra qué espera tu respuesta, qué espera tu swipe y quién está trabajando. Si algo falla, el botón **↻ Reintentar** retoma desde el último paso guardado.
+- **Memoria:** los agentes recuerdan las preferencias de cada cliente, las reglas generales de la agencia y las campañas anteriores. Se llena sola con tus comentarios (feed y conceptos) y con lo que aprenden los agentes; en **☰ → 🧠 Memoria** puedes ver, editar, borrar o escribir reglas.
+- **Archivo:** en **☰ → 🗂️ Archivo** están todas las piezas de todas las campañas, con sus versiones y tus comentarios. Puedes descargar cada pieza (PNG, SVG, HTML o TXT) o la campaña completa en ZIP, con un resumen del brief, tus respuestas y el concepto aprobado.
 - **Telegram:** te llegan las preguntas, los conceptos, las autorizaciones y las piezas con botones. Para escribir una respuesta, contesta (reply) al mensaje.
 
 ## El equipo

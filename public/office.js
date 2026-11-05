@@ -99,9 +99,12 @@ function renderPanels() {
   if (openAgentId) renderAgent(openAgentId);
 }
 
-const ESTADOS = { en_curso: '🟢 En curso', terminada: '✅ Terminada', interrumpida: '⏸️ Interrumpida', error: '⚠️ Error' };
+const ESTADOS = { en_curso: '🟢 En curso', terminada: '✅ Terminada', interrumpida: '⏸️ Interrumpida', error: '⚠️ Se detuvo por un error' };
+const FASES = { descubrimiento: '📝 Fase 1 · Preguntas', concepto: '💡 Fase 2 · Concepto', produccion: '🛠️ Fase 3 · Producción', terminada: '✅ Terminada' };
 function renderCampaigns() {
-  const list = [...store.campaigns].sort((a, b) => b.creada - a.creada).slice(0, 8);
+  const all = [...store.campaigns].sort((a, b) => b.creada - a.creada);
+  const abiertas = all.filter((c) => c.estado !== 'terminada');
+  const list = [...abiertas, ...all.filter((c) => c.estado === 'terminada').slice(0, Math.max(0, 6 - abiertas.length))];
   const el = $('camps');
   if (!list.length) { el.innerHTML = '<div class="empty">Aún no hay campañas. Pulsa “＋ Campaña”.</div>'; return; }
   const mes = new Date(); mes.setDate(1); mes.setHours(0, 0, 0, 0);
@@ -109,8 +112,24 @@ function renderCampaigns() {
   el.innerHTML = list.map((c) => {
     const piezas = store.pieces.filter((p) => p.campaignId === c.id);
     const ok = piezas.filter((p) => p.estado === 'aprobada').length;
-    return `<div class="camp"><div><div class="n">${esc(c.cliente)}</div><div class="s">${ESTADOS[c.estado] || esc(c.estado)} · ${ok}/${piezas.length} piezas aprobadas · ${hace(c.creada)}</div></div><div class="usd" title="Costo aproximado de la API de Claude">${store.demo ? 'demo' : usd(c.costo)}</div></div>`;
+    const tusResp = store.requests.filter((r) => r.campaignId === c.id && r.estado === 'pendiente').length;
+    const tusSwipes = piezas.filter((p) => p.estado === 'pendiente').length;
+    const trabajando = Object.values(store.agents).filter((a) => a.campaignId === c.id && a.estado === 'trabajando').map((a) => byId(a.id)?.nombre).filter(Boolean);
+    let espera = '';
+    if (c.estado === 'en_curso') {
+      const partes = [];
+      if (tusResp) partes.push(`<a href="#" class="goReq">⏳ ${tusResp} respuesta${tusResp > 1 ? 's' : ''} tuya${tusResp > 1 ? 's' : ''}</a>`);
+      if (tusSwipes) partes.push(`<a href="feed.html">📱 ${tusSwipes} pieza${tusSwipes > 1 ? 's' : ''} por revisar</a>`);
+      if (trabajando.length) partes.push(`🛠️ ${esc(trabajando.join(', '))} trabajando`);
+      espera = partes.length ? `<div class="s">${partes.join(' · ')}</div>` : '';
+    }
+    const fase = c.estado === 'en_curso' && c.fase ? FASES[c.fase] : ESTADOS[c.estado] || esc(c.estado);
+    const accion = c.estado === 'error' ? `<button class="mini retry" data-id="${c.id}">↻ Reintentar</button>${c.resumen ? `<div class="s" style="color:var(--no)">${esc(c.resumen).slice(0, 140)}</div>` : ''}`
+      : c.estado === 'interrumpida' ? `<button class="mini retry" data-id="${c.id}">↻ Volver a empezar</button>` : '';
+    return `<div class="camp"><div style="min-width:0"><div class="n">${esc(c.cliente)}</div><div class="s">${fase} · ${ok}/${piezas.length} aprobadas · ${hace(c.creada)} · <a href="archivo.html#c=${c.id}">ver archivo</a></div>${espera}${accion}</div><div class="usd" title="Costo aproximado de la API de Claude">${store.demo ? 'demo' : usd(c.costo)}</div></div>`;
   }).join('') + (store.demo ? '' : `<div class="total"><span>Gasto de IA este mes (aprox.)</span><b>${usd(totalMes)}</b></div>`);
+  el.querySelectorAll('.goReq').forEach((a) => (a.onclick = (e) => { e.preventDefault(); $('reqCard').scrollIntoView({ behavior: 'smooth' }); }));
+  el.querySelectorAll('.retry').forEach((b) => (b.onclick = async () => { b.disabled = true; try { await api(`/api/campaigns/${b.dataset.id}/retry`, {}); } catch (e) { alert(e.message); b.disabled = false; } }));
 }
 
 function fillClientSelect() {
@@ -215,3 +234,5 @@ connect((type, data) => {
 });
 setInterval(renderPanels, 15000);
 $('camReset').onclick = () => office?.resetCamera();
+// Cierra el menú al tocar fuera.
+document.addEventListener('click', (e) => { const m = document.querySelector('details.menu'); if (m?.open && !m.contains(e.target)) m.open = false; });

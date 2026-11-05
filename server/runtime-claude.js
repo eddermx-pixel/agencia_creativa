@@ -1,180 +1,238 @@
 // Agentes reales: cada uno es Claude con su propio rol y herramientas.
-// El director usa "asignar_tarea", que despierta a otro agente y le espera.
+//
+// Cada tarea de un agente es un "trabajo" (job) que se guarda en la base de
+// datos después de CADA paso. Si el servidor se reinicia (por ejemplo, al subir
+// una mejora a Railway), los trabajos pendientes se retoman donde se quedaron:
+// las preguntas que ya te hicieron siguen esperando tu respuesta y no se repiten.
 import Anthropic from '@anthropic-ai/sdk';
-import { betaTool } from '@anthropic-ai/sdk/helpers/beta/json-schema';
 import { ROSTER, byId } from './roster.js';
-import { setAgent, log, addUsage, brandText } from './hub.js';
-import { db } from './store.js';
+import { setAgent, log, addUsage, brandText, memoryText, setPhase } from './hub.js';
+import { db, save, newId } from './store.js';
 import { makeActions, withAgent } from './actions.js';
 
-const client = new Anthropic();
+const client = new Anthropic({ maxRetries: 4 });
 const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
 const EFFORT = process.env.CLAUDE_EFFORT || 'medium';
+const MAX_TURNS = 60;
 
 const REGLAS = `Trabajas en una agencia de marketing operada por agentes de IA. El "jefe" es el dueño de la agencia (humano).
-- Usa la herramienta estado cada vez que empieces algo nuevo, con una frase corta en primera persona ("Buscando referencias de color…"). El jefe te ve como un personaje en una oficina y lee esa frase.
+- Usa la herramienta estado cada vez que empieces algo nuevo, con una frase corta en primera persona ("Buscando referencias de color…"). El jefe te ve como un astronauta en una estación espacial y lee esa frase.
 - Si te falta información importante para hacer bien tu trabajo, pregunta antes de producir (preguntar_al_jefe); es mejor una pregunta que una pieza que no se va a usar. Ofrece opciones concretas cuando sea posible.
 - Pide autorización (pedir_autorizacion) antes de cualquier acción que gaste dinero, publique, o contacte al cliente.
+- Lee la MEMORIA y las campañas anteriores (abajo): son preferencias reales del jefe y del cliente; respétalas. Cuando aprendas algo que servirá en futuras campañas (algo que al jefe o al cliente le gusta o no), guárdalo con guardar_memoria en una frase clara.
 - Escribe siempre en español.`;
 
 function systemFor(agent, campaign) {
-  const client = db.clients.find((c) => c.id === campaign.clientId);
-  return `${REGLAS}\n\n${agent.prompt}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(client)}\n\nBrief del jefe:\n${campaign.brief}`;
+  const cl = db.clients.find((c) => c.id === campaign.clientId);
+  const mem = memoryText(campaign.clientId, campaign.id);
+  return `${REGLAS}\n\n${agent.prompt}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${mem ? `\n\n${mem}` : ''}`;
 }
 
-function toolsFor(agentId, campaign) {
-  const a = makeActions(agentId, campaign);
-  const agent = byId[agentId];
-  const tools = [
-    betaTool({
-      name: 'estado',
-      description: 'Actualiza la frase que el jefe ve sobre tu personaje (qué estás haciendo ahora).',
-      inputSchema: { type: 'object', properties: { texto: { type: 'string' } }, required: ['texto'], additionalProperties: false },
-      run: ({ texto }) => a.estado(texto),
-    }),
-    betaTool({
-      name: 'preguntar_al_jefe',
-      description: 'Camina hasta el escritorio del jefe y le hace una pregunta. Espera su respuesta (puede tardar). Usa opciones cuando haya alternativas claras.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          pregunta: { type: 'string' },
-          opciones: { type: 'array', items: { type: 'string' }, description: 'De 2 a 4 respuestas posibles (opcional)' },
-        },
-        required: ['pregunta'],
-        additionalProperties: false,
-      },
-      run: ({ pregunta, opciones }) => a.preguntar(pregunta, opciones || []),
-    }),
-    betaTool({
-      name: 'pedir_autorizacion',
-      description: 'Pide autorización al jefe antes de una acción sensible (gastar, publicar, contactar al cliente). Devuelve AUTORIZADO o NO AUTORIZADO.',
-      inputSchema: {
-        type: 'object',
-        properties: { accion: { type: 'string' }, detalle: { type: 'string' } },
-        required: ['accion'],
-        additionalProperties: false,
-      },
-      run: ({ accion, detalle }) => a.autorizar(accion, detalle || ''),
-    }),
-  ];
+// ---------- Herramientas (definición para la API) ----------
+const obj = (properties, required) => ({ type: 'object', properties, required, additionalProperties: false });
+const TOOLS = {
+  estado: { description: 'Actualiza la frase que el jefe ve sobre tu personaje (qué estás haciendo ahora).', input_schema: obj({ texto: { type: 'string' } }, ['texto']) },
+  preguntar_al_jefe: {
+    description: 'Vas hasta el escritorio del jefe y le haces una pregunta. Espera su respuesta (puede tardar horas). Usa opciones cuando haya alternativas claras.',
+    input_schema: obj({ pregunta: { type: 'string' }, opciones: { type: 'array', items: { type: 'string' }, description: 'De 2 a 4 respuestas posibles (opcional)' } }, ['pregunta']),
+  },
+  pedir_autorizacion: {
+    description: 'Pide autorización al jefe antes de una acción sensible (gastar, publicar, contactar al cliente). Devuelve AUTORIZADO o NO AUTORIZADO.',
+    input_schema: obj({ accion: { type: 'string' }, detalle: { type: 'string' } }, ['accion']),
+  },
+  guardar_memoria: {
+    description: 'Guarda un aprendizaje para futuras campañas (preferencias del cliente o del jefe). alcance "cliente" (por defecto) o "agencia" si aplica a todos los clientes.',
+    input_schema: obj({ texto: { type: 'string' }, alcance: { type: 'string', enum: ['cliente', 'agencia'] } }, ['texto']),
+  },
+  entregar_pieza: {
+    description: 'Sube una pieza al feed del jefe, que la aprueba o rechaza deslizando. Espera su decisión y devuelve APROBADA o RECHAZADA con su comentario.',
+    input_schema: obj({
+      tipo: { type: 'string', enum: ['arte', 'video', 'texto'] },
+      titulo: { type: 'string' },
+      descripcion: { type: 'string', description: 'Qué es y por qué funciona, en 1-2 frases' },
+      contenido: { type: 'string', description: 'arte: SVG completo · video: documento HTML completo · texto: el texto' },
+      version: { type: 'integer' },
+    }, ['tipo', 'titulo', 'contenido']),
+  },
+  hacer_preguntas: {
+    description: 'FASE 1: hace al jefe varias preguntas de una vez (un formulario) antes de planear la campaña. Espera sus respuestas.',
+    input_schema: obj({
+      intro: { type: 'string', description: 'Una frase de por qué preguntas' },
+      preguntas: { type: 'array', items: obj({ pregunta: { type: 'string' }, opciones: { type: 'array', items: { type: 'string' } } }, ['pregunta']) },
+    }, ['preguntas']),
+  },
+  presentar_concepto: {
+    description: 'FASE 2: presenta el concepto creativo al jefe para aprobarlo antes de producir. Devuelve CONCEPTO APROBADO o los cambios que pide.',
+    input_schema: obj({
+      titulo: { type: 'string', description: 'Nombre corto del concepto' },
+      detalle: { type: 'string', description: 'Idea central, mensaje clave, tono y lista de piezas (tipo, formato y objetivo de cada una). Usa saltos de línea.' },
+    }, ['titulo', 'detalle']),
+  },
+};
 
-  if (agent.puedeEntregar) {
-    tools.push(betaTool({
-      name: 'entregar_pieza',
-      description: 'Sube una pieza al feed del jefe, que la aprueba o rechaza deslizando. Espera su decisión y devuelve APROBADA o RECHAZADA con su comentario.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          tipo: { type: 'string', enum: ['arte', 'video', 'texto'] },
-          titulo: { type: 'string' },
-          descripcion: { type: 'string', description: 'Qué es y por qué funciona, en 1-2 frases' },
-          contenido: { type: 'string', description: 'arte: SVG completo · video: documento HTML completo · texto: el texto' },
-          version: { type: 'integer' },
-        },
-        required: ['tipo', 'titulo', 'contenido'],
-        additionalProperties: false,
-      },
-      run: (input) => a.entregar(input),
-    }));
-  }
-
+function toolDefs(agentId) {
+  const names = ['estado', 'preguntar_al_jefe', 'pedir_autorizacion', 'guardar_memoria'];
+  if (byId[agentId].puedeEntregar) names.push('entregar_pieza');
+  const defs = names.map((name) => ({ name, ...TOOLS[name] }));
   if (agentId === 'director') {
-    tools.push(betaTool({
-      name: 'hacer_preguntas',
-      description: 'FASE 1: hace al jefe varias preguntas de una vez (un formulario) antes de planear la campaña. Espera sus respuestas.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          intro: { type: 'string', description: 'Una frase de por qué preguntas' },
-          preguntas: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: { pregunta: { type: 'string' }, opciones: { type: 'array', items: { type: 'string' } } },
-              required: ['pregunta'],
-              additionalProperties: false,
-            },
-          },
-        },
-        required: ['preguntas'],
-        additionalProperties: false,
-      },
-      run: ({ intro, preguntas }) => a.cuestionario(intro, preguntas),
-    }));
-    tools.push(betaTool({
-      name: 'presentar_concepto',
-      description: 'FASE 2: presenta el concepto creativo al jefe para aprobarlo antes de producir. Devuelve CONCEPTO APROBADO o los cambios que pide.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          titulo: { type: 'string', description: 'Nombre corto del concepto' },
-          detalle: { type: 'string', description: 'Idea central, mensaje clave, tono y lista de piezas (tipo, formato y objetivo de cada una). Usa saltos de línea.' },
-        },
-        required: ['titulo', 'detalle'],
-        additionalProperties: false,
-      },
-      run: ({ titulo, detalle }) => a.concepto(titulo, detalle),
-    }));
+    defs.push({ name: 'hacer_preguntas', ...TOOLS.hacer_preguntas }, { name: 'presentar_concepto', ...TOOLS.presentar_concepto });
     const equipo = ROSTER.filter((x) => x.id !== 'director');
-    tools.push(betaTool({
+    defs.push({
       name: 'asignar_tarea',
       description: `Asigna una tarea a un miembro del equipo y espera su resultado. Equipo: ${equipo.map((x) => `${x.id} (${x.nombre}, ${x.rol})`).join('; ')}. Puedes asignar varias tareas a la vez a agentes distintos.`,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          agente: { type: 'string', enum: equipo.map((x) => x.id) },
-          instrucciones: { type: 'string', description: 'Tarea completa con todo el contexto necesario' },
-        },
-        required: ['agente', 'instrucciones'],
-        additionalProperties: false,
-      },
-      run: ({ agente, instrucciones }) => runAgent(agente, instrucciones, campaign),
-    }));
+      input_schema: obj({ agente: { type: 'string', enum: equipo.map((x) => x.id) }, instrucciones: { type: 'string', description: 'Tarea completa con todo el contexto necesario' } }, ['agente', 'instrucciones']),
+    });
   }
-  return tools;
+  return defs;
 }
 
-export async function runAgent(agentId, task, campaign) {
-  return withAgent(agentId, async () => {
-    const agent = byId[agentId];
-    setAgent(agentId, { estado: 'trabajando', burbuja: 'Empezando…', campaignId: campaign.id });
-    log(agentId, `Nueva tarea: ${task.slice(0, 200)}`, campaign.id);
-    try {
-      const runner = client.beta.messages.toolRunner({
+async function runTool(job, block, campaign) {
+  const a = makeActions(job.agentId, campaign, block.id);
+  const i = block.input || {};
+  switch (block.name) {
+    case 'estado': return a.estado(i.texto || '');
+    case 'preguntar_al_jefe': return a.preguntar(i.pregunta || '', i.opciones || []);
+    case 'pedir_autorizacion': return a.autorizar(i.accion || '', i.detalle || '');
+    case 'guardar_memoria': return a.memoria(i.texto || '', i.alcance);
+    case 'entregar_pieza':
+      if (!i.contenido || !i.tipo) throw new Error('Faltan tipo o contenido de la pieza');
+      return a.entregar(i);
+    case 'hacer_preguntas': return a.cuestionario(i.intro, i.preguntas);
+    case 'presentar_concepto': return a.concepto(i.titulo || 'Concepto', i.detalle || '');
+    case 'asignar_tarea': return delegate(job, block.id, i.agente, i.instrucciones || '', campaign);
+    default: throw new Error(`Herramienta desconocida: ${block.name}`);
+  }
+}
+
+// ---------- Trabajos persistentes ----------
+const running = new Map();
+
+function createJob({ agentId, task, campaignId, parentJobId = null, parentToolUseId = null }) {
+  const job = {
+    id: newId('j'), agentId, task, campaignId, parentJobId, parentToolUseId,
+    estado: 'activo', creado: Date.now(), messages: [{ role: 'user', content: task }],
+  };
+  db.jobs.push(job);
+  save();
+  return job;
+}
+
+async function delegate(parent, toolUseId, agentId, task, campaign) {
+  if (!byId[agentId] || agentId === 'director') throw new Error(`No existe el agente ${agentId}`);
+  setPhase(campaign.id, 'produccion');
+  const child = db.jobs.find((j) => j.parentToolUseId === toolUseId)
+    || createJob({ agentId, task, campaignId: campaign.id, parentJobId: parent.id, parentToolUseId: toolUseId });
+  return runJob(child);
+}
+
+export function runJob(job) {
+  if (job.estado === 'terminado') return Promise.resolve(job.resultado);
+  if (running.has(job.id)) return running.get(job.id);
+  const p = withAgent(job.agentId, () => loop(job)).finally(() => running.delete(job.id));
+  running.set(job.id, p);
+  return p;
+}
+
+const textOf = (content) => (Array.isArray(content) ? content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim() : String(content || ''));
+
+async function loop(job) {
+  const campaign = db.campaigns.find((c) => c.id === job.campaignId);
+  const agent = byId[job.agentId];
+  if (!campaign || !agent) throw new Error('Campaña o agente inexistente');
+  job.estado = 'activo'; job.error = null;
+  setAgent(job.agentId, { estado: 'trabajando', burbuja: job.messages.length > 1 ? 'Retomando donde me quedé…' : 'Empezando…', campaignId: campaign.id });
+  if (job.messages.length === 1) log(job.agentId, `Nueva tarea: ${job.task.slice(0, 200)}`, campaign.id);
+  else log(job.agentId, 'Retomo mi tarea donde me quedé.', campaign.id);
+
+  try {
+    for (let turn = 0; turn < MAX_TURNS; turn++) {
+      const last = job.messages.at(-1);
+      if (last.role === 'assistant') {
+        const uses = last.content.filter((b) => b.type === 'tool_use');
+        if (!uses.length) return finish(job, textOf(last.content));
+        // Ejecuta las herramientas pedidas (en paralelo) y devuelve TODOS los resultados juntos.
+        const results = await Promise.all(uses.map(async (b) => {
+          if (job.cortado) return { type: 'tool_result', tool_use_id: b.id, content: 'Tu respuesta se cortó por ser demasiado larga; vuelve a intentarlo con un contenido más compacto.', is_error: true };
+          try {
+            return { type: 'tool_result', tool_use_id: b.id, content: String(await runTool(job, b, campaign)) || 'ok' };
+          } catch (e) {
+            return { type: 'tool_result', tool_use_id: b.id, content: `Error: ${e.message}`, is_error: true };
+          }
+        }));
+        job.messages.push({ role: 'user', content: results });
+        job.cortado = false;
+        save();
+        setAgent(job.agentId, { estado: 'trabajando', campaignId: campaign.id });
+      }
+
+      const resp = await client.beta.messages.create({
         model: MODEL,
         max_tokens: 16000,
         output_config: { effort: EFFORT },
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         system: systemFor(agent, campaign),
-        tools: toolsFor(agentId, campaign),
-        messages: [{ role: 'user', content: task }],
+        tools: toolDefs(job.agentId),
+        messages: job.messages,
       });
-      // Cada vuelta del ciclo es una llamada a la API: sumamos su costo.
-      let final;
-      for await (const msg of runner) {
-        addUsage(campaign.id, MODEL, msg.usage, agentId);
-        final = msg;
+      addUsage(campaign.id, MODEL, resp.usage, job.agentId);
+      if (resp.stop_reason === 'refusal') {
+        log(job.agentId, 'No pude completar esta tarea (rechazada por las políticas del modelo).', campaign.id);
+        return finish(job, 'El agente no pudo completar la tarea.');
       }
-      if (final.stop_reason === 'refusal') {
-        log(agentId, 'No pude completar esta tarea (rechazada por las políticas del modelo).', campaign.id);
-        return 'El agente no pudo completar la tarea.';
-      }
-      const text = final.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
-      log(agentId, `Terminé: ${text.slice(0, 300)}`, campaign.id);
-      return text || 'Tarea terminada.';
-    } catch (err) {
-      log(agentId, `Error: ${err.message}`, campaign.id);
-      return `Error del agente: ${err.message}`;
-    } finally {
-      setAgent(agentId, { estado: 'libre', burbuja: '', campaignId: null });
+      job.messages.push({ role: 'assistant', content: resp.content });
+      job.cortado = resp.stop_reason === 'max_tokens';
+      save();
     }
-  });
+    return finish(job, 'Se alcanzó el límite de pasos para esta tarea.');
+  } catch (err) {
+    job.estado = 'error';
+    job.error = err.message;
+    save();
+    log(job.agentId, `Error: ${err.message}`, campaign.id);
+    throw err;
+  } finally {
+    setAgent(job.agentId, { estado: 'libre', burbuja: '', campaignId: null });
+  }
 }
 
+function finish(job, text) {
+  job.estado = 'terminado';
+  job.resultado = text || 'Tarea terminada.';
+  job.terminado = Date.now();
+  delete job.messages; // ya no hace falta: libera espacio
+  save();
+  log(job.agentId, `Terminé: ${job.resultado.slice(0, 300)}`, job.campaignId);
+  return job.resultado;
+}
+
+// ---------- API usada por el servidor ----------
 export async function runCampaign(campaign) {
-  return runAgent('director', `Nueva campaña para ${campaign.cliente}. Organiza al equipo y entrega las piezas.`, campaign);
+  const job = createJob({ agentId: 'director', task: `Nueva campaña para ${campaign.cliente}. Empieza por la FASE 1 (descubrimiento).`, campaignId: campaign.id });
+  campaign.jobId = job.id;
+  save();
+  return runJob(job);
+}
+
+// Al arrancar: retoma las campañas que estaban en curso.
+export function boot() {
+  return db.campaigns
+    .filter((c) => c.estado === 'en_curso' && c.jobId)
+    .map((c) => {
+      const job = db.jobs.find((j) => j.id === c.jobId);
+      if (!job || job.estado === 'terminado') return null;
+      log('director', `🔄 Retomando la campaña de ${c.cliente} tras un reinicio.`, c.id);
+      return { campaign: c, promise: runJob(job) };
+    })
+    .filter(Boolean);
+}
+
+// Reintentar una campaña que falló: retoma sus trabajos desde el último paso guardado.
+export function retryCampaign(campaign) {
+  const job = db.jobs.find((j) => j.id === campaign.jobId);
+  if (!job) return runCampaign(campaign);
+  for (const j of db.jobs) if (j.campaignId === campaign.id && j.estado === 'error') j.estado = 'activo';
+  return runJob(job);
 }
 
 // Chat directo con un agente (clic en el personaje → "Hablar").
@@ -188,5 +246,5 @@ export async function chatWithAgent(agentId, mensaje, contexto) {
     messages: [{ role: 'user', content: mensaje }],
   });
   addUsage(null, MODEL, res.usage, agentId);
-  return res.content.filter((b) => b.type === 'text').map((b) => b.text).join('\n');
+  return textOf(res.content);
 }

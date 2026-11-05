@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agencia IA — Memoria</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 900px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .intro { color: var(--muted); margin: 0; }
+    .add { display: grid; grid-template-columns: 200px 1fr auto; gap: 8px; }
+    @media (max-width: 640px) { .add { grid-template-columns: 1fr; } }
+    .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filters button.on { background: var(--accent); border-color: transparent; color: #fff; }
+    .mem { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .mem:last-child { border-bottom: 0; }
+    .mem .txt { flex: 1; min-width: 0; }
+    .mem .meta { color: var(--muted); font-size: 12px; margin-top: 4px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: var(--chip); border: 1px solid var(--line); }
+    .pill.jefe { border-color: rgba(139,123,255,.6); } .pill.feed { border-color: rgba(255,181,71,.5); }
+    .mem .acts { display: flex; gap: 6px; } .mem .acts button { padding: 6px 9px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a>
+    <span class="sp"></span>
+    <a id="usageChip" class="chip" href="uso.html"></a>
+  </header>
+  <main class="wrap">
+    <p class="intro">🧠 Lo que tu equipo recuerda. Los agentes leen esta memoria antes de cada tarea: las preferencias de cada cliente, las reglas generales de la agencia y lo que les corregiste. Se llena sola con tus comentarios del feed y de los conceptos, y también puedes escribir reglas tú.</p>
+    <section class="card">
+      <h2>Enseñarle algo al equipo</h2>
+      <div class="add">
+        <select id="scope"></select>
+        <input id="txt" placeholder="Ej. A este cliente no le gustan los fondos blancos">
+        <button class="primary" id="addBtn">Guardar</button>
+      </div>
+    </section>
+    <section class="card">
+      <h2>Recuerdos <span class="badge" id="count" style="background:var(--chip)"></span></h2>
+      <div class="filters" id="filters"></div>
+      <div id="list" style="margin-top:8px"></div>
+    </section>
+  </main>
+  <script type="module" src="memoria.js"></script>
+</body>
+</html>

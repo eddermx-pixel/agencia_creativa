@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agencia IA — Archivo</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .bar select, .bar input { width: auto; min-width: 160px; flex: 1; }
+    .camp { background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+    .camp .hd { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+    .camp .t { font-weight: 800; font-size: 17px; } .camp .s { color: var(--muted); font-size: 13px; }
+    .camp .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+    .camp .acts a { text-decoration: none; }
+    .camp .acts button { font-size: 13px; padding: 7px 11px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; }
+    .tile { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; position: relative; }
+    .tile:hover { border-color: var(--accent); }
+    .th { aspect-ratio: 4 / 5; background: #07070c; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .th img { width: 100%; height: 100%; object-fit: cover; }
+    .th iframe { border: 0; width: 1080px; height: 1920px; transform-origin: top left; position: absolute; left: 0; top: 0; pointer-events: none; }
+    .th pre { margin: 0; padding: 10px; font: 11px/1.4 system-ui; color: var(--ink); white-space: pre-wrap; overflow: hidden; height: 100%; width: 100%; background: var(--panel); }
+    .tile .info { padding: 8px 10px; font-size: 13px; } .tile .info span { display: block; color: var(--muted); font-size: 12px; }
+    .st { position: absolute; top: 8px; left: 8px; z-index: 2; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
+    .st.aprobada { background: var(--ok); color: #04140e; } .st.rechazada { background: var(--no); color: #fff; } .st.pendiente { background: var(--warn); color: #1b1406; } .st.expirada { background: #555; color: #fff; }
+    .det { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; }
+    @media (max-width: 760px) { .det { grid-template-columns: 1fr; } }
+    .prev { background: #07070c; border-radius: 12px; overflow: hidden; position: relative; min-height: 300px; display: flex; align-items: center; justify-content: center; }
+    .prev img { max-width: 100%; max-height: 70vh; }
+    .prev iframe { border: 0; width: 1080px; height: 1920px; transform-origin: top left; position: absolute; left: 0; top: 0; }
+    .prev pre { white-space: pre-wrap; margin: 0; padding: 16px; font: 15px/1.5 system-ui; color: var(--ink); background: var(--panel); width: 100%; }
+    .kv { font-size: 14px; display: flex; flex-direction: column; gap: 8px; } .kv b { color: var(--muted); font-weight: 600; font-size: 12px; display: block; }
+    dialog { width: min(1000px, calc(100vw - 24px)); }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a>
+    <span class="sp"></span>
+    <a id="usageChip" class="chip" href="uso.html"></a>
+  </header>
+  <main class="wrap">
+    <div class="bar">
+      <select id="fCliente"></select>
+      <select id="fEstado"><option value="aprobada">Solo aprobadas</option><option value="">Todas las versiones</option><option value="rechazada">Rechazadas</option><option value="pendiente">Por revisar</option></select>
+      <select id="fTipo"><option value="">Arte, video y texto</option><option value="arte">🎨 Artes</option><option value="video">🎬 Videos</option><option value="texto">✍️ Textos</option></select>
+      <input id="fBuscar" placeholder="Buscar…">
+    </div>
+    <div id="list"></div>
+  </main>
+  <dialog id="dlg"><div class="body" id="dlgBody"></div></dialog>
+  <script type="module" src="archivo.js"></script>
+</body>
+</html>

@@ -7,8 +7,9 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import { db, save, newId } from './store.js';
 import { publicRoster, byId } from './roster.js';
-import { bus, agentState, answerRequest, judgePiece, log, pieceSummary, usageSummary, usageReport } from './hub.js';
+import { bus, agentState, answerRequest, judgePiece, log, pieceSummary, usageSummary, usageReport, addMemory } from './hub.js';
 import { startTelegram } from './telegram.js';
+import { makeZip } from './zip.js';
 
 // Carga .env si existe (sin dependencias extra).
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -139,7 +140,18 @@ app.get('/api/clients/:id/logo', (req, res) => {
 
 app.post('/api/campaigns', (req, res) => {
   const { clientId, brief } = req.body || {};
-  const cl = db.clients.find((x) => x.id === clientId);
+  let cl = db.clients.find((x) => x.id === clientId);
+  // Cliente escrito a mano: se busca por nombre o se le crea su ficha, para que
+  // su memoria y su historial queden separados de los demás clientes.
+  const nombre = String(req.body?.cliente || '').trim();
+  if (!cl && nombre) {
+    cl = db.clients.find((x) => x.nombre.toLowerCase() === nombre.toLowerCase());
+    if (!cl) {
+      cl = { id: newId('cl'), nombre: nombre.slice(0, 120), colores: [], creado: Date.now(), actualizado: Date.now() };
+      db.clients.push(cl);
+      bus.emit('client', clientSummary(cl));
+    }
+  }
   const cliente = cl?.nombre || req.body?.cliente;
   if (!cliente?.trim() || !brief?.trim()) return res.status(400).json({ error: 'Falta cliente o brief' });
   const c = { id: newId('c'), clientId: cl?.id || null, cliente: cliente.trim(), brief: brief.trim(), estado: 'en_curso', creada: Date.now(), costo: 0 };
@@ -147,10 +159,26 @@ app.post('/api/campaigns', (req, res) => {
   save();
   log('jefe', `Nueva campaña: ${c.cliente}`, c.id);
   bus.emit('campaign', c);
-  runtime.runCampaign(c)
-    .then((resumen) => { c.estado = 'terminada'; c.resumen = resumen; })
+  track(c, runtime.runCampaign(c));
+  res.json(c);
+});
+
+// Sigue una campaña hasta que termina (o falla) y actualiza su estado.
+function track(c, promise) {
+  promise
+    .then((resumen) => { c.estado = 'terminada'; c.fase = 'terminada'; c.resumen = resumen; c.terminada = Date.now(); log('director', `🏁 Campaña de ${c.cliente} terminada.`, c.id); })
     .catch((e) => { c.estado = 'error'; c.resumen = e.message; })
     .finally(() => { save(); bus.emit('campaign', c); });
+}
+
+app.post('/api/campaigns/:id/retry', (req, res) => {
+  const c = db.campaigns.find((x) => x.id === req.params.id);
+  if (!c) return res.status(404).json({ error: 'No existe' });
+  if (c.estado === 'en_curso') return res.status(409).json({ error: 'La campaña ya está en curso' });
+  c.estado = 'en_curso'; c.resumen = '';
+  save(); bus.emit('campaign', c);
+  log('jefe', `Reintentar campaña: ${c.cliente}`, c.id);
+  track(c, runtime.retryCampaign(c));
   res.json(c);
 });
 
@@ -163,6 +191,69 @@ app.post('/api/requests/:id', (req, res) => {
 app.get('/api/pieces', (req, res) => {
   const estado = req.query.estado;
   res.json(db.pieces.filter((p) => !estado || p.estado === estado).slice(-100).map(pieceSummary));
+});
+
+// ---- Archivo: todas las piezas y descargas ----
+const slug = (s) => String(s || 'pieza').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60) || 'pieza';
+const EXT = { arte: 'svg', video: 'html', texto: 'txt' };
+function pieceBody(p) {
+  if (p.tipo === 'texto') return p.contenido;
+  const camp = db.campaigns.find((x) => x.id === p.campaignId);
+  const logo = db.clients.find((x) => x.id === camp?.clientId)?.logo || '';
+  return p.contenido.replaceAll('{{LOGO}}', logo);
+}
+const fileName = (p) => { const b = slug(p.titulo); return `${/-v\d+$/.test(b) ? b : `${b}-v${p.version || 1}`}.${EXT[p.tipo] || 'txt'}`; };
+
+app.get('/api/archive', (req, res) => {
+  res.json({
+    campaigns: db.campaigns.map((c) => ({ id: c.id, cliente: c.cliente, clientId: c.clientId, brief: c.brief, estado: c.estado, fase: c.fase, creada: c.creada, concepto: c.concepto || null, respuestas: c.respuestas || '', costo: c.costo || 0 })),
+    pieces: db.pieces.map(pieceSummary),
+  });
+});
+
+app.get('/api/pieces/:id/download', (req, res) => {
+  const p = db.pieces.find((x) => x.id === req.params.id);
+  if (!p) return res.status(404).end();
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName(p)}"`);
+  res.type({ arte: 'image/svg+xml', video: 'text/html', texto: 'text/plain; charset=utf-8' }[p.tipo] || 'text/plain').send(pieceBody(p));
+});
+
+// Campaña completa en .zip: piezas aprobadas (o todas con ?todas=1) + resumen.
+app.get('/api/campaigns/:id/zip', (req, res) => {
+  const c = db.campaigns.find((x) => x.id === req.params.id);
+  if (!c) return res.status(404).end();
+  const all = db.pieces.filter((p) => p.campaignId === c.id);
+  const sel = req.query.todas ? all : all.filter((p) => p.estado === 'aprobada');
+  const fecha = new Date(c.creada).toISOString().slice(0, 10);
+  const resumen = [
+    `CAMPAÑA: ${c.cliente}`, `Fecha: ${fecha}`, `Estado: ${c.estado}`, '', 'BRIEF:', c.brief, '',
+    c.respuestas ? `RESPUESTAS DEL CUESTIONARIO:\n${c.respuestas}\n` : '',
+    c.concepto ? `CONCEPTO APROBADO: ${c.concepto.titulo}\n${c.concepto.detalle}\n` : '',
+    'PIEZAS:', ...all.map((p) => `- [${p.estado}] ${p.tipo} "${p.titulo}" v${p.version || 1}${p.comentario ? ` — comentario: ${p.comentario}` : ''}`),
+  ].join('\n');
+  const files = [{ name: 'resumen.txt', data: resumen }, ...sel.map((p) => ({ name: `${p.estado === 'aprobada' ? 'aprobadas' : p.estado}/${fileName(p)}`, data: pieceBody(p) }))];
+  res.setHeader('Content-Disposition', `attachment; filename="${slug(c.cliente)}-${fecha}.zip"`);
+  res.type('application/zip').send(makeZip(files));
+});
+
+// ---- Memoria ----
+app.get('/api/memories', (req, res) => {
+  res.json([...db.memories].reverse().map(({ key, ...m }) => m));
+});
+app.post('/api/memories', (req, res) => {
+  const { clientId = null, texto = '' } = req.body || {};
+  if (!String(texto).trim()) return res.status(400).json({ error: 'Escribe algo para recordar' });
+  if (clientId && !db.clients.some((c) => c.id === clientId)) return res.status(400).json({ error: 'Cliente inexistente' });
+  res.json(addMemory({ clientId, texto, origen: 'jefe' }));
+});
+app.post('/api/memories/:id', (req, res) => {
+  const m = db.memories.find((x) => x.id === req.params.id);
+  if (!m) return res.status(404).json({ error: 'No existe' });
+  if ('texto' in (req.body || {})) m.texto = String(req.body.texto).trim().slice(0, 800);
+  if (req.body?.borrar) db.memories.splice(db.memories.indexOf(m), 1);
+  save();
+  bus.emit('memory', { ...m, borrada: !!req.body?.borrar });
+  res.json({ ok: true });
 });
 
 // Las piezas se sirven en una "caja de arena": su código no puede tocar la app.
@@ -218,8 +309,11 @@ bus.on('campaign', (c) => broadcast('campaign', c));
 bus.on('client', (c) => broadcast('client', c));
 bus.on('usage', (u) => broadcast('usage', u));
 bus.on('agency', (a) => broadcast('agency', a));
+bus.on('memory', (m) => broadcast('memory', { id: m.id, borrada: !!m.borrada }));
 
 startTelegram();
+// Retoma lo que estaba en curso antes del reinicio.
+for (const { campaign, promise } of runtime.boot()) track(campaign, promise);
 server.listen(PORT, () => {
   console.log(`\n🏢 Agencia IA en http://localhost:${PORT}${KEY ? `/?key=${KEY}` : ''}`);
   console.log(DEMO ? '🎭 MODO DEMO (sin API key de Claude: los agentes siguen un guion)' : `🤖 Agentes reales con ${process.env.CLAUDE_MODEL || 'claude-opus-5-5'}`);

@@ -2,7 +2,7 @@
 // Sirve para ver la oficina, las aprobaciones, Telegram y el feed funcionando.
 import { setAgent, log } from './hub.js';
 import { makeActions, withAgent } from './actions.js';
-import { db } from './store.js';
+import { db, expirePending } from './store.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -211,3 +211,7 @@ export async function chatWithAgent(agentId) {
   ];
   return frases[Math.floor(Math.random() * frases.length)];
 }
+
+// En modo demo los guiones no se pueden retomar: lo pendiente queda interrumpido.
+export function boot() { expirePending(); return []; }
+export function retryCampaign(campaign) { return runCampaign(campaign); }
