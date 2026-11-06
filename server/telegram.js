@@ -102,6 +102,7 @@ async function handle(update) {
       ok = r && answerRequest(id, { respuesta: r.opciones[Number(val)], via: 'telegram' });
     }
     if (kind === 'p') ok = judgePiece(id, { aprobado: val === '1', via: 'telegram' });
+    if (ok?.campaignId) bus.emit('wake', ok.campaignId);
     await api('answerCallbackQuery', { callback_query_id: cq.id, text: ok ? 'Listo ✅' : 'Ya estaba resuelto' });
     return;
   }
@@ -114,6 +115,8 @@ async function handle(update) {
   if (String(m.chat.id) !== String(CHAT)) return;
   const ref = m.reply_to_message && refFor.get(m.reply_to_message.message_id);
   if (!ref) return;
+  const cidRef = (db.requests.find((x) => x.id === ref.id) || db.pieces.find((x) => x.id === ref.id))?.campaignId;
+  setTimeout(() => cidRef && bus.emit('wake', cidRef), 500);
   if (ref.kind === 'r') {
     const r = db.requests.find((x) => x.id === ref.id);
     if (r?.tipo === 'autorizacion') answerRequest(ref.id, { aprobado: !/^\s*no\b/i.test(m.text), respuesta: m.text, via: 'telegram' });

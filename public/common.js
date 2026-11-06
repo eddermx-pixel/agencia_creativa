@@ -67,6 +67,15 @@ const NAVY = '#24246a', WHITE = '#f6f6fd', SHADE = '#dcdcef', SHADE2 = '#c9c9e6'
 export function drawCrew(ctx, x, y, p, o = {}) {
   const { t = 0, walking = false, facing = 0, typing = false, sitting = false, wave = false, glow = false, scale = 1, shadow = true } = o;
   const tipo = p?.tipo || 'astronauta';
+  if (tipo === 'perro') {
+    ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+    const fl = sitting ? Math.sin(t * 1.6) : walking ? -Math.abs(Math.sin(t * 9)) * 3 : -2 + Math.sin(t * 2.2) * 2;
+    if (shadow && !sitting) { ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(0, 0, facing === 1 || facing === -1 ? 42 : 28, 6, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.translate(0, fl);
+    drawDog(ctx, p, o);
+    ctx.restore();
+    return;
+  }
   const back = facing === 'back';
   const dir = back ? 0 : (facing || 0);
   const q = dir !== 0; // vista de tres cuartos
@@ -151,6 +160,116 @@ export function drawCrew(ctx, x, y, p, o = {}) {
   else drawHelmet(ctx, hy, back, q, tipo === 'perro', circ, shape);
 
   ctx.restore();
+}
+
+
+// ---------- Perro astronauta: cuerpo de perro en 4 patas con traje espacial para perro ----------
+function drawDog(ctx, p, o) {
+  const { t = 0, walking = false, facing = 0, typing = false, sitting = false, glow = false } = o;
+  const back = facing === 'back';
+  const side = facing === 1 || facing === -1;
+  const LW = 3.2;
+  const fur = '#c98b4f', furDark = '#7a4a24', cream = '#f3dfc6';
+  const shape = (fn, fill, stroke = true) => { ctx.beginPath(); fn(); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.lineWidth = LW; ctx.strokeStyle = NAVY; ctx.lineJoin = 'round'; ctx.stroke(); } };
+  const rr = (x, y, w, h, r, fill, stroke = true) => shape(() => ctx.roundRect(x, y, w, h, r), fill, stroke);
+  const circ = (x, y, r, fill, stroke = true) => shape(() => ctx.arc(x, y, r, 0, Math.PI * 2), fill, stroke);
+  const wag = Math.sin(t * (walking ? 14 : 9)) * 0.5;
+  const tail = (x, y, dirx) => {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(dirx * (-0.9 + wag));
+    rr(-5, -26, 10, 28, 5, fur); ctx.restore();
+  };
+  const badge = (x, y, w) => {
+    const pulse = glow ? 0.5 + 0.5 * Math.sin(t * 5) : 0;
+    rr(x, y, w, 18, 5, WHITE);
+    if (p?.color) { ctx.save(); ctx.globalAlpha = 0.18 + pulse * 0.35; ctx.fillStyle = p.color; ctx.beginPath(); ctx.roundRect(x + 1.5, y + 1.5, w - 3, 15, 4); ctx.fill(); ctx.restore(); }
+    ctx.font = '12px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(p?.icono || '★', x + w / 2, y + 9.5);
+  };
+  // Casco de burbuja con la cabeza del perro (dir: 1 derecha, -1 izquierda, 0 frente)
+  const head = (hx, hy, dir) => {
+    circ(hx, hy, 30, 'rgba(200,222,255,.35)');
+    ctx.save(); ctx.beginPath(); ctx.arc(hx, hy, 28, 0, Math.PI * 2); ctx.clip();
+    if (back) {
+      ctx.fillStyle = fur; ctx.beginPath(); ctx.ellipse(hx, hy + 6, 19, 19, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = furDark; for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(hx + s * 15, hy + 6, 6, 13, s * 0.3, 0, Math.PI * 2); ctx.fill(); }
+    } else if (dir) {
+      ctx.fillStyle = fur; ctx.beginPath(); ctx.ellipse(hx - dir * 2, hy + 4, 17, 17, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(hx + dir * 14, hy + 10, 12, 8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = cream; ctx.beginPath(); ctx.ellipse(hx + dir * 15, hy + 13, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = furDark; ctx.beginPath(); ctx.ellipse(hx - dir * 9, hy + 6, 6, 13, -dir * 0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1b1b2a'; ctx.beginPath(); ctx.ellipse(hx + dir * 24, hy + 8, 3.6, 3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(hx + dir * 6, hy - 1, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff7a9a'; ctx.beginPath(); ctx.ellipse(hx + dir * 14, hy + 19, 3, 4, 0, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = fur; ctx.beginPath(); ctx.ellipse(hx, hy + 4, 18, 18, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = furDark; for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(hx + s * 17, hy + 6, 6, 13, s * 0.3, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = cream; ctx.beginPath(); ctx.ellipse(hx, hy + 12, 10, 8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1b1b2a'; ctx.beginPath(); ctx.ellipse(hx, hy + 8, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
+      const blink = (t % 4.5) < 0.12;
+      for (const ex of [-7, 7]) { ctx.beginPath(); ctx.ellipse(hx + ex, hy, 2.6, blink ? 0.5 : 2.8, 0, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = '#ff7a9a'; ctx.beginPath(); ctx.ellipse(hx, hy + 18, 3, 4 + (typing ? Math.abs(Math.sin(t * 6)) * 1.5 : 0), 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    ctx.lineWidth = LW; ctx.strokeStyle = NAVY; ctx.beginPath(); ctx.arc(hx, hy, 30, 0, Math.PI * 2); ctx.stroke();
+    visorShine(ctx, hx, hy, 26, 26);
+    rr(hx - 18, hy + 25, 36, 8, 4, NAVY, false); // cuello del traje
+  };
+
+  if (side) {
+    const d = facing;
+    ctx.save(); ctx.scale(d, 1); // dibujamos mirando a la derecha
+    const sw = walking ? Math.sin(t * 9) * 6 : 0;
+    // Patas traseras y delanteras (las de atrás un poco más oscuras)
+    for (const [lx, ph, fill] of [[-24, 1, SHADE], [16, -1, SHADE], [-16, -1, WHITE], [24, 1, WHITE]]) {
+      const lift = Math.max(0, sw * ph);
+      rr(lx - 6, -26 - lift, 12, 24, 5, fill);
+      ctx.fillStyle = NAVY; ctx.fillRect(lx - 6, -9 - lift, 12, 3.5);
+      rr(lx - 7, -6 - lift, 15, 7, 3.5, WHITE);
+    }
+    tail(-38, -48, 1);
+    // Cuerpo horizontal con tanque de oxígeno en el lomo
+    rr(-30, -76, 32, 14, 6, SHADE);
+    rr(-40, -66, 76, 42, 20, WHITE);
+    ctx.save(); ctx.beginPath(); ctx.roundRect(-40, -66, 76, 42, 20); ctx.clip(); ctx.fillStyle = SHADE; ctx.fillRect(-40, -36, 76, 12); ctx.restore();
+    ctx.lineWidth = LW; ctx.strokeStyle = NAVY; ctx.beginPath(); ctx.roundRect(-40, -66, 76, 42, 20); ctx.stroke();
+    ctx.save(); ctx.scale(d, 1); badge(d > 0 ? -16 : -10, -56, 26); ctx.restore();
+    head(36, -86, 1);
+    ctx.restore();
+    return;
+  }
+
+  // De frente o de espaldas: cuerpo de perro en 4 patas (las traseras asoman detrás)
+  const sw = walking ? Math.sin(t * 9) * 4 : 0;
+  if (!sitting) {
+    for (const [lx, ph] of [[-25, -1], [25, 1]]) {
+      const lift = Math.max(0, sw * ph);
+      rr(lx - 6, -24 - lift, 12, 22, 5, SHADE);
+      rr(lx - 7, -6 - lift, 14, 6, 3, WHITE);
+    }
+  }
+  if (!back) tail(22, -46, 1);
+  rr(-31, -60, 62, 38, 18, WHITE);
+  ctx.save(); ctx.beginPath(); ctx.roundRect(-31, -60, 62, 38, 18); ctx.clip(); ctx.fillStyle = SHADE; ctx.fillRect(-31, -32, 62, 10); ctx.restore();
+  ctx.lineWidth = LW; ctx.strokeStyle = NAVY; ctx.beginPath(); ctx.roundRect(-31, -60, 62, 38, 18); ctx.stroke();
+  if (!sitting) {
+    for (const [lx, ph] of [[-11, 1], [11, -1]]) {
+      const lift = Math.max(0, sw * ph);
+      rr(lx - 7, -30 - lift, 14, 28, 6, WHITE);
+      ctx.fillStyle = NAVY; ctx.fillRect(lx - 7, -10 - lift, 14, 3.5);
+      rr(lx - 8, -6 - lift, 16, 7, 3.5, WHITE);
+    }
+  }
+  if (back) {
+    rr(-17, -58, 34, 20, 7, '#ececf8');
+    tail(0, -54, Math.sin(t * 9) > 0 ? 1 : -1);
+  } else {
+    badge(-13, -56, 26);
+    if (sitting && typing) {
+      const tap = Math.sin(t * 16) * 2;
+      circ(-12, -22 + tap, 7, WHITE); circ(12, -22 - tap, 7, WHITE);
+    }
+  }
+  head(0, -84, 0);
 }
 
 function visorShine(ctx, cx, cy, rx, ry) {

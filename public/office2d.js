@@ -5,24 +5,39 @@ import { store, byId, esc, drawCrew, JEFE } from './common.js';
 
 const W = 1600, H = 1000;
 const CORRIDOR = 505;
+// Distribución inspirada en la oficina real: estaciones de trabajo al centro,
+// cafetería con barra a la izquierda, sala de juntas y lounge con TV abajo,
+// acuario a la derecha y tu escritorio abajo a la derecha.
 const DESKS = {
-  investigador: { x: 260, y: 390 }, copy: { x: 560, y: 390 }, disenador: { x: 860, y: 390 },
-  video: { x: 260, y: 640 }, calidad: { x: 560, y: 640 }, director: { x: 860, y: 640 },
+  investigador: { x: 400, y: 390 }, copy: { x: 660, y: 390 }, disenador: { x: 920, y: 390 },
+  video: { x: 400, y: 640 }, calidad: { x: 660, y: 640 }, director: { x: 920, y: 640 },
 };
-const EXTRA_DESKS = [{ x: 260, y: 860 }, { x: 560, y: 860 }];
+const EXTRA_DESKS = [{ x: 1180, y: 390 }, { x: 1180, y: 640 }];
 const BOSS = { x: 1250, y: 790 };
-const BOSS_SLOTS = [{ x: 1150, y: 935 }, { x: 1250, y: 950 }, { x: 1350, y: 935 }, { x: 1060, y: 905 }, { x: 1440, y: 905 }];
+const BOSS_SLOTS = [{ x: 1150, y: 935 }, { x: 1250, y: 950 }, { x: 1350, y: 935 }, { x: 1080, y: 905 }, { x: 1440, y: 905 }];
 const FEED = { x: 1290, y: 52, w: 250, h: 150 };
 const FEED_SPOTS = [{ x: 1335, y: 300 }, { x: 1415, y: 305 }, { x: 1495, y: 300 }, { x: 1255, y: 310 }];
-const FOOD_SPOTS = [{ x: 150, y: 335 }, { x: 150, y: 430 }, { x: 150, y: 470 }];
 const WINDOWS = [{ x: 60, w: 270 }, { x: 370, w: 270 }, { x: 960, w: 270 }];
 const LOGO = { x: 660, y: 50, w: 280, h: 140 };
-// Mesa de juntas creativas (abajo a la izquierda)
-const TABLE = { x: 330, y: 905, rx: 125, ry: 36 };
+// Cafetería: barra con 3 bancos (como la oficina real)
+const BAR = { x: 140, y: 300, w: 46, h: 250 };
+const STOOLS = [{ x: 238, y: 365 }, { x: 238, y: 445 }, { x: 238, y: 525 }];
+// Sala de juntas: mesa larga con 8 sillas, pantalla de proyector y bocina
+const TABLE = { x: 300, y: 885, rx: 205, ry: 40 };
+const SCREEN = { x: 175, y: 712, w: 250, h: 62 };
 const SEATS = [
-  { x: 330, y: 864, face: 0 }, { x: 205, y: 870, face: 0 }, { x: 455, y: 870, face: 0 },
-  { x: 130, y: 918, face: 1 }, { x: 530, y: 918, face: -1 }, { x: 245, y: 968, face: 'back' }, { x: 415, y: 968, face: 'back' },
+  { x: 300, y: 838, face: 0 }, { x: 175, y: 840, face: 0 }, { x: 425, y: 840, face: 0 },
+  { x: 70, y: 890, face: 1 }, { x: 530, y: 890, face: -1 }, { x: 205, y: 948, face: 'back' }, { x: 395, y: 948, face: 'back' },
 ];
+const CHAIRS = [[175, 828], [300, 826], [425, 828], [205, 940], [395, 940], [300, 944], [70, 882], [530, 882]];
+// Lounge con TV y lámparas
+const TV = { x: 700, y: 712, w: 200, h: 100 };
+const SOFA = { x: 690, y: 920, w: 220, h: 60 };
+const SOFA_SPOTS = [{ x: 735, y: 945 }, { x: 800, y: 948 }, { x: 865, y: 945 }];
+// Acuario espacial
+const AQUA = { x: 1470, y: 560, w: 115, h: 160 };
+const AQUA_SPOTS = [{ x: 1500, y: 790 }, { x: 1560, y: 795 }];
+const fish = Array.from({ length: 6 }, (_, i) => ({ y: AQUA.y + 30 + i * 21, v: 12 + Math.random() * 18, p: Math.random() * 100, c: ['#ff9f43', '#36e2c8', '#ff6fae', '#ffd166', '#8b7bff', '#4aa3ff'][i] }));
 
 const pendingReqs = (id) => store.requests.filter((r) => r.agente === id && r.estado === 'pendiente');
 const pendingPieces = (id) => store.pieces.filter((p) => p.agente === id && p.estado === 'pendiente');
@@ -82,49 +97,52 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
     store.roster.forEach((a, i) => {
       if (chars[a.id]) return;
       const desk = DESKS[a.id] || EXTRA_DESKS[i % EXTRA_DESKS.length];
-      chars[a.id] = { id: a.id, desk, x: desk.x, y: desk.y + 24, path: [], target: null, seated: true, facing: 0, t: Math.random() * 10, nextSnack: performance.now() + 9000 + Math.random() * 30000, snackUntil: 0 };
+      chars[a.id] = { id: a.id, desk, x: desk.x, y: desk.y + 24, path: [], target: null, seated: true, facing: 0, t: Math.random() * 10, nextBreak: performance.now() + 8000 + Math.random() * 30000, breakUntil: 0, breakKind: null };
     });
   }
 
   function spotFor(ch) {
     const st = store.agents[ch.id] || {};
+    const ids = Object.keys(chars);
     const reqs = store.requests.filter((r) => r.estado === 'pendiente');
     const ri = reqs.findIndex((r) => r.agente === ch.id);
     if (ri >= 0) {
       const s = BOSS_SLOTS[ri % BOSS_SLOTS.length];
-      return { kind: 'boss', x: s.x, y: s.y, via: [{ x: 1000, y: CORRIDOR }, { x: 1000, y: s.y }], face: 'back' };
+      return { kind: 'boss', x: s.x, y: s.y, via: [{ x: 1060, y: CORRIDOR }, { x: 1060, y: s.y }], face: 'back' };
     }
     if (pendingPieces(ch.id).length) {
-      const i = Object.keys(chars).filter((id) => pendingPieces(id).length).indexOf(ch.id);
+      const i = ids.filter((id) => pendingPieces(id).length).indexOf(ch.id);
       const s = FEED_SPOTS[i % FEED_SPOTS.length];
       return { kind: 'feed', x: s.x, y: s.y, via: [{ x: s.x, y: CORRIDOR }], face: 'back' };
     }
     if (st.estado === 'junta') {
-      const ids = store.roster.map((a) => a.id);
-      const s = SEATS[Math.max(0, ids.indexOf(ch.id)) % SEATS.length];
-      const front = s.y > TABLE.y + 20;
-      const via = [{ x: 700, y: CORRIDOR }, { x: 700, y: 790 }, ...(front ? [{ x: 600, y: 790 }, { x: 600, y: s.y }] : [{ x: s.x, y: 790 }])];
-      return { kind: 'junta', x: s.x, y: s.y, via, face: s.face };
+      const s = SEATS[Math.max(0, store.roster.findIndex((a) => a.id === ch.id)) % SEATS.length];
+      const lane = s.face === 'back' ? [{ x: 545, y: 800 }, { x: 545, y: 990 }, { x: s.x, y: 990 }] : [{ x: 545, y: 800 }, { x: s.x, y: 800 }];
+      return { kind: 'junta', x: s.x, y: s.y, via: [{ x: 545, y: CORRIDOR }, ...lane], face: s.face };
     }
     const now = performance.now();
     if (!st.estado || st.estado === 'libre') {
-      if (now > ch.nextSnack && !ch.snackUntil) { ch.snackUntil = now + 9000; ch.nextSnack = now + 35000 + Math.random() * 40000; }
-      if (ch.snackUntil > now) {
-        const s = FOOD_SPOTS[Object.keys(chars).indexOf(ch.id) % FOOD_SPOTS.length];
-        return { kind: 'food', x: s.x, y: s.y, via: [{ x: s.x, y: CORRIDOR }], face: -1 };
+      if (now > ch.nextBreak && !ch.breakUntil) {
+        ch.breakKind = ['cafe', 'cafe', 'tv', 'acuario'][Math.floor(Math.random() * 4)];
+        ch.breakUntil = now + 10000 + Math.random() * 6000;
+        ch.nextBreak = now + 30000 + Math.random() * 40000;
       }
-      ch.snackUntil = 0;
-    } else ch.snackUntil = 0;
+      if (ch.breakUntil > now) {
+        const i = ids.indexOf(ch.id);
+        if (ch.breakKind === 'cafe') { const s = STOOLS[i % STOOLS.length]; return { kind: 'cafe', x: s.x, y: s.y, via: [{ x: s.x, y: CORRIDOR }], face: -1 }; }
+        if (ch.breakKind === 'tv') { const s = SOFA_SPOTS[i % SOFA_SPOTS.length]; return { kind: 'tv', x: s.x, y: s.y, via: [{ x: 1045, y: CORRIDOR }, { x: 1045, y: 880 }, { x: s.x, y: 880 }], face: 'back' }; }
+        const s = AQUA_SPOTS[i % AQUA_SPOTS.length]; return { kind: 'acuario', x: s.x, y: s.y, via: [{ x: 1420, y: CORRIDOR }, { x: 1420, y: s.y }], face: 'back' };
+      }
+      ch.breakUntil = 0;
+    } else ch.breakUntil = 0;
     const d = ch.desk;
     return { kind: 'desk', x: d.x, y: d.y + 24, via: [{ x: d.x + 125, y: CORRIDOR }, { x: d.x + 125, y: d.y + 24 }], face: 0 };
   }
 
+  // Para salir de un lugar se deshace el camino de llegada (así nadie atraviesa muebles).
   function route(ch, t) {
-    const pts = [];
-    if (ch.seated) pts.push({ x: ch.desk.x + 125, y: ch.y });
-    const sx = pts.length ? pts[0].x : ch.x;
-    pts.push({ x: sx, y: CORRIDOR }, ...t.via, { x: t.x, y: t.y });
-    return pts;
+    const back = ch.target ? [...ch.target.via].reverse() : [{ x: ch.x, y: CORRIDOR }];
+    return [...back, ...t.via, { x: t.x, y: t.y }];
   }
 
   function update(dt) {
@@ -132,7 +150,7 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
       ch.t += dt;
       const t = spotFor(ch);
       if (!ch.target || ch.target.kind !== t.kind || ch.target.x !== t.x || ch.target.y !== t.y) {
-        ch.target = t; ch.path = route(ch, t); ch.seated = false;
+        ch.path = route(ch, t); ch.target = t; ch.seated = false;
       }
       const wp = ch.path[0];
       if (wp) {
@@ -150,7 +168,7 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
         ch.v = 0;
         ch.walking = false;
         ch.facing = t.face;
-        ch.seated = t.kind === 'desk';
+        ch.seated = ['desk', 'cafe', 'tv'].includes(t.kind);
       }
     }
   }
@@ -240,20 +258,185 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
     });
     ctx.fillStyle = 'rgba(255,255,255,.05)'; for (let y = FEED.y; y < FEED.y + FEED.h; y += 6) ctx.fillRect(FEED.x, y + ((time / 40) % 6), FEED.w, 1);
 
-    // Dispensador de comida espacial
-    rr(ctx, 30, 250, 80, 150, 16, '#3a3f66');
-    rr(ctx, 42, 266, 56, 60, 10, '#0c0f22');
-    ctx.fillStyle = `rgba(54,226,200,${0.5 + 0.3 * Math.sin(time / 300)})`; ctx.beginPath(); ctx.arc(70, 296, 10, 0, Math.PI * 2); ctx.fill();
-    rr(ctx, 46, 340, 48, 40, 8, '#262a44');
-    ctx.fillStyle = '#c9c7da'; ctx.font = '700 11px system-ui'; ctx.textAlign = 'center'; ctx.fillText('SNACKS', 70, 395);
-
-    // Zona de juntas: alfombra de luz
+    // Zona de juntas, lounge y cafetería: alfombras de luz y letreros
     const enJunta = Object.values(store.agents).some((a) => a.estado === 'junta');
-    ctx.fillStyle = enJunta ? `rgba(139,123,255,${0.12 + 0.05 * Math.sin(time / 400)})` : 'rgba(139,123,255,.06)';
-    ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y + 10, 250, 90, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(201,199,218,.55)'; ctx.font = '700 13px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText('SALA DE JUNTAS', 90, 820);
-    for (const [x, y] of [[40, 960], [1560, 960], [1560, 440], [960, 300]]) plant(x, y, time);
+    ctx.fillStyle = enJunta ? `rgba(139,123,255,${0.13 + 0.05 * Math.sin(time / 400)})` : 'rgba(139,123,255,.06)';
+    ctx.beginPath(); ctx.roundRect(20, 700, 560, 292, 30); ctx.fill();
+    ctx.fillStyle = 'rgba(54,226,200,.05)'; ctx.beginPath(); ctx.roundRect(615, 700, 340, 292, 30); ctx.fill();
+    ctx.fillStyle = 'rgba(255,181,71,.05)'; ctx.beginPath(); ctx.roundRect(10, 240, 290, 330, 24); ctx.fill();
+    ctx.fillStyle = 'rgba(201,199,218,.5)'; ctx.font = '700 12px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('☕ CAFETERÍA', 22, 590); ctx.fillText('🗣️ SALA DE JUNTAS', 34, 724); ctx.fillText('📺 LOUNGE', 630, 984);
+    drawKitchen(time);
+    drawScreen(time, enJunta);
+    drawTV(time);
+    drawAquarium(time);
+    // Bocina de la sala de juntas
+    rr(ctx, 30, 760, 34, 52, 8, '#262a44');
+    for (const [cy, r] of [[776, 8], [798, 6]]) { ctx.fillStyle = '#141626'; ctx.beginPath(); ctx.arc(47, cy, r, 0, Math.PI * 2); ctx.fill(); }
+    if (enJunta) for (let k = 1; k <= 2; k++) { ctx.strokeStyle = `rgba(139,123,255,${0.5 - ((time / 900 + k / 2) % 1) * 0.5})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(47, 786, 20 + ((time / 900 + k / 2) % 1) * 22, -0.6, 0.6); ctx.stroke(); }
+    // Plantas: palmera, monstera, dracena y macetas como en la oficina real
+    palm(565, 995, time); monstera(1555, 990, time); dracena(1565, 470, time);
+    for (const [x, y] of [[1385, 1000], [990, 1000]]) plant(x, y, time);
+    lamp(632, 900, time); lamp(940, 900, time);
+  }
+
+  // ---------- Amenidades ----------
+  function drawKitchen(time) {
+    // Refrigerador con imanes
+    rr(ctx, 18, 248, 82, 150, 12, '#dfe3f0');
+    ctx.fillStyle = '#c3c9db'; ctx.fillRect(18, 300, 82, 3);
+    rr(ctx, 88, 260, 5, 30, 2, '#9aa1bb'); rr(ctx, 88, 312, 5, 50, 2, '#9aa1bb');
+    for (const [x, y, c] of [[34, 270, '#8b7bff'], [52, 280, '#ff6fae'], [40, 330, '#36e2c8']]) { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill(); }
+    // Barra lateral con cafetera, microondas y galletas
+    rr(ctx, 18, 410, 92, 150, 12, '#3a3f66');
+    rr(ctx, 18, 410, 92, 10, 6, '#4a5079');
+    rr(ctx, 30, 428, 66, 36, 6, '#1a1c2c');
+    ctx.fillStyle = `rgba(255,214,120,${0.25 + 0.15 * Math.sin(time / 500)})`; ctx.fillRect(36, 434, 40, 24);
+    rr(ctx, 80, 436, 10, 20, 3, '#2b2e45');
+    rr(ctx, 36, 480, 34, 46, 7, '#1a1c2c');
+    ctx.fillStyle = '#ff5d6c'; ctx.beginPath(); ctx.arc(62, 490, 3, 0, Math.PI * 2); ctx.fill();
+    rr(ctx, 46, 512, 14, 12, 3, '#e9e6f2');
+    // Vapor de la cafetera cuando hay alguien en la barra
+    const hayCafe = Object.values(chars).some((c) => c.target?.kind === 'cafe' && !c.walking);
+    if (hayCafe) for (let k = 0; k < 3; k++) { const ph = (time / 1200 + k / 3) % 1; ctx.fillStyle = `rgba(255,255,255,${0.35 * (1 - ph)})`; ctx.beginPath(); ctx.arc(53 + Math.sin(ph * 6 + k) * 4, 508 - ph * 34, 4 + ph * 4, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#e9e6f2'; ctx.beginPath(); ctx.ellipse(90, 540, 14, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c98b4f'; for (const dx of [-6, 0, 6]) { ctx.beginPath(); ctx.arc(90 + dx, 536, 4, 0, Math.PI * 2); ctx.fill(); }
+    // Barra con 3 bancos
+    const bg = ctx.createLinearGradient(BAR.x, 0, BAR.x + BAR.w, 0); bg.addColorStop(0, '#4a5079'); bg.addColorStop(1, '#353a5e');
+    rr(ctx, BAR.x, BAR.y, BAR.w, BAR.h, 14, bg);
+    ctx.fillStyle = `rgba(255,181,71,${0.4 + 0.2 * Math.sin(time / 700)})`; ctx.fillRect(BAR.x + BAR.w - 4, BAR.y + 14, 3, BAR.h - 28);
+    // Tazas, vasos y el pequeño Cthulhu de la barra
+    for (const y of [340, 470]) { rr(ctx, BAR.x + 14, y, 16, 14, 4, '#e9e6f2'); }
+    for (const y of [400, 410]) { ctx.fillStyle = 'rgba(190,230,255,.6)'; ctx.fillRect(BAR.x + 12 + (y - 400) * 1.5, y, 8, 14); }
+    cthulhu(BAR.x + 23, 535, time);
+  }
+
+  function cthulhu(x, y, time) {
+    const b = Math.sin(time / 600) * 1.5;
+    ctx.fillStyle = '#5fbf8a';
+    for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.ellipse(x + k * 3.5, y + 3 + Math.abs(k), 1.8, 6 + Math.sin(time / 300 + k) * 1.2, k * 0.2, 0, Math.PI * 2); ctx.fill(); }
+    ctx.beginPath(); ctx.ellipse(x, y - 6 + b, 8, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1b1b2a'; for (const dx of [-3, 3]) { ctx.beginPath(); ctx.arc(x + dx, y - 6 + b, 1.6, 0, Math.PI * 2); ctx.fill(); }
+  }
+
+  function drawScreen(time, enJunta) {
+    rr(ctx, SCREEN.x - 6, SCREEN.y - 6, SCREEN.w + 12, SCREEN.h + 12, 10, '#3a3f66');
+    const g = ctx.createLinearGradient(SCREEN.x, SCREEN.y, SCREEN.x + SCREEN.w, SCREEN.y + SCREEN.h);
+    g.addColorStop(0, enJunta ? '#2a1f78' : '#14163a'); g.addColorStop(1, enJunta ? '#0b3a4a' : '#101226');
+    rr(ctx, SCREEN.x, SCREEN.y, SCREEN.w, SCREEN.h, 6, g);
+    rr(ctx, SCREEN.x + SCREEN.w / 2 - 3, SCREEN.y + SCREEN.h + 6, 6, 40, 3, '#3a3f66');
+    const m = [...(store.meetings || [])].reverse().find((x) => x.estado === 'en_curso');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (enJunta && m) {
+      ctx.fillStyle = '#fff'; ctx.font = '800 14px system-ui, sans-serif'; ctx.fillText(`💡 JUNTA CREATIVA #${m.numero}`, SCREEN.x + SCREEN.w / 2, SCREEN.y + 20);
+      ctx.fillStyle = '#c9c7da'; ctx.font = '500 12px system-ui, sans-serif';
+      let t = m.tema; while (ctx.measureText(t).width > SCREEN.w - 24 && t.length > 3) t = t.slice(0, -2);
+      ctx.fillText(t === m.tema ? t : `${t}…`, SCREEN.x + SCREEN.w / 2, SCREEN.y + 40);
+      ctx.fillStyle = '#36e2c8'; ctx.fillRect(SCREEN.x + 12, SCREEN.y + SCREEN.h - 8, (SCREEN.w - 24) * Math.min(1, m.aportes.length / 5), 3);
+    } else {
+      ctx.fillStyle = 'rgba(201,199,218,.6)'; ctx.font = '700 13px system-ui, sans-serif'; ctx.fillText('PROYECTOR · SALA DE JUNTAS', SCREEN.x + SCREEN.w / 2, SCREEN.y + SCREEN.h / 2);
+    }
+  }
+
+  function drawTV(time) {
+    rr(ctx, TV.x - 6, TV.y - 6, TV.w + 12, TV.h + 12, 10, '#0d0e18');
+    const g = ctx.createLinearGradient(0, TV.y, 0, TV.y + TV.h); g.addColorStop(0, '#0b1550'); g.addColorStop(1, '#2a1f78');
+    rr(ctx, TV.x, TV.y, TV.w, TV.h, 6, g);
+    ctx.save(); ctx.beginPath(); ctx.roundRect(TV.x, TV.y, TV.w, TV.h, 6); ctx.clip();
+    // Noticiero de la agencia con la Tierra girando
+    const ex = TV.x + 46, ey = TV.y + 46;
+    const eg = ctx.createRadialGradient(ex - 8, ey - 8, 4, ex, ey, 26); eg.addColorStop(0, '#8be9ff'); eg.addColorStop(1, '#1f6fd1');
+    ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(ex, ey, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3ccf8e'; for (let k = 0; k < 3; k++) { const ox = ((time / 60 + k * 30) % 70) - 35; ctx.beginPath(); ctx.ellipse(ex + ox, ey - 6 + k * 9, 7, 4, 0, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#fff'; ctx.font = '800 13px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText('PIXEL NEWS', TV.x + 84, TV.y + 26);
+    const enCurso = store.campaigns.filter((c) => c.estado === 'en_curso').length;
+    const pend = store.pieces.filter((p) => p.estado === 'pendiente').length;
+    ctx.fillStyle = '#c9c7da'; ctx.font = '500 11px system-ui, sans-serif';
+    ctx.fillText(`${enCurso} campaña${enCurso === 1 ? '' : 's'} en curso`, TV.x + 84, TV.y + 46);
+    ctx.fillText(`${pend} pieza${pend === 1 ? '' : 's'} por revisar`, TV.x + 84, TV.y + 62);
+    const ticker = '  ★ La tripulación Pixel trabaja para ti  ★  Aprueba en el feed  ★  ';
+    ctx.fillStyle = '#ffb547'; ctx.fillRect(TV.x, TV.y + TV.h - 18, TV.w, 18);
+    ctx.fillStyle = '#1b1406'; ctx.font = '700 11px system-ui, sans-serif';
+    const tw = ctx.measureText(ticker).width; const off = (time / 30) % tw;
+    ctx.fillText(ticker + ticker, TV.x - off, TV.y + TV.h - 9);
+    ctx.restore();
+    rr(ctx, TV.x + TV.w / 2 - 50, TV.y + TV.h + 6, 100, 16, 6, '#262a44');
+  }
+
+  function drawAquarium(time) {
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(AQUA.x + AQUA.w / 2, AQUA.y + AQUA.h + 26, 70, 9, 0, 0, Math.PI * 2); ctx.fill();
+    rr(ctx, AQUA.x - 6, AQUA.y + AQUA.h, AQUA.w + 12, 24, 6, '#262a44');
+    const g = ctx.createLinearGradient(0, AQUA.y, 0, AQUA.y + AQUA.h); g.addColorStop(0, 'rgba(80,200,255,.55)'); g.addColorStop(1, 'rgba(40,60,200,.65)');
+    rr(ctx, AQUA.x, AQUA.y, AQUA.w, AQUA.h, 10, g);
+    ctx.save(); ctx.beginPath(); ctx.roundRect(AQUA.x, AQUA.y, AQUA.w, AQUA.h, 10); ctx.clip();
+    // Algas
+    ctx.strokeStyle = '#3ccf8e'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    for (const ax of [AQUA.x + 18, AQUA.x + 40, AQUA.x + 92]) { ctx.beginPath(); ctx.moveTo(ax, AQUA.y + AQUA.h); for (let k = 1; k <= 4; k++) ctx.lineTo(ax + Math.sin(time / 700 + k + ax) * 5, AQUA.y + AQUA.h - k * 18); ctx.stroke(); }
+    // Peces alienígenas
+    for (const f of fish) {
+      const span = AQUA.w + 40; const px = ((time / 1000) * f.v + f.p) % span; const dir = Math.floor(((time / 1000) * f.v + f.p) / span) % 2 ? -1 : 1;
+      const fx = dir > 0 ? AQUA.x - 20 + px : AQUA.x + AQUA.w + 20 - px; const fy = f.y + Math.sin(time / 500 + f.p) * 4;
+      ctx.fillStyle = f.c; ctx.beginPath(); ctx.ellipse(fx, fy, 9, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(fx - dir * 8, fy); ctx.lineTo(fx - dir * 15, fy - 5); ctx.lineTo(fx - dir * 15, fy + 5); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#1b1b2a'; ctx.beginPath(); ctx.arc(fx + dir * 4, fy - 1, 1.3, 0, Math.PI * 2); ctx.fill();
+    }
+    // Burbujas
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    for (let k = 0; k < 7; k++) { const ph = (time / 2500 + k / 7) % 1; ctx.beginPath(); ctx.arc(AQUA.x + 20 + ((k * 37) % (AQUA.w - 30)), AQUA.y + AQUA.h - ph * AQUA.h, 2 + (k % 3), 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(AQUA.x + 8, AQUA.y + 8, 6, AQUA.h - 16);
+    rr(ctx, AQUA.x - 4, AQUA.y - 8, AQUA.w + 8, 10, 4, '#3a3f66');
+  }
+
+  function palm(x, y, time) {
+    rr(ctx, x - 22, y - 36, 44, 38, 10, '#e9e6f2');
+    const sway = Math.sin(time / 1100) * 4;
+    ctx.strokeStyle = '#8a6a4f'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(x, y - 34); ctx.quadraticCurveTo(x + 6, y - 90, x + sway, y - 140); ctx.stroke();
+    ctx.fillStyle = '#2fb57a';
+    for (let k = 0; k < 6; k++) { const a = -Math.PI / 2 + (k - 2.5) * 0.55; ctx.save(); ctx.translate(x + sway, y - 140); ctx.rotate(a + Math.sin(time / 900 + k) * 0.05); ctx.beginPath(); ctx.ellipse(0, -30, 9, 34, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  }
+
+  function monstera(x, y, time) {
+    rr(ctx, x - 24, y - 38, 48, 40, 10, '#e9e6f2');
+    ctx.fillStyle = '#25a466';
+    for (let k = 0; k < 5; k++) {
+      ctx.save(); ctx.translate(x + (k - 2) * 12, y - 52 - (k % 2) * 16); ctx.rotate((k - 2) * 0.35 + Math.sin(time / 1000 + k) * 0.04);
+      ctx.beginPath(); ctx.ellipse(0, 0, 17, 22, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#141626'; ctx.fillRect(-1, -14, 2, 28); ctx.fillStyle = '#25a466'; ctx.restore();
+    }
+  }
+
+  function dracena(x, y, time) {
+    rr(ctx, x - 16, y - 30, 32, 32, 8, '#e9e6f2');
+    ctx.strokeStyle = '#8a6a4f'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x, y - 28); ctx.lineTo(x, y - 90); ctx.stroke();
+    ctx.fillStyle = '#7bd389';
+    for (let k = 0; k < 7; k++) { ctx.save(); ctx.translate(x, y - 90); ctx.rotate((k - 3) * 0.45 + Math.sin(time / 1000) * 0.05); ctx.beginPath(); ctx.ellipse(0, -18, 4, 22, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  }
+
+  function lamp(x, y, time) {
+    rr(ctx, x - 10, y - 2, 20, 6, 3, '#262a44');
+    rr(ctx, x - 3, y - 110, 6, 110, 3, '#3a3f66');
+    const glow = 0.55 + 0.15 * Math.sin(time / 800 + x);
+    ctx.fillStyle = `rgba(255,214,140,${glow})`; rr(ctx, x - 9, y - 140, 18, 34, 8, `rgba(255,214,140,${glow})`);
+    const lg = ctx.createRadialGradient(x, y - 123, 4, x, y - 123, 60); lg.addColorStop(0, 'rgba(255,214,140,.18)'); lg.addColorStop(1, 'rgba(255,214,140,0)');
+    ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(x, y - 123, 60, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawStool(s) {
+    rr(ctx, s.x - 3, s.y - 34, 6, 34, 3, '#3a3f66');
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(s.x, s.y + 2, 18, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffb547'; ctx.beginPath(); ctx.ellipse(s.x, s.y - 36, 20, 7, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawSofaBack() {
+    rr(ctx, SOFA.x, SOFA.y, SOFA.w, SOFA.h, 22, '#4b3fb3');
+    rr(ctx, SOFA.x - 10, SOFA.y + 10, 24, SOFA.h - 6, 10, '#5b4bd6');
+    rr(ctx, SOFA.x + SOFA.w - 14, SOFA.y + 10, 24, SOFA.h - 6, 10, '#5b4bd6');
+  }
+
+  function drawMeetChair([x, y]) {
+    rr(ctx, x - 20, y - 48, 40, 44, 12, '#3d4266');
   }
 
   function plant(x, y, time) {
@@ -268,25 +451,20 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
 
   function drawTable(time) {
     const enJunta = Object.values(store.agents).some((a) => a.estado === 'junta');
-    rr(ctx, TABLE.x - 22, TABLE.y, 44, 46, 10, '#262a44');
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y + 48, 90, 12, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#2f3352'; ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y + 8, TABLE.rx, TABLE.ry, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y + 44, TABLE.rx * 0.8, 12, 0, 0, Math.PI * 2); ctx.fill();
+    for (const dx of [-120, 120]) rr(ctx, TABLE.x + dx - 10, TABLE.y, 20, 42, 6, '#262a44');
+    rr(ctx, TABLE.x - TABLE.rx, TABLE.y - TABLE.ry + 10, TABLE.rx * 2, TABLE.ry * 2, 30, '#2f3352');
     const g = ctx.createLinearGradient(0, TABLE.y - TABLE.ry, 0, TABLE.y + TABLE.ry);
-    g.addColorStop(0, '#565d8c'); g.addColorStop(1, '#3a4070');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y, TABLE.rx, TABLE.ry, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = enJunta ? `rgba(139,123,255,${0.6 + 0.3 * Math.sin(time / 300)})` : 'rgba(139,123,255,.35)';
-    ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(TABLE.x, TABLE.y, TABLE.rx - 10, TABLE.ry - 6, 0, 0, Math.PI * 2); ctx.stroke();
+    g.addColorStop(0, '#5a618f'); g.addColorStop(1, '#3a4070');
+    rr(ctx, TABLE.x - TABLE.rx, TABLE.y - TABLE.ry, TABLE.rx * 2, TABLE.ry * 2, 30, g);
+    ctx.strokeStyle = enJunta ? `rgba(139,123,255,${0.6 + 0.3 * Math.sin(time / 300)})` : 'rgba(139,123,255,.3)';
+    ctx.lineWidth = 3; ctx.beginPath(); ctx.roundRect(TABLE.x - TABLE.rx + 12, TABLE.y - TABLE.ry + 8, TABLE.rx * 2 - 24, TABLE.ry * 2 - 16, 22); ctx.stroke();
+    for (const dx of [-140, -40, 60, 150]) rr(ctx, TABLE.x + dx, TABLE.y - 6 + (dx % 3), 26, 16, 3, 'rgba(233,230,242,.85)');
     if (enJunta) {
-      // Holograma: una idea que gira sobre la mesa
-      const hy = TABLE.y - 48 + Math.sin(time / 500) * 4;
-      const beam = ctx.createLinearGradient(0, hy, 0, TABLE.y);
-      beam.addColorStop(0, 'rgba(139,123,255,0)'); beam.addColorStop(1, 'rgba(139,123,255,.35)');
-      ctx.fillStyle = beam; ctx.beginPath(); ctx.moveTo(TABLE.x - 14, TABLE.y); ctx.lineTo(TABLE.x + 14, TABLE.y); ctx.lineTo(TABLE.x + 40, hy); ctx.lineTo(TABLE.x - 40, hy); ctx.closePath(); ctx.fill();
-      ctx.save(); ctx.translate(TABLE.x, hy - 10); ctx.scale(Math.cos(time / 700), 1);
-      ctx.font = '34px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('💡', 0, 0);
+      const hy = TABLE.y - 40 + Math.sin(time / 500) * 4;
+      ctx.save(); ctx.translate(TABLE.x, hy); ctx.scale(Math.cos(time / 700), 1);
+      ctx.font = '30px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('💡', 0, 0);
       ctx.restore();
-      ctx.fillStyle = '#fff'; ctx.font = '800 15px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#8b7bff'; ctx.shadowBlur = 12;
-      ctx.fillText('JUNTA CREATIVA', TABLE.x, TABLE.y - 150); ctx.shadowBlur = 0;
     }
   }
 
@@ -419,6 +597,9 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
       if (!ch.walking && pendingReqs(id).length) items.push({ y: ch.y - 0.5, draw: () => { ctx.strokeStyle = `rgba(255,181,71,${0.5 + 0.4 * Math.sin(now / 180)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(ch.x, ch.y, 34, 10, 0, 0, Math.PI * 2); ctx.stroke(); } });
     }
     items.push({ y: TABLE.y + 6, draw: () => drawTable(now) });
+    for (const c of CHAIRS) items.push({ y: c[1] - 2, draw: () => drawMeetChair(c) });
+    for (const st of STOOLS) items.push({ y: st.y - 1, draw: () => drawStool(st) });
+    items.push({ y: SOFA.y + 40, draw: () => drawSofaBack() });
     const alert = store.requests.some((r) => r.estado === 'pendiente');
     items.push({ y: BOSS.y - 1, draw: () => drawChair(BOSS, true) });
     items.push({ y: BOSS.y + 24, draw: () => drawCrew(ctx, BOSS.x, BOSS.y + 24, JEFE, { t: now / 1000, sitting: true, typing: true, glow: alert, scale: 1.15 }) });

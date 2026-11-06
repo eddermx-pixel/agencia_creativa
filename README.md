@@ -2,7 +2,7 @@
 
 Una agencia de marketing operada por agentes de Claude, cada uno con su propio rol. Los ves trabajar como personajes de videojuego en una oficina.
 
-- **Estación espacial 2D:** los agentes son astronautas que trabajan en su consola con una burbuja que dice qué hacen. Cuando están libres van por snacks. Si necesitan algo, **flotan hasta tu escritorio** y te saludan; cuando entregan, van al **muro del feed**. En el celular arrastras la vista con el dedo.
+- **Estación espacial 2D (inspirada en la oficina real):** estaciones de trabajo, cafetería con barra y bancos (cafetera, refri, microondas, galletas y un pequeño Cthulhu), sala de juntas con mesa larga, proyector y bocina, lounge con TV "PIXEL NEWS", acuario y plantas. Los agentes trabajan en su consola; en sus descansos van por café, ven la TV o miran el acuario. Si te necesitan, **flotan hasta tu escritorio**; cuando entregan, van al **muro del feed**. En el celular arrastras la vista con el dedo.
 - **Primero preguntan, luego producen:** el director te hace un **cuestionario** con las dudas clave del brief y te presenta un **concepto creativo**. Nadie diseña nada hasta que tú apruebas el concepto. Si pides cambios, lo ajusta y te lo vuelve a presentar.
 - **Feed tipo Tinder:** todo lo que produce el equipo (artes, reels y textos) llega aquí. Deslizas **→ para aprobar** o **← para rechazar**. Si rechazas con un comentario, el agente hace una nueva versión.
 - **Clientes con kit de marca:** colores, logo, tono, público y reglas de cada cliente. Los agentes los usan en cada campaña y el logo real se coloca solo en los artes y videos.
@@ -21,7 +21,7 @@ Una agencia de marketing operada por agentes de Claude, cada uno con su propio r
 | 🔭 Iris | Alienígena | Investigadora | Curiosa, pregunta "¿y por qué?" y trae datos |
 | ✍️ Teo | Astronauta | Copywriter | Ingenioso y juguetón, ama los juegos de palabras |
 | 🎨 Luna | Astronauta | Diseñadora | Perfeccionista, audaz con el color, odia lo saturado |
-| 🎬 Max | Perro espacial | Video / motion | Energético, vive en TikTok, gancho en 2 segundos |
+| 🎬 Max | Perro astronauta (4 patas, traje para perro) | Video / motion | Energético, vive en TikTok, gancho en 2 segundos |
 | ✅ Rita | Robot | Control de calidad | Meticulosa y directa, no perdona una falta |
 
 Cada uno tiene su **currículum** (☰ → 👩‍🚀 El equipo) con habilidades, personalidad e historial real (campañas, ideas en juntas, piezas aprobadas).

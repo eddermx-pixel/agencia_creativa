@@ -158,7 +158,15 @@ async function juntaDemo(campaign, ronda, comentario, cliente) {
   setAgent('director', { estado: 'trabajando', burbuja: 'Armando el concepto con las ideas del equipo', campaignId: campaign.id });
 }
 
+const vivas = new Set();
+export const isRunning = (id) => vivas.has(id);
+
 export async function runCampaign(campaign) {
+  vivas.add(campaign.id);
+  try { return await runCampaignInner(campaign); } finally { vivas.delete(campaign.id); }
+}
+
+async function runCampaignInner(campaign) {
   const { cliente } = campaign;
   const director = makeActions('director', campaign);
   const client = db.clients.find((c) => c.id === campaign.clientId);

@@ -149,7 +149,9 @@ function renderCampaigns() {
       espera = partes.length ? `<div class="s">${partes.join(' · ')}</div>` : '';
     }
     const fase = c.estado === 'en_curso' && c.fase ? FASES[c.fase] : ESTADOS[c.estado] || esc(c.estado);
-    const accion = c.estado === 'error' ? `<button class="mini retry" data-id="${c.id}">↻ Reintentar</button>${c.resumen ? `<div class="s" style="color:var(--no)">${esc(c.resumen).slice(0, 140)}</div>` : ''}`
+    const atorada = c.estado === 'en_curso' && c.activa === false && !tusResp && !tusSwipes;
+    const accion = atorada ? `<div class="s" style="color:var(--warn)">⚠️ Nadie está trabajando en esta campaña (pudo detenerse por un reinicio).</div><button class="mini retry" data-id="${c.id}">↻ Reanudar</button>`
+      : c.estado === 'error' ? `<button class="mini retry" data-id="${c.id}">↻ Reintentar</button>${c.resumen ? `<div class="s" style="color:var(--no)">${esc(c.resumen).slice(0, 140)}</div>` : ''}`
       : c.estado === 'interrumpida' ? `<button class="mini retry" data-id="${c.id}">↻ Volver a empezar</button>` : '';
     return `<div class="camp"><div style="min-width:0"><div class="n">${esc(c.cliente)}</div><div class="s">${fase} · ${ok}/${piezas.length} aprobadas · ${hace(c.creada)} · <a href="archivo.html#c=${c.id}">ver archivo</a></div>${espera}${accion}</div><div class="usd" title="Costo aproximado de la API de Claude">${store.demo ? 'demo' : usd(c.costo)}</div></div>`;
   }).join('') + (store.demo ? '' : `<div class="total"><span>Gasto de IA este mes (aprox.)</span><b>${usd(totalMes)}</b></div>`);

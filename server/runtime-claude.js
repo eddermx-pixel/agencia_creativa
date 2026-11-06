@@ -114,6 +114,7 @@ async function runTool(job, block, campaign) {
 
 // ---------- Trabajos persistentes ----------
 const running = new Map();
+export const isRunning = (campaignId) => [...running.keys()].some((id) => db.jobs.find((j) => j.id === id)?.campaignId === campaignId);
 
 function createJob({ agentId, task, campaignId, parentJobId = null, parentToolUseId = null }) {
   const job = {
@@ -310,8 +311,10 @@ export function boot() {
 
 // Reintentar una campaña que falló: retoma sus trabajos desde el último paso guardado.
 export function retryCampaign(campaign) {
-  const job = db.jobs.find((j) => j.id === campaign.jobId);
-  if (!job) return runCampaign(campaign);
+  const job = db.jobs.find((j) => j.id === campaign.jobId)
+    || db.jobs.find((j) => j.campaignId === campaign.id && !j.parentJobId && j.estado !== 'terminado');
+  if (!job || job.estado === 'terminado') return runCampaign(campaign);
+  campaign.jobId = job.id;
   for (const j of db.jobs) if (j.campaignId === campaign.id && j.estado === 'error') j.estado = 'activo';
   return runJob(job);
 }

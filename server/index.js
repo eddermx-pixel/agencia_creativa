@@ -69,7 +69,7 @@ function snapshot() {
     meetings: db.meetings.slice(-30),
     clients: db.clients.map(clientSummary),
     agents: Object.values(agentState),
-    campaigns: db.campaigns.slice(-20),
+    campaigns: db.campaigns.slice(-20).map((c) => ({ ...c, activa: runtime.isRunning(c.id) })),
     requests: db.requests.filter((r) => r.estado === 'pendiente'),
     pieces: db.pieces.slice(-60).map(pieceSummary),
     log: db.log.slice(-120),
@@ -186,6 +186,15 @@ app.post('/api/campaigns', (req, res) => {
   res.json(c);
 });
 
+// Si respondes algo de una campaña que se quedó sin agentes trabajando (por un
+// reinicio del servidor), la campaña se reanuda sola desde su último paso.
+function wakeIfStuck(campaignId) {
+  const c = db.campaigns.find((x) => x.id === campaignId);
+  if (!c || c.estado !== 'en_curso' || runtime.isRunning(c.id) || DEMO) return;
+  log('director', `🔄 Reanudando la campaña de ${c.cliente} con tu respuesta.`, c.id);
+  track(c, runtime.retryCampaign(c));
+}
+
 // Sigue una campaña hasta que termina (o falla) y actualiza su estado.
 function track(c, promise) {
   promise
@@ -197,7 +206,7 @@ function track(c, promise) {
 app.post('/api/campaigns/:id/retry', (req, res) => {
   const c = db.campaigns.find((x) => x.id === req.params.id);
   if (!c) return res.status(404).json({ error: 'No existe' });
-  if (c.estado === 'en_curso') return res.status(409).json({ error: 'La campaña ya está en curso' });
+  if (c.estado === 'en_curso' && runtime.isRunning(c.id)) return res.status(409).json({ error: 'La campaña ya está trabajando' });
   c.estado = 'en_curso'; c.resumen = '';
   save(); bus.emit('campaign', c);
   log('jefe', `Reintentar campaña: ${c.cliente}`, c.id);
@@ -208,6 +217,7 @@ app.post('/api/campaigns/:id/retry', (req, res) => {
 app.post('/api/requests/:id', (req, res) => {
   const { respuesta = '', aprobado = null, respuestas = null } = req.body || {};
   const r = answerRequest(req.params.id, { respuesta: String(respuesta).slice(0, 3000), aprobado, respuestas, via: 'web' });
+  if (r) wakeIfStuck(r.campaignId);
   r ? res.json(r) : res.status(409).json({ error: 'Ya estaba resuelta' });
 });
 
@@ -296,6 +306,7 @@ app.get('/api/pieces/:id/render', (req, res) => {
 app.post('/api/pieces/:id', (req, res) => {
   const { aprobado, comentario = '' } = req.body || {};
   const p = judgePiece(req.params.id, { aprobado: !!aprobado, comentario, via: 'web' });
+  if (p) wakeIfStuck(p.campaignId);
   p ? res.json(pieceSummary(p)) : res.status(409).json({ error: 'Ya estaba juzgada' });
 });
 
@@ -328,7 +339,8 @@ bus.on('agent', (a) => broadcast('agent', a));
 bus.on('log', (l) => broadcast('log', l));
 bus.on('request', (r) => broadcast('request', r));
 bus.on('piece', (p) => broadcast('piece', pieceSummary(p)));
-bus.on('campaign', (c) => broadcast('campaign', c));
+bus.on('campaign', (c) => broadcast('campaign', { ...c, activa: runtime.isRunning(c.id) }));
+bus.on('wake', (cid) => wakeIfStuck(cid));
 bus.on('client', (c) => broadcast('client', c));
 bus.on('usage', (u) => broadcast('usage', u));
 bus.on('agency', (a) => broadcast('agency', a));
