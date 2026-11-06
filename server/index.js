@@ -16,6 +16,7 @@ import * as ws from './workspace.js';
 import * as entregables from './entregables.js';
 import QRCode from 'qrcode';
 import * as planeacion from './planeacion.js';
+import * as costos from './costos.js';
 import crypto from 'node:crypto';
 import { ESTILOS, estiloById, demoSpec, resolveBroll, proxyBroll, brollDisponible, sugerirEstilos } from './video.js';
 
@@ -123,7 +124,7 @@ app.get('/api/team', (req, res) => {
 
 // ---- Clientes (kit de marca) ----
 const clientSummary = ({ logo, ...c }) => ({ ...c, tieneLogo: !!logo });
-const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas', 'objetivo', 'competencia', 'metas', 'ads', 'ghlLocationId', 'ghlUserId'];
+const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas', 'objetivo', 'competencia', 'metas', 'ads', 'ghlLocationId', 'ghlUserId', 'cobroMensual'];
 
 function cleanClient(body, prev = {}) {
   const c = { ...prev };
@@ -342,6 +343,7 @@ function track(c, promise) {
     .finally(() => { save(); bus.emit('campaign', c); });
 }
 
+costos.registrar(app);
 planeacion.registrar(app, { baseUrl, runCampaign: (c) => runtime.runCampaign(c), track, clientSummary, ws });
 
 app.post('/api/campaigns/:id/retry', (req, res) => {

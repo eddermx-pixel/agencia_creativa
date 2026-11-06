@@ -131,3 +131,8 @@ docs/
 - **Buscar campañas** (`/campanas.html`): texto, cliente, objetivo, mes, estado; editar objetivo y etiquetas.
 - **Métricas** (`/metricas.html`): captura manual por pieza (alcance, interacciones, clics, leads, ventas, gasto); compara por estilo de video, tipo, objetivo, plataforma y agente; lo que mejor funciona se le da al generador del plan.
 - **GoHighLevel** (`server/planeacion.js`): variables `GHL_TOKEN` (Private Integration), `GHL_LOCATION_ID` (o por cliente), opcional `GHL_USER_ID`. Lista redes conectadas, programa en Social Planner manualmente o solo al aprobar (fecha del plan). Videos MP4 guardados en el archivo del cliente se entregan a GHL con un enlace firmado de solo lectura (`/pub/...`). Probado únicamente contra un servidor simulado: el formato exacto de GHL debe confirmarse con tu cuenta. Limitación: el arte (HTML) aún no se convierte a PNG, así que hoy se programan textos y videos.
+
+## Costo y margen por cliente (`/costos.html`)
+- Cada llamada a la IA guarda sus tokens reales (y búsquedas web) con su campaña y cliente. El costo = tokens × precio por token (corregible con `PRECIOS_JSON` y `PRECIO_BUSQUEDA_USD`); es una **estimación**, no la factura.
+- Reporte mensual por cliente: IA, cargos fijos repartidos (Railway, GoHighLevel… igual o según uso), piezas aprobadas, costo por pieza, cobro mensual y margen.
+- "Factor de ajuste": compara con platform.claude.com → Billing y corrige todo el reporte. La conexión automática con la factura (Admin API) requiere una cuenta de organización; no disponible en cuentas personales.

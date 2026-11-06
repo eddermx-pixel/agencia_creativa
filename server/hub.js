@@ -116,6 +116,10 @@ export function pieceSummary(p) {
 }
 
 // ---- Costo de la API de Claude (aprox., USD por millón de tokens) ----
+// Si Anthropic cambia precios, se pueden corregir sin tocar código: PRECIOS_JSON='{"claude-opus-5-5":[4,20,0.2]}' (USD por millón: entrada, salida, caché leída)
+let PRECIOS_EXTRA = {};
+try { PRECIOS_EXTRA = JSON.parse(process.env.PRECIOS_JSON || '{}'); } catch {}
+const BUSQUEDA_USD = Number(process.env.PRECIO_BUSQUEDA_USD || 0.01); // por búsqueda web
 const PRECIOS = {
   'claude-opus-5-5': [4, 20, 0.2], 'claude-sonnet-5-5': [2, 10, 0.2], 'claude-haiku-5-5': [0.1, 0.5, 0.01],
   'claude-fable-5-1': [10, 50, 0.25],
@@ -123,15 +127,16 @@ const PRECIOS = {
 
 export function addUsage(campaignId, model, usage, agente = null) {
   if (!usage) return 0;
-  const [inp, out, cacheRead] = PRECIOS[model] || PRECIOS['claude-opus-5-5'];
+  const [inp, out, cacheRead] = PRECIOS_EXTRA[model] || PRECIOS[model] || PRECIOS['claude-opus-5-5'];
+  const busquedas = usage.server_tool_use?.web_search_requests || 0;
   const usd = ((usage.input_tokens || 0) * inp
     + (usage.cache_creation_input_tokens || 0) * inp * 1.25
     + (usage.cache_read_input_tokens || 0) * cacheRead
-    + (usage.output_tokens || 0) * out) / 1e6;
+    + (usage.output_tokens || 0) * out) / 1e6 + busquedas * BUSQUEDA_USD;
   db.usage.push({
     t: Date.now(), c: campaignId, a: agente, m: model, usd,
     i: usage.input_tokens || 0, o: usage.output_tokens || 0,
-    cr: usage.cache_read_input_tokens || 0, cw: usage.cache_creation_input_tokens || 0,
+    cr: usage.cache_read_input_tokens || 0, cw: usage.cache_creation_input_tokens || 0, ws: busquedas,
   });
   if (db.usage.length > 50000) db.usage.splice(0, db.usage.length - 50000);
   const c = db.campaigns.find((x) => x.id === campaignId);

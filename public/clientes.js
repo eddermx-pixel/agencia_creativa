@@ -59,7 +59,7 @@ function open(c) {
   $('dlgTitle').textContent = c ? `Editar ${c.nombre}` : 'Nuevo cliente';
   const f = $('form');
   f.reset();
-  for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas', 'metas', 'ads', 'ghlLocationId']) f.elements[k].value = c?.[k] || '';
+  for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas', 'metas', 'ads', 'ghlLocationId', 'cobroMensual']) f.elements[k].value = c?.[k] || '';
   f.elements.ghlAuto.checked = !!c?.ghlAuto; ghlSel = [...(c?.ghlCuentas || [])];
   $('ghlCuentas').textContent = ghlSel.length ? `${ghlSel.length} red(es) elegidas` : 'Aún no eliges redes.';
   const vp = c?.videoPrefs || {};
@@ -85,7 +85,7 @@ $('form').onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target.elements;
   const body = { colores };
-  for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas', 'metas', 'ads', 'ghlLocationId']) body[k] = f[k].value;
+  for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas', 'metas', 'ads', 'ghlLocationId', 'cobroMensual']) body[k] = f[k].value;
   body.ghlCuentas = ghlSel; body.ghlAuto = f.ghlAuto.checked;
   const vp = {};
   for (const k of ['nivel', 'look', 'musica', 'subtitulos', 'estiloTexto', 'sensacion']) if (f[`vp_${k}`].value) vp[k] = f[`vp_${k}`].value;

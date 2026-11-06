@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Costos por cliente</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 1000px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; } th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: right; } th:first-child, td:first-child { text-align: left; } th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    .pos { color: var(--ok); } .neg { color: var(--no); }
+    .scroll { overflow-x: auto; }
+    .fx { display: flex; gap: 8px; margin: 6px 0; flex-wrap: wrap; } .fx input, .fx select { width: auto; flex: 1 1 120px; }
+    .aviso { border: 1px solid rgba(255,181,71,.4); background: rgba(255,181,71,.08); border-radius: 12px; padding: 12px 14px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a>
+    <span class="sp"></span>
+    <a id="usageChip" class="chip" href="uso.html"></a>
+  </header>
+  <main class="wrap">
+    <h1 style="margin:0">💵 Costo y margen por cliente</h1>
+    <div class="card" style="padding:10px 12px;display:flex;gap:8px;align-items:center"><input type="month" id="mes" style="width:auto"><span class="empty" style="font-size:13px">Cargos en dólares (USD)</span></div>
+    <div class="aviso" id="aviso"></div>
+    <div class="card scroll"><table id="tb"></table></div>
+    <div class="card">
+      <h2>Cargos fijos (se reparten entre tus clientes)</h2>
+      <div id="fijos"></div>
+      <button id="addFx">＋ Agregar cargo</button>
+      <div style="margin:12px 0 4px"><b style="font-size:13px">Ajuste con tu factura de Anthropic</b></div>
+      <div class="empty" style="font-size:13px;margin-bottom:6px">Compara el gasto de este mes en platform.claude.com → Billing con el total de IA de arriba. Factor = real ÷ estimado (1.00 = igual). Se aplica a todos los clientes.</div>
+      <div class="fx"><input type="number" step="0.01" id="factor" style="max-width:120px"><button class="primary" id="guardar">Guardar</button><span id="msg" class="empty"></span></div>
+    </div>
+  </main>
+  <script type="module" src="costos.js"></script>
+</body>
+</html>
