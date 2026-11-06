@@ -140,6 +140,11 @@ export function startTelegram() {
   if (CHAT) {
     bus.on('request', (r) => onRequest(r).catch((e) => console.warn('[telegram]', e.message)));
     bus.on('piece', (p) => onPiece(p).catch((e) => console.warn('[telegram]', e.message)));
+    bus.on('campaign', (c) => {
+      if (c.estado !== 'error' || c.avisadoError === c.resumen) return;
+      c.avisadoError = c.resumen;
+      api('sendMessage', { chat_id: CHAT, text: `⚠️ La campaña de ${c.cliente} se detuvo: ${c.resumen || 'error'}\nEntra a la oficina y pulsa "Reintentar".${link('/') ? `\n${link('/')}` : ''}` }).catch(() => {});
+    });
   } else {
     console.log('[telegram] Falta TELEGRAM_CHAT_ID: escríbele /start a tu bot para obtenerlo.');
   }

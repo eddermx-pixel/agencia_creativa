@@ -135,3 +135,5 @@ button.mini { padding: 5px 10px; font-size: 12px; margin-top: 6px; }
 .ap .who { font-weight: 700; font-size: 13px; }
 .ap .who span { color: var(--muted); font-weight: 400; }
 .ap .tx { font-size: 14px; white-space: pre-wrap; }
+
+.req-error { border-color: rgba(255,93,108,.5); background: rgba(255,93,108,.08); }

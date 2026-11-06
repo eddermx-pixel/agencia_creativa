@@ -91,15 +91,26 @@ function renderPanels() {
   renderJunta();
   $('demoTag').hidden = !store.demo;
   const reqs = store.requests.filter((r) => r.estado === 'pendiente');
-  for (const id of ['reqCount', 'reqCount2']) { $(id).textContent = reqs.length || ''; $(id).dataset.n = reqs.length; }
+  const nAlert = reqs.length + store.campaigns.filter((c) => c.estado === 'error').length;
+  for (const id of ['reqCount', 'reqCount2']) { $(id).textContent = nAlert || ''; $(id).dataset.n = nAlert; }
   const feedN = store.pieces.filter((p) => p.estado === 'pendiente').length;
   $('feedCount').textContent = feedN || ''; $('feedCount').dataset.n = feedN;
 
   const list = $('reqList');
-  const ids = reqs.map((r) => r.id).join();
+  const fallas = store.campaigns.filter((c) => c.estado === 'error' || (c.estado === 'en_curso' && c.activa === false && !store.requests.some((r) => r.campaignId === c.id && r.estado === 'pendiente') && !store.pieces.some((p) => p.campaignId === c.id && p.estado === 'pendiente')));
+  const ids = reqs.map((r) => r.id).join() + '|' + fallas.map((c) => `${c.id}:${c.estado}:${c.resumen || ''}`).join();
   if (list.dataset.ids !== ids) {
     list.dataset.ids = ids;
-    list.replaceChildren(...(reqs.length ? reqs.map(reqElement) : [Object.assign(document.createElement('div'), { className: 'empty', textContent: 'Nadie te necesita ahora mismo. ☕' })]));
+    const alertas = fallas.map((c) => {
+      const el = document.createElement('div');
+      el.className = 'req req-error';
+      el.innerHTML = `<div class="who">⚠️ La campaña de ${esc(c.cliente)} se detuvo</div><div class="det">${esc(c.resumen || 'Nadie está trabajando en ella (pudo detenerse por un reinicio).')}</div><div class="row"><button class="primary">↻ Reintentar desde donde se quedó</button></div>`;
+      const b = el.querySelector('button');
+      b.onclick = async () => { b.disabled = true; try { await api(`/api/campaigns/${c.id}/retry`, {}); } catch (e) { alert(e.message); b.disabled = false; } };
+      return el;
+    });
+    const items = [...alertas, ...reqs.map(reqElement)];
+    list.replaceChildren(...(items.length ? items : [Object.assign(document.createElement('div'), { className: 'empty', textContent: 'Nadie te necesita ahora mismo. ☕' })]));
   }
 
   $('team').replaceChildren(...store.roster.map((a) => {
@@ -107,7 +118,7 @@ function renderPanels() {
     const el = document.createElement('div');
     el.className = 'member';
     const espera = pendingReqs(a.id).length ? 'esperando' : pendingPieces(a.id).length ? 'entregando' : st.estado;
-    const texto = pendingReqs(a.id)[0]?.texto || (pendingPieces(a.id).length ? 'Esperando tu swipe en el feed 📱' : st.burbuja) || (st.estado === 'libre' || !st.estado ? 'Libre' : st.estado);
+    const texto = pendingReqs(a.id)[0]?.texto || (st.pensando ? `🧠 Pensando… ${Math.max(1, Math.round((Date.now() - st.pensando) / 1000))} s` : '') || (pendingPieces(a.id).length ? 'Esperando tu swipe en el feed 📱' : st.burbuja) || (st.estado === 'libre' || !st.estado ? 'Libre' : st.estado);
     el.innerHTML = `<div class="info"><div class="name">${esc(a.nombre)} <span style="color:var(--muted);font-weight:400">· ${esc(a.rol)}</span></div><div class="st">${esc(texto)}</div></div><span class="dot ${espera}"></span>`;
     el.prepend(avatar(a, 36));
     el.onclick = () => openAgent(a.id);
@@ -260,7 +271,7 @@ connect((type, data) => {
   office?.refresh();
   renderPanels();
 });
-setInterval(renderPanels, 15000);
+setInterval(renderPanels, 5000);
 $('camReset').onclick = () => office?.resetCamera();
 // Cierra el menú al tocar fuera.
 document.addEventListener('click', (e) => { const m = document.querySelector('details.menu'); if (m?.open && !m.contains(e.target)) m.open = false; });

@@ -10,7 +10,7 @@ import { setAgent, log, addUsage, brandText, memoryText, setPhase, agentState, s
 import { db, save, newId } from './store.js';
 import { makeActions, withAgent } from './actions.js';
 
-const client = new Anthropic({ maxRetries: 4 });
+const client = new Anthropic({ maxRetries: 4, timeout: 6 * 60 * 1000 });
 const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
 const EFFORT = process.env.CLAUDE_EFFORT || 'medium';
 const MAX_TURNS = 60;
@@ -160,11 +160,19 @@ async function loop(job) {
         const uses = last.content.filter((b) => b.type === 'tool_use');
         if (!uses.length) {
           const falta = pendingWork(job, campaign);
-          if (falta && (job.empujones || 0) < 3) {
+          if (job.cortado && (job.cortes || 0) < 2) {
+            // Se le acabó el espacio a media respuesta: que continúe.
+            job.cortes = (job.cortes || 0) + 1;
+            job.cortado = false;
+            job.messages.push({ role: 'user', content: '[Sistema] Tu respuesta se cortó por larga. Continúa, sé más breve y usa la herramienta que corresponda.' });
+            save();
+          } else if (falta && (job.empujones || 0) < 4) {
             job.empujones = (job.empujones || 0) + 1;
-            job.messages.push({ role: 'user', content: `[Sistema] Todavía no terminas: ${falta} No te detengas.` });
+            job.messages.push({ role: 'user', content: `[Sistema] Todavía no terminas: ${falta} No escribas el resultado como texto: usa la herramienta. No te detengas.` });
             save();
             log(job.agentId, '↪️ Sigo trabajando: aún falta completar la campaña.', campaign.id);
+          } else if (falta) {
+            throw new Error(`${agent.nombre} no logró avanzar (${falta.split('.')[0]}). Pulsa Reintentar.`);
           } else return finish(job, textOf(last.content));
         }
         if (uses.length) {
@@ -184,21 +192,25 @@ async function loop(job) {
         }
       }
 
-      const resp = await client.beta.messages.create({
+      setAgent(job.agentId, { estado: 'trabajando', campaignId: campaign.id, pensando: Date.now() });
+      const resp = await client.beta.messages.stream({
         model: MODEL,
-        max_tokens: 16000,
+        max_tokens: 48000,
         output_config: { effort: EFFORT },
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         system: systemFor(agent, campaign),
         tools: toolDefs(job.agentId),
         messages: job.messages,
-      });
+      }).finalMessage();
+      setAgent(job.agentId, { pensando: null });
       addUsage(campaign.id, MODEL, resp.usage, job.agentId);
       if (resp.stop_reason === 'refusal') {
-        log(job.agentId, 'No pude completar esta tarea (rechazada por las políticas del modelo).', campaign.id);
-        return finish(job, 'El agente no pudo completar la tarea.');
+        throw new Error(`${agent.nombre} no pudo continuar: el modelo rechazó la solicitud (${resp.stop_details?.category || 'política'}).`);
       }
+      // Lo que el agente "dice" entre pasos se ve en la bitácora.
+      const dicho = textOf(resp.content);
+      if (dicho) log(job.agentId, `🗨️ ${dicho.slice(0, 400)}`, campaign.id);
       job.messages.push({ role: 'assistant', content: resp.content });
       job.cortado = resp.stop_reason === 'max_tokens';
       save();
@@ -276,7 +288,7 @@ const transcriptFor = (m) => `Ideas de la junta creativa #${m.numero}:
 
 ${meetingTranscript(m, (id) => `${byId[id]?.nombre} (${byId[id]?.rol})`)}
 
-Ahora sintetiza el mejor concepto (combina ideas y menciona de quién viene cada una) y preséntalo con presentar_concepto.`;
+TU SIGUIENTE PASO OBLIGATORIO: sintetiza el mejor concepto (combina ideas y menciona de quién viene cada una) y llama a la herramienta presentar_concepto. No lo escribas como texto: el jefe solo lo ve si usas la herramienta.`;
 
 function finish(job, text) {
   job.estado = 'terminado';
