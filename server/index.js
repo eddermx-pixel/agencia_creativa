@@ -10,6 +10,10 @@ import { publicRoster, byId } from './roster.js';
 import { bus, agentState, answerRequest, judgePiece, log, pieceSummary, usageSummary, usageReport, addMemory } from './hub.js';
 import { startTelegram } from './telegram.js';
 import { makeZip } from './zip.js';
+import * as files from './files.js';
+import QRCode from 'qrcode';
+import crypto from 'node:crypto';
+import { ESTILOS, estiloById, demoSpec, resolveBroll, proxyBroll, brollDisponible, sugerirEstilos } from './video.js';
 
 // Carga .env si existe (sin dependencias extra).
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -52,7 +56,7 @@ app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
 app.use((req, res, next) => {
   const q = new URL(req.url, 'http://x').searchParams.get('key');
   if (KEY && q === KEY) res.setHeader('Set-Cookie', keyCookie());
-  if (authorized(req) || req.path === '/api/agency/logo') return next();
+  if (authorized(req) || req.path === '/api/agency/logo' || req.path === '/alta.html' || req.path.startsWith('/api/alta/')) return next();
   if (req.method === 'GET' && !req.path.startsWith('/api/')) return res.status(401).sendFile(path.join(here, 'login.html'));
   res.status(401).json({ error: 'Acceso restringido' });
 });
@@ -103,12 +107,14 @@ app.get('/api/team', (req, res) => {
 
 // ---- Clientes (kit de marca) ----
 const clientSummary = ({ logo, ...c }) => ({ ...c, tieneLogo: !!logo });
-const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas'];
+const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas', 'objetivo', 'competencia'];
 
 function cleanClient(body, prev = {}) {
   const c = { ...prev };
   for (const f of CLIENT_FIELDS) if (f in body) c[f] = String(body[f] || '').trim().slice(0, 1500);
   if (Array.isArray(body.colores)) c.colores = body.colores.filter((x) => /^#[0-9a-f]{6}$/i.test(x)).slice(0, 5);
+  for (const k of ['redes', 'contacto']) if (body[k] && typeof body[k] === 'object') c[k] = Object.fromEntries(Object.entries(body[k]).slice(0, 8).map(([a, v]) => [String(a).slice(0, 20), String(v || '').trim().slice(0, 200)]));
+  if (Array.isArray(body.estilosVideo)) c.estilosVideo = body.estilosVideo.filter((x) => estiloById[x]).slice(0, 6);
   if (body.logo === null) delete c.logo;
   else if (typeof body.logo === 'string' && /^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(body.logo) && body.logo.length < 700_000) c.logo = body.logo;
   c.actualizado = Date.now();
@@ -151,6 +157,96 @@ app.get('/api/agency/logo', (req, res) => {
   if (!m) return res.status(404).end();
   res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
   res.type(m[1]).send(Buffer.from(m[2], 'base64'));
+});
+
+// ---- Archivos de cada cliente (carpetas ordenadas) ----
+const getClient = (req, res) => { const c = db.clients.find((x) => x.id === req.params.id); if (!c) res.status(404).json({ error: 'Cliente inexistente' }); return c; };
+const filesChanged = (clientId) => bus.emit('files', { clientId });
+app.get('/api/clients/:id/files', (req, res) => { if (getClient(req, res)) res.json({ carpetas: files.listar(req.params.id), max: files.MAX_BYTES }); });
+app.put('/api/clients/:id/files', async (req, res) => {
+  if (!getClient(req, res)) return;
+  try {
+    const r = await files.recibir(req, req.params.id, String(req.query.carpeta || ''), String(req.query.sub || ''), String(req.query.nombre || ''));
+    log('jefe', `📁 Subió ${r.ruta}`); filesChanged(req.params.id); res.json(r);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.get('/api/clients/:id/files/raw', (req, res) => { try { files.enviar(res, req.params.id, String(req.query.path || '')); } catch (e) { res.status(400).json({ error: e.message }); } });
+app.post('/api/clients/:id/folders', (req, res) => {
+  if (!getClient(req, res)) return;
+  try { const ruta = files.crearSubcarpeta(req.params.id, req.body?.carpeta, req.body?.nombre); filesChanged(req.params.id); res.json({ ruta }); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.post('/api/clients/:id/files/move', (req, res) => {
+  if (!getClient(req, res)) return;
+  try { const ruta = files.mover(req.params.id, req.body?.ruta, req.body?.destino); filesChanged(req.params.id); res.json({ ruta }); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.delete('/api/clients/:id/files', (req, res) => {
+  if (!getClient(req, res)) return;
+  try { files.borrar(req.params.id, String(req.query.path || '')); filesChanged(req.params.id); res.json({ ok: true }); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// ---- Alta de clientes nuevos por QR (formulario público con invitación) ----
+const baseUrl = (req) => (process.env.PUBLIC_URL || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers.host}`).replace(/\/$/, '');
+app.post('/api/invites', async (req, res) => {
+  const inv = { token: crypto.randomBytes(12).toString('base64url'), creado: Date.now(), expira: Date.now() + 30 * 86400000, clientId: null, estado: 'abierta', nota: String(req.body?.nota || '').slice(0, 80) };
+  db.invites.push(inv); save();
+  const url = `${baseUrl(req)}/alta.html?t=${inv.token}`;
+  res.json({ ...inv, url, svg: await QRCode.toString(url, { type: 'svg', margin: 1, color: { dark: '#14141f', light: '#ffffff' } }) });
+});
+app.get('/api/invites', async (req, res) => {
+  res.json(await Promise.all(db.invites.slice(-15).reverse().map(async (i) => ({ ...i, url: `${baseUrl(req)}/alta.html?t=${i.token}`, cliente: db.clients.find((c) => c.id === i.clientId)?.nombre || null }))));
+});
+const invite = (req, res) => {
+  const i = db.invites.find((x) => x.token === req.params.t);
+  if (!i || i.expira < Date.now()) { res.status(404).json({ error: 'Esta invitación no existe o ya venció. Pide un nuevo QR a la agencia.' }); return null; }
+  return i;
+};
+app.get('/api/alta/:t', (req, res) => {
+  const i = invite(req, res); if (!i) return;
+  const c = db.clients.find((x) => x.id === i.clientId);
+  res.json({
+    agencia: { nombre: db.agency.nombre || 'la agencia', tieneLogo: !!db.agency.logo },
+    estilos: ESTILOS.map(({ id, emoji, nombre, descripcion }) => ({ id, emoji, nombre, descripcion })),
+    carpetas: files.CARPETAS.map((n) => ({ nombre: n, ayuda: files.AYUDA[n] })),
+    cliente: c ? clientSummary(c) : null, estado: i.estado,
+  });
+});
+app.post('/api/alta/:t', (req, res) => {
+  const i = invite(req, res); if (!i) return;
+  const body = { ...(req.body || {}) }; delete body.logo;
+  let c = db.clients.find((x) => x.id === i.clientId);
+  if (!c) {
+    if (!String(body.nombre || '').trim()) return res.status(400).json({ error: 'Escribe el nombre de tu marca' });
+    c = cleanClient(body, { id: newId('cl'), creado: Date.now(), origen: 'formulario QR' });
+    db.clients.push(c); i.clientId = c.id;
+  } else Object.assign(c, cleanClient(body, c));
+  if (body.final) {
+    i.estado = 'completada'; i.completada = Date.now();
+    log('jefe', `🆕 Nuevo cliente por QR: ${c.nombre}${c.contacto?.nombre ? ` (contacto: ${c.contacto.nombre})` : ''}`);
+    bus.emit('nuevo-cliente', c);
+  }
+  save(); bus.emit('client', clientSummary(c));
+  res.json({ ok: true, clientId: c.id });
+});
+app.get('/api/alta/:t/files', (req, res) => {
+  const i = invite(req, res); if (!i) return;
+  if (!i.clientId) return res.json({ carpetas: [] });
+  res.json({ carpetas: files.listar(i.clientId).map((c) => ({ carpeta: c.carpeta, archivos: c.archivos.map((a) => a.nombre) })) });
+});
+app.put('/api/alta/:t/files', async (req, res) => {
+  const i = invite(req, res); if (!i) return;
+  if (!i.clientId) return res.status(400).json({ error: 'Primero escribe el nombre de tu marca' });
+  if (Number(req.headers['content-length'] || 0) > 100 * 1024 * 1024) return res.status(400).json({ error: 'Máximo 100 MB por archivo' });
+  try {
+    const r = await files.recibir(req, i.clientId, String(req.query.carpeta || ''), '', String(req.query.nombre || ''));
+    // Si es su logo y aún no tiene uno en su kit de marca, se usa automáticamente.
+    const c = db.clients.find((x) => x.id === i.clientId);
+    if (c && !c.logo && r.ruta.startsWith('Logos/') && /\.(png|jpe?g|webp|svg)$/i.test(r.nombre) && r.tam < 650000) {
+      const ext = r.nombre.split('.').pop().toLowerCase();
+      c.logo = `data:image/${ext === 'jpg' ? 'jpeg' : ext === 'svg' ? 'svg+xml' : ext};base64,${fs.readFileSync(files.safePath(c.id, r.ruta).full).toString('base64')}`;
+      c.actualizado = Date.now(); save(); bus.emit('client', clientSummary(c));
+    }
+    log('jefe', `📁 El cliente subió ${r.ruta}`); filesChanged(i.clientId); res.json({ nombre: r.nombre });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 app.get('/api/clients/:id/logo', (req, res) => {
@@ -229,13 +325,14 @@ app.get('/api/pieces', (req, res) => {
 // ---- Archivo: todas las piezas y descargas ----
 const slug = (s) => String(s || 'pieza').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 60) || 'pieza';
 const EXT = { arte: 'svg', video: 'html', texto: 'txt' };
+const extOf = (p) => (p.motor === 'v2' ? 'json' : EXT[p.tipo] || 'txt');
 function pieceBody(p) {
   if (p.tipo === 'texto') return p.contenido;
   const camp = db.campaigns.find((x) => x.id === p.campaignId);
   const logo = db.clients.find((x) => x.id === camp?.clientId)?.logo || '';
   return p.contenido.replaceAll('{{LOGO}}', logo);
 }
-const fileName = (p) => { const b = slug(p.titulo); return `${/-v\d+$/.test(b) ? b : `${b}-v${p.version || 1}`}.${EXT[p.tipo] || 'txt'}`; };
+const fileName = (p) => { const b = slug(p.titulo); return `${/-v\d+$/.test(b) ? b : `${b}-v${p.version || 1}`}.${extOf(p)}`; };
 
 app.get('/api/archive', (req, res) => {
   res.json({
@@ -248,7 +345,7 @@ app.get('/api/pieces/:id/download', (req, res) => {
   const p = db.pieces.find((x) => x.id === req.params.id);
   if (!p) return res.status(404).end();
   res.setHeader('Content-Disposition', `attachment; filename="${fileName(p)}"`);
-  res.type({ arte: 'image/svg+xml', video: 'text/html', texto: 'text/plain; charset=utf-8' }[p.tipo] || 'text/plain').send(pieceBody(p));
+  res.type(p.motor === 'v2' ? 'application/json' : { arte: 'image/svg+xml', video: 'text/html', texto: 'text/plain; charset=utf-8' }[p.tipo] || 'text/plain').send(pieceBody(p));
 });
 
 // Campaña completa en .zip: piezas aprobadas (o todas con ?todas=1) + resumen.
@@ -289,10 +386,37 @@ app.post('/api/memories/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Video v2: estilos virales, guion del video y tomas reales ----
+app.get('/api/estilos', (req, res) => res.json({ estilos: ESTILOS, broll: brollDisponible() }));
+const previews = new Map();
+app.get('/api/estilos/:id/preview', async (req, res) => {
+  const e = estiloById[req.params.id];
+  if (!e) return res.status(404).json({ error: 'Estilo inexistente' });
+  const cl = db.clients.find((x) => x.id === req.query.cliente);
+  const k = `${e.id}|${cl?.id || ''}|${cl?.actualizado || ''}`;
+  if (!previews.has(k)) previews.set(k, await resolveBroll(demoSpec(e.id, cl || {})));
+  res.json({ spec: previews.get(k), titulo: `${e.emoji} ${e.nombre}`, estilo: e.descripcion, logoUrl: cl?.logo ? `/api/clients/${cl.id}/logo?v=${cl.actualizado || ''}` : null, clientId: cl?.id, broll: brollDisponible() });
+});
+app.post('/api/clients/:id/sugerir-estilos', (req, res) => {
+  const cl = db.clients.find((x) => x.id === req.params.id);
+  if (!cl) return res.status(404).json({ error: 'No existe' });
+  res.json({ sugeridos: sugerirEstilos(cl) });
+});
+app.get('/api/broll/proxy', (req, res) => proxyBroll(req, res).catch(() => res.status(502).end()));
+app.get('/api/pieces/:id/spec', (req, res) => {
+  const p = db.pieces.find((x) => x.id === req.params.id);
+  if (!p || p.motor !== 'v2') return res.status(404).json({ error: 'Video no encontrado' });
+  const camp = db.campaigns.find((x) => x.id === p.campaignId);
+  const cl = db.clients.find((x) => x.id === camp?.clientId);
+  const spec = JSON.parse(p.contenido);
+  res.json({ spec, titulo: p.titulo, estilo: estiloById[spec.estilo] ? `${estiloById[spec.estilo].emoji} ${estiloById[spec.estilo].nombre}` : '', logoUrl: cl?.logo ? `/api/clients/${cl.id}/logo?v=${cl.actualizado || ''}` : null, clientId: cl?.id, broll: brollDisponible() });
+});
+
 // Las piezas se sirven en una "caja de arena": su código no puede tocar la app.
 app.get('/api/pieces/:id/render', (req, res) => {
   const p = db.pieces.find((x) => x.id === req.params.id);
   if (!p) return res.status(404).end();
+  if (p.motor === 'v2') return res.redirect(302, `/player.html?id=${p.id}&embed=1`);
   res.setHeader('Content-Security-Policy', "sandbox allow-scripts; default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; font-src data:");
   // El marcador {{LOGO}} se reemplaza por el logo real del cliente.
   const camp = db.campaigns.find((x) => x.id === p.campaignId);
@@ -346,6 +470,7 @@ bus.on('usage', (u) => broadcast('usage', u));
 bus.on('agency', (a) => broadcast('agency', a));
 bus.on('memory', (m) => broadcast('memory', { id: m.id, borrada: !!m.borrada }));
 bus.on('meeting', (m) => broadcast('meeting', m));
+bus.on('files', (f) => broadcast('files', f));
 
 startTelegram();
 // Retoma lo que estaba en curso antes del reinicio.

@@ -82,7 +82,7 @@ function onRequest(r) {
 
 function onPiece(p) {
   if (p.estado !== 'pendiente') return markDone(p.id, p.estado === 'aprobada' ? '✅ Aprobada' : `❌ Rechazada${p.comentario ? `: ${p.comentario}` : ''}`);
-  const feed = link(`/feed.html#${p.id}`);
+  const feed = link(p.motor === 'v2' ? `/player.html?id=${p.id}` : `/feed.html#${p.id}`);
   const icon = { arte: '🎨', video: '🎬', texto: '✍️' }[p.tipo] || '📦';
   const preview = p.tipo === 'texto' ? `\n\n${h(p.contenido.slice(0, 700))}` : '';
   return send('p', p.id,
@@ -140,6 +140,9 @@ export function startTelegram() {
   if (CHAT) {
     bus.on('request', (r) => onRequest(r).catch((e) => console.warn('[telegram]', e.message)));
     bus.on('piece', (p) => onPiece(p).catch((e) => console.warn('[telegram]', e.message)));
+    bus.on('nuevo-cliente', (c) => {
+      api('sendMessage', { chat_id: CHAT, text: `🆕 Nuevo cliente registrado por QR: ${c.nombre}\n${c.rubro || ''}${c.contacto?.whatsapp ? `\nWhatsApp: ${c.contacto.whatsapp}` : ''}${link('/clientes.html') ? `\n${link('/clientes.html')}` : ''}` }).catch(() => {});
+    });
     bus.on('campaign', (c) => {
       if (c.estado !== 'error' || c.avisadoError === c.resumen) return;
       c.avisadoError = c.resumen;

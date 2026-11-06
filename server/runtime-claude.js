@@ -8,6 +8,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { ROSTER, byId, personaText } from './roster.js';
 import { setAgent, log, addUsage, brandText, memoryText, setPhase, agentState, startMeeting, addAporte, endMeeting, meetingTranscript } from './hub.js';
 import { db, save, newId } from './store.js';
+import { videoGuide } from './video.js';
+import { resumenParaAgentes, imagenesReferencia } from './files.js';
 import { makeActions, withAgent } from './actions.js';
 
 const client = new Anthropic({ maxRetries: 4, timeout: 6 * 60 * 1000 });
@@ -25,7 +27,9 @@ const REGLAS = `Trabajas en una agencia de marketing operada por agentes de IA. 
 function systemFor(agent, campaign) {
   const cl = db.clients.find((c) => c.id === campaign.clientId);
   const mem = memoryText(campaign.clientId, campaign.id);
-  return `${REGLAS}\n\n${agent.prompt}\n\n${personaText(agent)}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${mem ? `\n\n${mem}` : ''}`;
+  const guia = ['video', 'director'].includes(agent.id) ? `\n\n${videoGuide(cl?.estilosVideo || [])}` : '';
+  const archivos = resumenParaAgentes(cl?.id);
+  return `${REGLAS}\n\n${agent.prompt}${guia}\n\n${personaText(agent)}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${archivos ? `\n\n${archivos}` : ''}${mem ? `\n\n${mem}` : ''}`;
 }
 
 // ---------- Herramientas (definición para la API) ----------
@@ -207,7 +211,7 @@ async function loop(job) {
         fallbacks: 'default',
         system: job.system,
         tools: toolDefs(job.agentId),
-        messages: job.messages,
+        messages: withRefs(job, campaign),
       }).finalMessage();
       setAgent(job.agentId, { pensando: null });
       addUsage(campaign.id, MODEL, resp.usage, job.agentId);
@@ -231,6 +235,25 @@ async function loop(job) {
   } finally {
     setAgent(job.agentId, { estado: 'libre', burbuja: '', campaignId: null });
   }
+}
+
+// Diseñadora y video "ven" las imágenes de referencia del cliente. Se agregan al
+// enviar (no se guardan en la base de datos) y siempre las mismas en toda la tarea.
+function withRefs(job, campaign) {
+  if (!['disenador', 'video'].includes(job.agentId)) return job.messages;
+  if (!job.refs) {
+    job.refs = imagenesReferencia(campaign.clientId).map((i) => i.ruta);
+    save();
+  }
+  if (!job.refs.length) return job.messages;
+  const imgs = imagenesReferencia(campaign.clientId, 8).filter((i) => job.refs.includes(i.ruta));
+  if (!imgs.length) return job.messages;
+  const [first, ...rest] = job.messages;
+  const content = [
+    ...imgs.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.media_type, data: i.data } })),
+    { type: 'text', text: `Imágenes de referencia del cliente (${imgs.map((i) => i.ruta).join(', ')}): úsalas para captar su estilo visual.\n\n${typeof first.content === 'string' ? first.content : textOf(first.content)}` },
+  ];
+  return [{ role: 'user', content }, ...rest];
 }
 
 // ¿Qué le falta a la directora antes de poder cerrar la campaña?

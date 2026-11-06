@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agencia IA — Estilos de video</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 1150px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .intro { color: var(--muted); margin: 0; }
+    .bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .bar select { width: auto; min-width: 220px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .st { background: linear-gradient(180deg, var(--panel2), var(--panel)); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 8px; position: relative; }
+    .st.on { border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2); }
+    .st .e { font-size: 28px; } .st .n { font-weight: 800; font-size: 17px; }
+    .st .d { color: var(--ink); font-size: 14px; } .st .m { color: var(--muted); font-size: 13px; }
+    .st .acts { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+    .sug { position: absolute; top: 12px; right: 12px; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 99px; background: var(--warn); color: #1b1406; }
+    dialog.v { width: min(440px, calc(100vw - 24px)); }
+    dialog.v iframe { width: 100%; aspect-ratio: 9 / 16; border: 0; display: block; background: #000; border-radius: 12px; }
+    .warn { border: 1px solid rgba(255,181,71,.4); background: rgba(255,181,71,.08); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a>
+    <span class="sp"></span>
+    <a id="usageChip" class="chip" href="uso.html"></a>
+  </header>
+  <main class="wrap">
+    <p class="intro">🎞️ Formatos de video corto que mejor funcionan en Reels y TikTok. Elige cuáles van con cada marca: Max los usará primero en sus videos. Pide a Max una sugerencia según el rubro y el tono del cliente.</p>
+    <div class="warn" id="nobroll" hidden>⚠️ Las tomas reales (B-roll) necesitan una clave gratuita de Pexels. Créala en <b>pexels.com/api</b> y agrégala en Railway como <code>PEXELS_API_KEY</code>. Sin ella, los videos usan fondos de color.</div>
+    <div class="bar">
+      <label>Marca: <select id="cliente"></select></label>
+      <button id="sugerir">🐕 Sugerencia de Max</button>
+      <span class="empty" id="msg"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+  </main>
+  <dialog class="v" id="dlg"><div class="body"><div class="head"><h3 id="dt"></h3><span style="flex:1"></span><button id="dx">✕</button></div><iframe id="frame" title="Ejemplo del estilo"></iframe><div class="empty" style="font-size:13px">Ejemplo con tomas reales genéricas y los colores de la marca elegida. Los videos de las campañas usan tomas específicas para cada idea.</div></div></dialog>
+  <script type="module" src="estilos.js"></script>
+</body>
+</html>

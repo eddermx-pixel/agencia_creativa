@@ -15,6 +15,7 @@
     .cl .logo img { max-height: 60px; max-width: 90%; object-fit: contain; }
     .cl .n { font-weight: 700; } .cl .r { color: var(--muted); font-size: 13px; }
     .sw { display: flex; gap: 6px; } .sw span { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(0,0,0,.1); }
+    .acts2 { display: flex; gap: 6px; } .acts2 button { flex: 1; font-size: 13px; padding: 7px 8px; }
     .new { border: 2px dashed var(--line); background: transparent; box-shadow: none; align-items: center; justify-content: center; min-height: 170px; color: var(--muted); font-weight: 600; }
     .colors { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .colors .c { position: relative; }
@@ -53,11 +54,19 @@
         </div>
       </div>
     </section>
-    <h2 class="sect">🏷️ Clientes</h2>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between"><h2 class="sect" style="margin:0">🏷️ Clientes</h2><button class="primary" id="qrBtn">📱 QR para cliente nuevo</button></div>
     <p class="intro">El kit de marca de cada cliente (colores, logo, tono y público) lo leen todos los agentes en cada campaña.</p>
     <div class="grid" id="grid"></div>
   </main>
 
+  <dialog id="dlgQr"><div class="body">
+    <div class="head"><h3>📱 Alta de cliente nuevo</h3><span style="flex:1"></span><button id="qrX">✕</button></div>
+    <p class="intro" style="margin:0">Que tu cliente escanee este código con la cámara de su celular. Se abre un cuestionario rápido; con sus respuestas se crea su ficha y su kit de marca, y ahí mismo sube su logo y sus referencias, ordenados en carpetas. Te avisamos cuando termine. La invitación dura 30 días.</p>
+    <div id="qrBox" style="background:#fff;border-radius:16px;padding:16px;width:min(320px,100%);align-self:center"></div>
+    <input id="qrUrl" readonly onclick="this.select()">
+    <div class="actions" style="justify-content:center"><button id="qrCopy">Copiar enlace</button><a id="qrWa" target="_blank" rel="noopener"><button>Enviar por WhatsApp</button></a><button id="qrPrint">🖨️ Imprimir</button></div>
+    <div id="qrList" class="empty" style="font-size:13px"></div>
+  </div></dialog>
   <dialog id="dlg">
     <form class="body" id="form">
       <div class="head"><h3 id="dlgTitle">Nuevo cliente</h3></div>

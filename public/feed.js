@@ -28,7 +28,7 @@ function fitIframes(root) {
 function mediaHTML(p) {
   const src = `/api/pieces/${p.id}/render`;
   if (p.tipo === 'arte') return `<img src="${src}" alt="${esc(p.titulo)}">`;
-  if (p.tipo === 'video') return `<iframe sandbox="allow-scripts" src="${src}" title="${esc(p.titulo)}" loading="lazy"></iframe>`;
+  if (p.tipo === 'video') return `<iframe ${p.motor === 'v2' ? '' : 'sandbox="allow-scripts"'} src="${p.motor === 'v2' ? `/player.html?id=${p.id}&embed=1` : src}" title="${esc(p.titulo)}" loading="lazy"></iframe>`;
   return '<pre>Cargando…</pre>';
 }
 
@@ -132,7 +132,7 @@ function renderGrid() {
     const t = document.createElement('div');
     t.className = 'tile';
     const inner = p.tipo === 'arte' ? `<img src="/api/pieces/${p.id}/render" alt="">`
-      : p.tipo === 'video' ? `<iframe sandbox="allow-scripts" src="/api/pieces/${p.id}/render" loading="lazy"></iframe>` : '<div style="font-size:40px;background:var(--chip);width:100%;height:100%;display:flex;align-items:center;justify-content:center">✍️</div>';
+      : p.tipo === 'video' ? `<iframe ${p.motor === 'v2' ? '' : 'sandbox="allow-scripts"'} src="${p.motor === 'v2' ? `/player.html?id=${p.id}&embed=1` : `/api/pieces/${p.id}/render`}" loading="lazy"></iframe>` : '<div style="font-size:40px;background:var(--chip);width:100%;height:100%;display:flex;align-items:center;justify-content:center">✍️</div>';
     t.innerHTML = `<div class="th">${inner}</div><div class="t">${esc(p.titulo)}<span>${esc(byId(p.agente)?.nombre || '')} · ${hace(p.creada)}</span></div>`;
     t.onclick = () => window.open(`/api/pieces/${p.id}/render`, '_blank', 'noopener');
     g.append(t);

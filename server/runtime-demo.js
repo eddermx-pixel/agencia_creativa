@@ -4,6 +4,7 @@ import { setAgent, log, startMeeting, addAporte, endMeeting } from './hub.js';
 import { ROSTER } from './roster.js';
 import { makeActions, withAgent } from './actions.js';
 import { db, expirePending } from './store.js';
+import { demoSpec, sugerirEstilos } from './video.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -102,13 +103,13 @@ async function entregarHastaAprobar(a, make) {
 const CONCEPTOS = [
   { titulo: 'Lo que buscabas ya llegó', idea: '{cliente} como la respuesta a lo que tu público ya estaba buscando.', mensaje: 'Calidad y buen precio, por tiempo limitado.',
     credito: 'titular de Teo, paleta cálida de Luna, gancho de pregunta de Max.', titular: 'LO QUE\nBUSCABAS\nYA LLEGÓ', sub: 'Calidad y buen precio, solo esta semana', cta: 'ESCRÍBENOS HOY',
-    escenas: ['¿Todavía no lo tienes?', 'Llegó lo nuevo', 'Calidad + buen precio'], ctaVideo: 'Pídelo hoy' },
+    escenas: ['¿Todavía no lo tienes?', 'Llegó lo nuevo', 'Calidad + buen precio'], ctaVideo: 'Pídelo hoy', busquedas: ['woman searching looking around street', 'fresh bread bakery close up', 'happy friends sharing food', 'customer smiling shop'] },
   { titulo: 'El ritual de la semana', idea: 'Convertir la promoción en un ritual que la gente espera cada semana, con cuenta regresiva.', mensaje: 'Tu cita favorita de la semana ya tiene día.',
     credito: 'insight de Iris (la gente repite lo que se vuelve costumbre), cuenta regresiva de Max, copy de Teo.', titular: 'TU CITA\nFAVORITA\nDE LA SEMANA', sub: 'Aparta el día: la promo vuelve cada semana', cta: 'APÁRTALO YA',
-    escenas: ['3…', '2…', '1…', '¡Hoy es el día!'], ctaVideo: 'Te esperamos' },
+    escenas: ['3…', '2…', '1…', '¡Hoy es el día!'], ctaVideo: 'Te esperamos', busquedas: ['calendar page turning', 'clock ticking close up', 'people walking into shop', 'celebration friends cheering'] },
   { titulo: 'Detrás del mostrador', idea: 'Mostrar el proceso y a las personas detrás del producto: honestidad y cercanía.', mensaje: 'Hecho a mano, hecho hoy, hecho para ti.',
     credito: 'idea de Luna (fotos de proceso en ilustración), testimonio de Iris, revisión de claims de Rita.', titular: 'HECHO HOY,\nHECHO PARA\nTI', sub: 'Así se prepara lo que te llevas a casa', cta: 'VEN A PROBARLO',
-    escenas: ['5:00 a.m.', 'Manos a la obra', 'Recién hecho', 'Para ti'], ctaVideo: 'Ven hoy' },
+    escenas: ['5:00 a.m.', 'Manos a la obra', 'Recién hecho', 'Para ti'], ctaVideo: 'Ven hoy', busquedas: ['baker kneading dough early morning', 'hands shaping bread dough', 'bread coming out of oven', 'family breakfast table'] },
 ];
 
 const IDEAS = {
@@ -257,11 +258,16 @@ async function runCampaignInner(campaign) {
         await entregarHastaAprobar(a, (v) => ({
           tipo: 'video',
           titulo: `Reel 9:16 v${v}`,
-          descripcion: 'Reel de 12 segundos con gancho, mensaje y CTA.',
-          contenido: videoHTML({
-            cliente, escenas: ctx.escenas, cta: ctx.ctaVideo,
-            pal: pals[(ctx.pal + v - 1) % pals.length], logo,
-          }),
+          descripcion: 'Reel con tomas reales, transiciones y subtítulos, en el estilo viral de la marca.',
+          contenido: (() => {
+            // Guion de video v2 con tomas reales, en el estilo viral de la marca
+            const estilos = client?.estilosVideo?.length ? client.estilosVideo : sugerirEstilos(client || {});
+            const pal = pals[(ctx.pal + v - 1) % pals.length];
+            const spec = demoSpec(estilos[(v - 1) % estilos.length], { nombre: cliente, colores: [pal.fondo1, pal.fondo2, pal.acento] },
+              { ...ctx.escenas, busquedas: ctx.busquedas, cta: ctx.ctaVideo });
+            spec.escenas.forEach((e, i) => { e.texto = ctx.escenas[i] || e.texto; e.subtitulo = i === 0 ? ctx.sub : ''; e.logo = i === 0; });
+            return JSON.stringify(spec);
+          })(),
         }));
       }),
     ]);

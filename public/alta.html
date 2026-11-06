@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bienvenido · Alta de cliente</title>
+  <style>
+    :root { color-scheme: dark; --bg: #0b0b12; --panel: #161622; --chip: #23233a; --ink: #f1f0f7; --muted: #9a98ad; --line: #2b2b44; --accent: #8b7bff; --accent2: #36e2c8; --no: #ff5d6c; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: radial-gradient(900px 500px at 20% -10%, #1b1640, transparent 60%), var(--bg); color: var(--ink); font: 17px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .app { max-width: 560px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; padding: 18px 18px calc(18px + env(safe-area-inset-bottom)); }
+    .top { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+    .top img { max-height: 38px; max-width: 160px; object-fit: contain; }
+    .top b { font-size: 18px; }
+    .prog { height: 6px; border-radius: 9px; background: var(--chip); overflow: hidden; margin: 14px 0 6px; }
+    .prog i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
+    .step { color: var(--muted); font-size: 13px; }
+    .q { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 16px 0; animation: in .3s ease-out; }
+    @keyframes in { from { opacity: 0; transform: translateY(12px); } }
+    h1 { font-size: 26px; line-height: 1.2; margin: 0; letter-spacing: -.01em; }
+    .help { color: var(--muted); font-size: 15px; margin: 0; }
+    input, textarea { width: 100%; font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+    textarea { min-height: 110px; resize: vertical; }
+    input:focus, textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(139,123,255,.25); }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chips button { font: inherit; font-size: 15px; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 99px; padding: 10px 14px; cursor: pointer; }
+    .chips button.on { background: var(--accent); border-color: transparent; color: #fff; }
+    .cards { display: grid; gap: 10px; }
+    .cards button { text-align: left; font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; cursor: pointer; display: flex; gap: 12px; align-items: center; }
+    .cards button.on { border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2); }
+    .cards .e { font-size: 26px; } .cards small { display: block; color: var(--muted); font-size: 13px; }
+    .colors { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .colors input[type=color] { width: 64px; height: 56px; padding: 4px; border-radius: 14px; }
+    .grid2 { display: grid; gap: 10px; }
+    .grid2 label { font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+    .up { border: 2px dashed var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .up select { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px; }
+    .up .btn { text-align: center; }
+    .files { font-size: 14px; color: var(--muted); }
+    .nav { display: flex; gap: 10px; padding-top: 8px; }
+    .btn { font: inherit; font-weight: 700; border: 0; border-radius: 14px; padding: 15px 18px; cursor: pointer; background: var(--chip); color: inherit; }
+    .btn.go { flex: 1; background: linear-gradient(135deg, #8b7bff, #6a5cff); color: #fff; }
+    .btn:disabled { opacity: .5; }
+    .err { color: var(--no); font-size: 14px; min-height: 20px; }
+    .done { text-align: center; } .done .big { font-size: 64px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="top" id="top"></div>
+    <div class="prog"><i id="bar" style="width:0"></i></div>
+    <div class="step" id="stepn"></div>
+    <div class="q" id="q"></div>
+    <div class="err" id="err"></div>
+    <div class="nav" id="nav"><button class="btn" id="back">←</button><button class="btn go" id="next">Siguiente →</button></div>
+  </div>
+  <script>
+    const t = new URLSearchParams(location.search).get('t');
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    let info = null, i = 0;
+    const r = { colores: [], estilosVideo: [], redes: {}, contacto: {} };
+
+    const PASOS = [
+      { id: 'hola', tipo: 'intro' },
+      { id: 'nombre', p: '¿Cómo se llama tu marca o negocio?', tipo: 'text', ph: 'Ej. Panadería La Espiga', req: true },
+      { id: 'rubro', p: '¿A qué se dedica?', tipo: 'chips1', ops: ['Comida y bebidas', 'Moda', 'Belleza y cuidado', 'Salud', 'Servicios profesionales', 'Educación', 'Tecnología', 'Hogar', 'Fitness', 'Eventos'], otro: true },
+      { id: 'publico', p: '¿Quién es tu cliente ideal?', help: 'Edad, dónde vive, qué le gusta, qué problema le resuelves.', tipo: 'textarea', ph: 'Ej. Familias de 25 a 45 años de la zona que buscan pan recién hecho' },
+      { id: 'tono', p: '¿Cómo quieres que suene tu marca?', tipo: 'chips1', ops: ['Cercano y divertido', 'Cálido y familiar', 'Profesional', 'Premium y elegante', 'Juvenil y atrevido', 'Inspirador'], otro: true },
+      { id: 'colores', p: '¿Cuáles son los colores de tu marca?', help: 'Elige hasta 4. Si no tienes, sáltalo y te proponemos unos.', tipo: 'colores' },
+      { id: 'logo', p: 'Sube tu logo', help: 'De preferencia PNG con fondo transparente o SVG.', tipo: 'upload', carpeta: 'Logos', accept: 'image/*,.svg,.pdf,.ai' },
+      { id: 'objetivo', p: '¿Qué quieres lograr con tus redes?', tipo: 'chips1', ops: ['Vender más', 'Que me conozcan', 'Recibir mensajes y citas', 'Abrir un nuevo producto', 'Fidelizar clientes'], otro: true },
+      { id: 'redes', p: '¿Dónde te encuentran?', tipo: 'redes' },
+      { id: 'competencia', p: '¿Qué marcas admiras o son tu competencia?', help: 'Nombres o cuentas de Instagram/TikTok.', tipo: 'textarea', ph: 'Ej. @marca1, @marca2' },
+      { id: 'estilosVideo', p: '¿Qué estilos de video te gustan?', help: 'Elige los que más vayan contigo (puedes elegir varios).', tipo: 'estilos' },
+      { id: 'refs', p: 'Comparte referencias y material', help: 'Fotos de tu producto, posts o videos que te gusten, manual de marca… Elige la carpeta para que todo quede ordenado.', tipo: 'upload', multi: true },
+      { id: 'notas', p: '¿Algo que NUNCA debamos hacer o decir?', tipo: 'textarea', ph: 'Ej. No usar la palabra "barato", no mostrar personas…' },
+      { id: 'contacto', p: '¿Cómo te contactamos?', tipo: 'contacto' },
+      { id: 'fin', tipo: 'fin' },
+    ];
+
+    async function api(path, body) {
+      const res = await fetch(`/api/alta/${t}${path}`, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || 'Error');
+      return j;
+    }
+
+    function upload(file, carpeta) {
+      return new Promise((ok, fail) => {
+        const x = new XMLHttpRequest();
+        x.open('PUT', `/api/alta/${t}/files?carpeta=${encodeURIComponent(carpeta)}&nombre=${encodeURIComponent(file.name)}`);
+        x.setRequestHeader('Content-Type', 'application/octet-stream');
+        x.upload.onprogress = (e) => e.lengthComputable && ($('err').textContent = `Subiendo ${file.name}… ${Math.round((e.loaded / e.total) * 100)}%`);
+        x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch {} x.status < 300 ? ok(j) : fail(new Error(j.error || 'Error')); };
+        x.onerror = () => fail(new Error('Error de red'));
+        x.send(file);
+      });
+    }
+
+    async function filesList() { try { return (await api('/files')).carpetas; } catch { return []; } }
+
+    async function render() {
+      const s = PASOS[i];
+      $('err').textContent = '';
+      $('bar').style.width = `${(i / (PASOS.length - 1)) * 100}%`;
+      $('stepn').textContent = i > 0 && s.tipo !== 'fin' ? `Pregunta ${i} de ${PASOS.length - 2}` : '';
+      $('back').style.visibility = i > 0 && s.tipo !== 'fin' ? 'visible' : 'hidden';
+      $('nav').style.display = s.tipo === 'fin' ? 'none' : 'flex';
+      $('next').textContent = s.tipo === 'intro' ? 'Empezar →' : i === PASOS.length - 2 ? 'Terminar ✓' : 'Siguiente →';
+      const q = $('q'); q.style.animation = 'none'; q.offsetHeight; q.style.animation = '';
+      const v = r[s.id];
+      if (s.tipo === 'intro') q.innerHTML = `<h1>¡Bienvenido a ${esc(info.agencia.nombre)}! 👋</h1><p class="help">Contesta unas preguntas rápidas (5 minutos) para conocer tu marca. Así nuestro equipo arma tu kit de marca y tus primeras ideas. Tus respuestas se guardan en cada paso.</p>`;
+      else if (s.tipo === 'text') q.innerHTML = `<h1>${s.p}</h1><input id="in" value="${esc(v || '')}" placeholder="${esc(s.ph || '')}" autofocus>`;
+      else if (s.tipo === 'textarea') q.innerHTML = `<h1>${s.p}</h1>${s.help ? `<p class="help">${s.help}</p>` : ''}<textarea id="in" placeholder="${esc(s.ph || '')}">${esc(v || '')}</textarea>`;
+      else if (s.tipo === 'chips1') {
+        q.innerHTML = `<h1>${s.p}</h1><div class="chips">${s.ops.map((o) => `<button class="${v === o ? 'on' : ''}">${esc(o)}</button>`).join('')}</div>${s.otro ? `<input id="in" placeholder="Otro (escríbelo)" value="${esc(v && !s.ops.includes(v) ? v : '')}">` : ''}`;
+        q.querySelectorAll('.chips button').forEach((b) => (b.onclick = () => { r[s.id] = b.textContent; if ($('in')) $('in').value = ''; render(); }));
+      } else if (s.tipo === 'colores') {
+        const cols = r.colores.length ? r.colores : [];
+        q.innerHTML = `<h1>${s.p}</h1><p class="help">${s.help}</p><div class="colors">${cols.map((c, k) => `<input type="color" value="${c}" data-k="${k}">`).join('')}${cols.length < 4 ? '<button class="btn" id="add">＋ Color</button>' : ''}${cols.length ? '<button class="btn" id="rm">Quitar último</button>' : ''}</div>`;
+        q.querySelectorAll('input[type=color]').forEach((x) => (x.oninput = () => (r.colores[+x.dataset.k] = x.value)));
+        if ($('add')) $('add').onclick = () => { r.colores.push('#8b7bff'); render(); };
+        if ($('rm')) $('rm').onclick = () => { r.colores.pop(); render(); };
+      } else if (s.tipo === 'upload') {
+        const ls = await filesList();
+        const lista = ls.flatMap((c) => c.archivos.map((a) => `${c.carpeta}: ${a}`));
+        q.innerHTML = `<h1>${s.p}</h1><p class="help">${s.help}</p><div class="up">
+          ${s.carpeta ? '' : `<select id="carp">${info.carpetas.filter((c) => c.nombre !== 'Logos').map((c) => `<option value="${esc(c.nombre)}">📂 ${esc(c.nombre)} — ${esc(c.ayuda)}</option>`).join('')}</select>`}
+          <label class="btn go" style="text-align:center">📎 Elegir archivos<input type="file" id="fi" ${s.multi ? 'multiple' : ''} accept="${s.accept || 'image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.ttf,.otf'}" hidden></label>
+          <div class="files">${lista.length ? `Ya subiste: ${lista.map(esc).join(' · ')}` : 'Aún no has subido archivos.'}</div></div>`;
+        $('fi').onchange = async (e) => {
+          const carpeta = s.carpeta || $('carp').value;
+          for (const f of e.target.files) { try { await upload(f, carpeta); } catch (err) { alert(`${f.name}: ${err.message}`); } }
+          render();
+        };
+      } else if (s.tipo === 'estilos') {
+        q.innerHTML = `<h1>${s.p}</h1><p class="help">${s.help}</p><div class="cards">${info.estilos.map((e) => `<button data-id="${e.id}" class="${r.estilosVideo.includes(e.id) ? 'on' : ''}"><span class="e">${e.emoji}</span><span><b>${esc(e.nombre)}</b><small>${esc(e.descripcion)}</small></span></button>`).join('')}</div>`;
+        q.querySelectorAll('.cards button').forEach((b) => (b.onclick = () => { const k = r.estilosVideo.indexOf(b.dataset.id); k >= 0 ? r.estilosVideo.splice(k, 1) : r.estilosVideo.push(b.dataset.id); b.classList.toggle('on'); }));
+      } else if (s.tipo === 'redes') {
+        q.innerHTML = `<h1>${s.p}</h1><div class="grid2">${[['instagram', 'Instagram', '@tumarca'], ['tiktok', 'TikTok', '@tumarca'], ['facebook', 'Facebook', 'facebook.com/tumarca'], ['web', 'Sitio web', 'tumarca.com']].map(([k, l, ph]) => `<label>${l}<input data-k="${k}" value="${esc(r.redes[k] || '')}" placeholder="${ph}"></label>`).join('')}</div>`;
+      } else if (s.tipo === 'contacto') {
+        q.innerHTML = `<h1>${s.p}</h1><div class="grid2">${[['nombre', 'Tu nombre', ''], ['whatsapp', 'WhatsApp', '+52 …'], ['email', 'Correo', 'tu@correo.com']].map(([k, l, ph]) => `<label>${l}<input data-k="${k}" value="${esc(r.contacto[k] || '')}" placeholder="${ph}"></label>`).join('')}</div>`;
+      } else if (s.tipo === 'fin') {
+        q.innerHTML = `<div class="done"><div class="big">🚀</div><h1>¡Listo, ${esc(r.nombre || '')}!</h1><p class="help">Recibimos tu información y tus archivos. Nuestro equipo ya está revisando tu marca y te contactaremos muy pronto.</p></div>`;
+      }
+      const inp = $('in'); if (inp && s.tipo === 'text') inp.onkeydown = (e) => { if (e.key === 'Enter') $('next').click(); };
+    }
+
+    function leer() {
+      const s = PASOS[i];
+      const inp = $('in');
+      if (['text', 'textarea'].includes(s.tipo)) r[s.id] = inp.value.trim();
+      if (s.tipo === 'chips1' && inp?.value.trim()) r[s.id] = inp.value.trim();
+      if (s.tipo === 'redes') document.querySelectorAll('[data-k]').forEach((x) => (r.redes[x.dataset.k] = x.value.trim()));
+      if (s.tipo === 'contacto') document.querySelectorAll('[data-k]').forEach((x) => (r.contacto[x.dataset.k] = x.value.trim()));
+    }
+
+    $('next').onclick = async () => {
+      const s = PASOS[i];
+      leer();
+      if (s.req && !r[s.id]) { $('err').textContent = 'Este dato es necesario para continuar.'; return; }
+      $('next').disabled = true;
+      try {
+        if (s.tipo !== 'intro') {
+          const { refs, logo, ...datos } = r;
+          await api('', { ...datos, final: i === PASOS.length - 2 });
+        }
+        i++; render();
+      } catch (e) { $('err').textContent = e.message; }
+      $('next').disabled = false;
+    };
+    $('back').onclick = () => { leer(); i = Math.max(0, i - 1); render(); };
+
+    (async () => {
+      try { info = await api(''); } catch (e) { $('q').innerHTML = `<h1>😕 Ups</h1><p class="help">${esc(e.message)}</p>`; $('nav').style.display = 'none'; return; }
+      $('top').innerHTML = info.agencia.tieneLogo ? `<img src="/api/agency/logo" alt="${esc(info.agencia.nombre)}">` : `<b>${esc(info.agencia.nombre)}</b>`;
+      if (info.cliente) Object.assign(r, { ...info.cliente, colores: info.cliente.colores || [], estilosVideo: info.cliente.estilosVideo || [], redes: info.cliente.redes || {}, contacto: info.cliente.contacto || {} });
+      if (info.estado === 'completada') { i = PASOS.length - 1; }
+      render();
+    })();
+  </script>
+</body>
+</html>

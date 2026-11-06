@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agencia IA — Video</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { height: 100%; }
+    body.embed { background: #000; overflow: hidden; }
+    body.embed .wrap { padding: 0; height: 100%; }
+    body.embed header, body.embed .side { display: none; }
+    .wrap { max-width: 1000px; margin: 0 auto; padding: 16px; display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+    .stagev { position: relative; background: #000; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center; }
+    body:not(.embed) .stagev { height: min(78vh, 900px); }
+    body.embed .stagev { width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
+    canvas { height: 100%; width: auto; max-width: 100%; display: block; cursor: pointer; }
+    .side { flex: 1; min-width: 260px; max-width: 380px; display: flex; flex-direction: column; gap: 12px; }
+    .bar { height: 6px; border-radius: 9px; background: var(--chip); overflow: hidden; } .bar i { display: block; height: 100%; width: 0; background: var(--accent2); }
+    .msg { color: var(--muted); font-size: 14px; }
+    .scenes { font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+    .scenes div { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+    .scenes b { color: var(--accent2); }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a>
+    <span class="sp"></span>
+  </header>
+  <main class="wrap">
+    <div class="stagev"><canvas id="cv"></canvas></div>
+    <aside class="side">
+      <div class="card">
+        <h2 id="titulo">Video</h2>
+        <div class="msg" id="info"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class="primary" id="exp">⬇️ Exportar video</button>
+          <button id="pp">⏸️ Pausa</button>
+        </div>
+        <div class="bar" style="margin-top:10px"><i id="prog"></i></div>
+        <div class="msg" id="expmsg" style="margin-top:6px"></div>
+      </div>
+      <div class="card"><h2>Escenas</h2><div class="scenes" id="scenes"></div></div>
+    </aside>
+  </main>
+  <script type="module">
+    import { createPlayer } from './video-player.js';
+    import { connect, esc } from './common.js';
+    const q = new URLSearchParams(location.search);
+    if (q.get('embed')) document.body.classList.add('embed');
+    else connect(() => {});
+    const $ = (id) => document.getElementById(id);
+    const url = q.get('id') ? `/api/pieces/${q.get('id')}/spec` : `/api/estilos/${q.get('estilo')}/preview?cliente=${encodeURIComponent(q.get('cliente') || '')}`;
+    const data = await (await fetch(url)).json();
+    if (data.error) { document.body.insertAdjacentHTML('beforeend', `<p class="msg" style="padding:20px">${esc(data.error)}</p>`); throw new Error(data.error); }
+    const { spec } = data;
+    $('titulo').textContent = data.titulo || 'Video';
+    $('info').innerHTML = `${esc(data.estilo || '')} · ${spec.formato} · ${spec.escenas.length} escenas${data.broll === false ? '<br>⚠️ Sin tomas reales: falta configurar PEXELS_API_KEY.' : ''}`;
+    $('scenes').innerHTML = spec.escenas.map((e, i) => `<div><b>${i + 1}.</b> ${esc(e.texto || '—')} <span class="msg">· ${e.duracion}s · ${e.transicion}${e.fondo.clip ? ` · 🎥 ${esc(e.fondo.clip.autor)}` : e.fondo.tipo === 'broll' ? ` · (${esc(e.fondo.busqueda)})` : ''}</span></div>`).join('');
+    const player = await createPlayer($('cv'), spec, {
+      logoUrl: data.logoUrl, fileUrl: (r) => `/api/clients/${data.clientId}/files/raw?path=${encodeURIComponent(r)}`,
+      onTime: (t, total) => { $('prog').style.width = `${(t / total) * 100}%`; },
+    });
+    let on = true;
+    const toggle = () => { on ? player.pause() : player.play(); on = !on; $('pp').textContent = on ? '⏸️ Pausa' : '▶️ Reproducir'; };
+    $('cv').onclick = toggle; $('pp').onclick = toggle;
+    $('exp').onclick = async () => {
+      $('exp').disabled = true;
+      try {
+        const { blob, ext } = await player.exportar((p) => ($('expmsg').textContent = `Grabando… ${Math.round(p * 100)}% (no cierres esta pestaña)`));
+        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${(data.titulo || 'video').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\- ]+/g, '').trim() || 'video'}.${ext}` });
+        a.click(); $('expmsg').textContent = `✓ Listo (${ext.toUpperCase()}, ${(blob.size / 1e6).toFixed(1)} MB)`;
+      } catch (e) { $('expmsg').textContent = `No se pudo exportar: ${e.message}`; }
+      $('exp').disabled = false;
+    };
+  </script>
+</body>
+</html>

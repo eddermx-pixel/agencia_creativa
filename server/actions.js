@@ -1,6 +1,7 @@
 // Acciones que cualquier agente puede hacer en la oficina. Las usan tanto
 // los agentes reales (Claude) como el modo demo.
 import { setAgent, log, askBoss, submitPiece, setPhase, addMemory } from './hub.js';
+import { isSpec, normalizeSpec, resolveBroll, brollDisponible } from './video.js';
 
 // `key` = id de la llamada del agente; permite retomar sin duplicar tras un reinicio.
 export function makeActions(agentId, campaign, key = null) {
@@ -50,8 +51,16 @@ export function makeActions(agentId, campaign, key = null) {
     },
 
     async entregar({ tipo, titulo, descripcion = '', contenido, version = 1 }) {
+      let motor = null;
+      if (tipo === 'video' && (isSpec(contenido) || typeof contenido === 'object')) {
+        const spec = normalizeSpec(contenido); // lanza error si el JSON no sirve: el agente lo corrige
+        setAgent(agentId, { burbuja: brollDisponible() ? '🎥 Buscando tomas reales…' : 'Armando el video…' });
+        await resolveBroll(spec);
+        contenido = JSON.stringify(spec);
+        motor = 'v2';
+      }
       setAgent(agentId, { estado: 'entregando', burbuja: `Esperando tu swipe: ${titulo}`.slice(0, 140) });
-      const p = await submitPiece({ agente: agentId, campaignId: cid, tipo, titulo, descripcion, contenido, version, key });
+      const p = await submitPiece({ agente: agentId, campaignId: cid, tipo, titulo, descripcion, contenido, version, key, motor });
       setAgent(agentId, {
         estado: 'trabajando',
         burbuja: p.estado === 'aprobada' ? `¡Aprobaron "${titulo}"!` : `Rehaciendo "${titulo}"…`,

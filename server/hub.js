@@ -77,14 +77,14 @@ export function answerRequest(id, { respuesta = '', aprobado = null, respuestas 
 // ---- Piezas creativas (feed tipo Tinder) ----
 const pieceWaiters = new Map();
 
-export function submitPiece({ agente, campaignId, tipo, titulo, descripcion, contenido, version = 1, key = null }) {
+export function submitPiece({ agente, campaignId, tipo, titulo, descripcion, contenido, version = 1, key = null, motor = null }) {
   const prev = key && db.pieces.find((x) => x.key === key && x.estado !== 'expirada');
   if (prev) {
     if (prev.estado !== 'pendiente') return Promise.resolve(prev);
     return new Promise((resolve) => pieceWaiters.set(prev.id, resolve));
   }
   const p = {
-    id: newId('p'), key, agente, campaignId, tipo, titulo, descripcion, contenido, version,
+    id: newId('p'), key, agente, campaignId, tipo, titulo, descripcion, contenido, version, motor,
     estado: 'pendiente', creada: Date.now(),
   };
   db.pieces.push(p);
@@ -188,6 +188,10 @@ export function brandText(client) {
   if (client.colores?.length) l.push(`- Colores de marca (úsalos siempre): ${client.colores.join(', ')}`);
   if (client.tipografia) l.push(`- Tipografía preferida: ${client.tipografia} (si no está disponible, usa la fuente del sistema más parecida)`);
   if (client.notas) l.push(`- Reglas y notas: ${client.notas}`);
+  if (client.objetivo) l.push(`- Objetivo principal: ${client.objetivo}`);
+  if (client.competencia) l.push(`- Competencia y marcas que admira: ${client.competencia}`);
+  const redes = Object.entries(client.redes || {}).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`);
+  if (redes.length) l.push(`- Redes: ${redes.join(' · ')}`);
   if (client.logo) l.push('- Logo: SÍ hay logo oficial. Para colocarlo usa exactamente el marcador {{LOGO}} como dirección de la imagen: en SVG <image href="{{LOGO}}" x=".." y=".." width=".." height=".."/> y en HTML <img src="{{LOGO}}">. El sistema lo reemplaza por el logo real. Nunca dibujes ni inventes un logo.');
   else l.push('- Logo: no hay logo cargado; escribe el nombre de la marca con buena tipografía.');
   return l.join('\n');

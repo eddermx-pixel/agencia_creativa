@@ -1,5 +1,6 @@
 // Clientes y sus kits de marca.
 import { api, store, connect, esc } from './common.js';
+import { openFiles } from './archivos-cliente.js';
 
 const $ = (id) => document.getElementById(id);
 let editing = null;   // id del cliente en edición (null = nuevo)
@@ -15,6 +16,9 @@ function render() {
       <div class="logo">${c.tieneLogo ? `<img src="/api/clients/${esc(c.id)}/logo?v=${esc(String(c.actualizado || ''))}" alt="">` : esc(c.nombre.slice(0, 2).toUpperCase())}</div>
       <div><div class="n">${esc(c.nombre)}</div><div class="r">${esc(c.rubro || 'Sin rubro')}${c.tono ? ` · ${esc(c.tono)}` : ''}</div></div>
       <div class="sw">${(c.colores || []).map((h) => `<span style="background:${esc(h)}"></span>`).join('')}</div>`;
+    el.insertAdjacentHTML('beforeend', '<div class="acts2"><button class="ed">✏️ Kit de marca</button><button class="fl">📁 Archivos</button></div>');
+    el.querySelector('.ed').onclick = (e) => { e.stopPropagation(); open(c); };
+    el.querySelector('.fl').onclick = (e) => { e.stopPropagation(); openFiles(c); };
     el.onclick = () => open(c);
     return el;
   }), Object.assign(document.createElement('button'), { className: 'cl new', textContent: '＋ Nuevo cliente', onclick: () => open(null) }));
@@ -106,3 +110,23 @@ $('agSave').onclick = async () => {
 
 let first = true;
 connect((type) => { render(); if (first || type === 'agency') { renderAgency(first); first = false; } });
+
+// ---- QR para dar de alta clientes nuevos ----
+$('qrBtn').onclick = async () => {
+  try {
+    const inv = await api('/api/invites', {});
+    $('qrBox').innerHTML = inv.svg;
+    $('qrUrl').value = inv.url;
+    $('qrWa').href = `https://wa.me/?text=${encodeURIComponent(`¡Hola! Para empezar a trabajar juntos, llena este cuestionario de tu marca (5 min): ${inv.url}`)}`;
+    const list = await api('/api/invites');
+    $('qrList').innerHTML = list.length ? `<b>Invitaciones recientes:</b><br>${list.slice(0, 6).map((i) => `${i.estado === 'completada' ? '✅' : i.clientId ? '✏️' : '⏳'} ${i.cliente ? esc(i.cliente) : 'Sin llenar'} · ${new Date(i.creado).toLocaleDateString('es-MX')}`).join('<br>')}` : '';
+    $('dlgQr').showModal();
+  } catch (e) { alert(e.message); }
+};
+$('qrX').onclick = () => $('dlgQr').close();
+$('qrCopy').onclick = () => { navigator.clipboard?.writeText($('qrUrl').value); $('qrCopy').textContent = '✓ Copiado'; setTimeout(() => ($('qrCopy').textContent = 'Copiar enlace'), 1500); };
+$('qrPrint').onclick = () => {
+  const w = window.open('', '_blank');
+  w.document.write(`<html><head><title>QR alta de cliente</title></head><body style="font-family:system-ui;text-align:center;padding:40px"><h1>¡Bienvenido!</h1><p>Escanea para registrar tu marca</p><div style="width:360px;margin:20px auto">${$('qrBox').innerHTML}</div><p style="font-size:12px;color:#666">${esc($('qrUrl').value)}</p><script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
+};
