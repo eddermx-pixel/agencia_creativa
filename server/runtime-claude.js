@@ -149,6 +149,9 @@ async function loop(job) {
   const agent = byId[job.agentId];
   if (!campaign || !agent) throw new Error('Campaña o agente inexistente');
   job.estado = 'activo'; job.error = null;
+  // Las instrucciones NO pueden cambiar a mitad de una tarea (la API lo rechaza):
+  // se fijan una sola vez, con la memoria y el historial de ese momento.
+  if (!job.system) { job.system = systemFor(agent, campaign); save(); }
   setAgent(job.agentId, { estado: 'trabajando', burbuja: job.messages.length > 1 ? 'Retomando donde me quedé…' : 'Empezando…', campaignId: campaign.id });
   if (job.messages.length === 1) log(job.agentId, `Nueva tarea: ${job.task.slice(0, 200)}`, campaign.id);
   else log(job.agentId, 'Retomo mi tarea donde me quedé.', campaign.id);
@@ -197,9 +200,12 @@ async function loop(job) {
         model: MODEL,
         max_tokens: 48000,
         output_config: { effort: EFFORT },
-        betas: ['server-side-fallback-2026-07-01'],
+        // Si una conversación vieja quedó con "pensamientos" que ya no coinciden
+        // (por ejemplo, tras una actualización), la API los descarta y sigue.
+        thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } },
+        betas: ['server-side-fallback-2026-07-01', 'thinking-binding-controls-2026-08-01'],
         fallbacks: 'default',
-        system: systemFor(agent, campaign),
+        system: job.system,
         tools: toolDefs(job.agentId),
         messages: job.messages,
       }).finalMessage();
