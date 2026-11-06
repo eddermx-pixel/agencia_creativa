@@ -68,12 +68,12 @@
       { id: 'publico', p: '¿Quién es tu cliente ideal?', help: 'Edad, dónde vive, qué le gusta, qué problema le resuelves.', tipo: 'textarea', ph: 'Ej. Familias de 25 a 45 años de la zona que buscan pan recién hecho' },
       { id: 'tono', p: '¿Cómo quieres que suene tu marca?', tipo: 'chips1', ops: ['Cercano y divertido', 'Cálido y familiar', 'Profesional', 'Premium y elegante', 'Juvenil y atrevido', 'Inspirador'], otro: true },
       { id: 'colores', p: '¿Cuáles son los colores de tu marca?', help: 'Elige hasta 4. Si no tienes, sáltalo y te proponemos unos.', tipo: 'colores' },
-      { id: 'logo', p: 'Sube tu logo', help: 'De preferencia PNG con fondo transparente o SVG.', tipo: 'upload', carpeta: 'Logos', accept: 'image/*,.svg,.pdf,.ai' },
+      { id: 'logo', p: 'Sube tu logo', help: 'De preferencia PNG con fondo transparente o SVG.', tipo: 'upload', carpeta: 'Referencias del cliente', sub: 'Logos', accept: 'image/*,.svg,.pdf,.ai' },
       { id: 'objetivo', p: '¿Qué quieres lograr con tus redes?', tipo: 'chips1', ops: ['Vender más', 'Que me conozcan', 'Recibir mensajes y citas', 'Abrir un nuevo producto', 'Fidelizar clientes'], otro: true },
       { id: 'redes', p: '¿Dónde te encuentran?', tipo: 'redes' },
       { id: 'competencia', p: '¿Qué marcas admiras o son tu competencia?', help: 'Nombres o cuentas de Instagram/TikTok.', tipo: 'textarea', ph: 'Ej. @marca1, @marca2' },
       { id: 'estilosVideo', p: '¿Qué estilos de video te gustan?', help: 'Elige los que más vayan contigo (puedes elegir varios).', tipo: 'estilos' },
-      { id: 'refs', p: 'Comparte referencias y material', help: 'Fotos de tu producto, posts o videos que te gusten, manual de marca… Elige la carpeta para que todo quede ordenado.', tipo: 'upload', multi: true },
+      { id: 'refs', p: 'Comparte fotos y material', help: 'Súbelos desde tu galería: nosotros los ordenamos en carpetas.', tipo: 'upload2' },
       { id: 'notas', p: '¿Algo que NUNCA debamos hacer o decir?', tipo: 'textarea', ph: 'Ej. No usar la palabra "barato", no mostrar personas…' },
       { id: 'contacto', p: '¿Cómo te contactamos?', tipo: 'contacto' },
       { id: 'fin', tipo: 'fin' },
@@ -86,10 +86,10 @@
       return j;
     }
 
-    function upload(file, carpeta) {
+    function upload(file, carpeta, sub = '') {
       return new Promise((ok, fail) => {
         const x = new XMLHttpRequest();
-        x.open('PUT', `/api/alta/${t}/files?carpeta=${encodeURIComponent(carpeta)}&nombre=${encodeURIComponent(file.name)}`);
+        x.open('PUT', `/api/alta/${t}/files?carpeta=${encodeURIComponent(carpeta)}&sub=${encodeURIComponent(sub)}&nombre=${encodeURIComponent(file.name)}`);
         x.setRequestHeader('Content-Type', 'application/octet-stream');
         x.upload.onprogress = (e) => e.lengthComputable && ($('err').textContent = `Subiendo ${file.name}… ${Math.round((e.loaded / e.total) * 100)}%`);
         x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch {} x.status < 300 ? ok(j) : fail(new Error(j.error || 'Error')); };
@@ -122,18 +122,21 @@
         q.querySelectorAll('input[type=color]').forEach((x) => (x.oninput = () => (r.colores[+x.dataset.k] = x.value)));
         if ($('add')) $('add').onclick = () => { r.colores.push('#8b7bff'); render(); };
         if ($('rm')) $('rm').onclick = () => { r.colores.pop(); render(); };
-      } else if (s.tipo === 'upload') {
+      } else if (s.tipo === 'upload' || s.tipo === 'upload2') {
         const ls = await filesList();
-        const lista = ls.flatMap((c) => c.archivos.map((a) => `${c.carpeta}: ${a}`));
+        const lista = ls.flatMap((c) => c.archivos.map((a) => `${c.carpeta === 'Referencias del cliente' ? '📸' : '🎬'} ${a}`));
+        const acepta = 'image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.ttf,.otf,.svg';
         q.innerHTML = `<h1>${s.p}</h1><p class="help">${s.help}</p><div class="up">
-          ${s.carpeta ? '' : `<select id="carp">${info.carpetas.filter((c) => c.nombre !== 'Logos').map((c) => `<option value="${esc(c.nombre)}">📂 ${esc(c.nombre)} — ${esc(c.ayuda)}</option>`).join('')}</select>`}
-          <label class="btn go" style="text-align:center">📎 Elegir archivos<input type="file" id="fi" ${s.multi ? 'multiple' : ''} accept="${s.accept || 'image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.ttf,.otf'}" hidden></label>
-          <div class="files">${lista.length ? `Ya subiste: ${lista.map(esc).join(' · ')}` : 'Aún no has subido archivos.'}</div></div>`;
-        $('fi').onchange = async (e) => {
-          const carpeta = s.carpeta || $('carp').value;
-          for (const f of e.target.files) { try { await upload(f, carpeta); } catch (err) { alert(`${f.name}: ${err.message}`); } }
-          render();
-        };
+          ${s.tipo === 'upload'
+            ? `<label class="btn go" style="text-align:center">📎 Elegir archivo<input type="file" id="fi" accept="${s.accept}" hidden></label>`
+            : `<label class="btn go" style="text-align:center">📸 Fotos y videos de referencia<input type="file" id="fi" multiple accept="${acepta}" hidden></label>
+               <div class="help" style="margin:-4px 0 4px">Posts, fotos o videos que te gusten, tu manual de marca…</div>
+               <label class="btn" style="text-align:center">🎬 Fotos y videos propios sin editar <small>(opcional)</small><input type="file" id="fi2" multiple accept="${acepta}" hidden></label>
+               <div class="help" style="margin:-4px 0 4px">Tu producto, tu local, tu equipo, tal como los grabaste.</div>`}
+          <div class="files">${lista.length ? `Ya subiste (${lista.length}): ${lista.slice(-8).map(esc).join(' · ')}` : 'Aún no has subido archivos.'}</div></div>`;
+        const subir = (el, carpeta, sub) => (el.onchange = async (e) => { for (const f of e.target.files) { try { await upload(f, carpeta, sub); } catch (err) { alert(`${f.name}: ${err.message}`); } } render(); });
+        subir($('fi'), s.carpeta || 'Referencias del cliente', s.sub || '');
+        if ($('fi2')) subir($('fi2'), 'Material en crudo', '');
       } else if (s.tipo === 'estilos') {
         q.innerHTML = `<h1>${s.p}</h1><p class="help">${s.help}</p><div class="cards">${info.estilos.map((e) => `<button data-id="${e.id}" class="${r.estilosVideo.includes(e.id) ? 'on' : ''}"><span class="e">${e.emoji}</span><span><b>${esc(e.nombre)}</b><small>${esc(e.descripcion)}</small></span></button>`).join('')}</div>`;
         q.querySelectorAll('.cards button').forEach((b) => (b.onclick = () => { const k = r.estilosVideo.indexOf(b.dataset.id); k >= 0 ? r.estilosVideo.splice(k, 1) : r.estilosVideo.push(b.dataset.id); b.classList.toggle('on'); }));

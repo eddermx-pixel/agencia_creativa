@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Agencia IA — Video</title>
   <link rel="stylesheet" href="styles.css">
   <style>
@@ -10,17 +10,28 @@
     body.embed { background: #000; overflow: hidden; }
     body.embed .wrap { padding: 0; height: 100%; }
     body.embed header, body.embed .side { display: none; }
-    .wrap { max-width: 1000px; margin: 0 auto; padding: 16px; display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+    .wrap { max-width: 1050px; margin: 0 auto; padding: 16px; display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
     .stagev { position: relative; background: #000; border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); display: flex; align-items: center; justify-content: center; }
-    body:not(.embed) .stagev { height: min(78vh, 900px); }
+    body:not(.embed) .stagev { height: min(78vh, 900px); aspect-ratio: 9 / 16; max-width: 100%; }
     body.embed .stagev { width: 100%; height: 100%; border-radius: 0; box-shadow: none; }
-    canvas { height: 100%; width: auto; max-width: 100%; display: block; cursor: pointer; }
-    .side { flex: 1; min-width: 260px; max-width: 380px; display: flex; flex-direction: column; gap: 12px; }
+    canvas { height: 100%; width: 100%; object-fit: contain; display: block; cursor: pointer; touch-action: manipulation; }
+    .side { flex: 1; min-width: 270px; max-width: 400px; display: flex; flex-direction: column; gap: 12px; }
     .bar { height: 6px; border-radius: 9px; background: var(--chip); overflow: hidden; } .bar i { display: block; height: 100%; width: 0; background: var(--accent2); }
     .msg { color: var(--muted); font-size: 14px; }
     .scenes { font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
     .scenes div { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
     .scenes b { color: var(--accent2); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+    .row select { width: auto; padding: 8px 10px; }
+    .sound { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 10px; background: rgba(0,0,0,.45); color: #fff; z-index: 3; font-size: 20px; font-weight: 800; text-align: center; padding: 20px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .sound span { font-size: 52px; }
+    .sound small { font-size: 14px; font-weight: 500; opacity: .8; }
+    .hud { position: absolute; left: 0; right: 0; bottom: 0; display: none; justify-content: center; gap: 10px; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); z-index: 4; background: linear-gradient(transparent, rgba(0,0,0,.6)); }
+    .hud button { background: rgba(20,20,34,.85); color: #fff; border-color: rgba(255,255,255,.2); font-size: 15px; }
+    body.embed.full .hud.on { display: flex; }
+    .decide { display: none; gap: 10px; margin-top: 12px; }
+    .decide.on { display: flex; }
+    .decide button { flex: 1; padding: 12px; font-size: 15px; }
   </style>
 </head>
 <body>
@@ -30,14 +41,26 @@
     <span class="sp"></span>
   </header>
   <main class="wrap">
-    <div class="stagev"><canvas id="cv"></canvas></div>
+    <div class="stagev" id="stage">
+      <canvas id="cv"></canvas>
+      <div class="sound" id="sound"><span>🔊</span>Toca para activar el sonido<small>Música y efectos incluidos</small></div>
+      <div class="hud" id="hud"><button id="hPause">⏸️</button><button id="hMute">🔊</button><button id="hVoz">🗣️ Voz</button></div>
+    </div>
     <aside class="side">
       <div class="card">
         <h2 id="titulo">Video</h2>
         <div class="msg" id="info"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <div class="decide" id="decide"><button class="no" id="dNo">❌ Rechazar</button><button class="ok" id="dOk">✅ Aprobar</button></div>
+        <div class="row">
           <button class="primary" id="exp">⬇️ Exportar video</button>
           <button id="pp">⏸️ Pausa</button>
+          <button id="snd">🔊 Sonido</button>
+          <button id="voz">🗣️ Voz en off</button>
+          <button id="fs">⛶ Pantalla completa</button>
+        </div>
+        <div class="row">
+          <label class="msg">Nivel <select id="selNivel"><option value="1">1 · Básico</option><option value="2">2 · Movimiento</option><option value="3">3 · Profesional</option></select></label>
+          <label class="msg">Look <select id="selLook"></select></label>
         </div>
         <div class="bar" style="margin-top:10px"><i id="prog"></i></div>
         <div class="msg" id="expmsg" style="margin-top:6px"></div>
@@ -46,35 +69,102 @@
     </aside>
   </main>
   <script type="module">
-    import { createPlayer } from './video-player.js';
-    import { connect, esc } from './common.js';
+    import { createPlayer, LOOK_NAMES } from './video-player.js';
+    import { connect, esc, api } from './common.js';
     const q = new URLSearchParams(location.search);
-    if (q.get('embed')) document.body.classList.add('embed');
-    else connect(() => {});
     const $ = (id) => document.getElementById(id);
+    const embed = !!q.get('embed'), lite = !!q.get('lite'), full = !!q.get('full');
+    if (embed) document.body.classList.add('embed'); if (full) document.body.classList.add('full');
+    if (!embed) connect(() => {});
+    const movil = matchMedia('(max-width: 700px)').matches || matchMedia('(pointer: coarse)').matches;
+
     const url = q.get('id') ? `/api/pieces/${q.get('id')}/spec` : `/api/estilos/${q.get('estilo')}/preview?cliente=${encodeURIComponent(q.get('cliente') || '')}`;
     const data = await (await fetch(url)).json();
     if (data.error) { document.body.insertAdjacentHTML('beforeend', `<p class="msg" style="padding:20px">${esc(data.error)}</p>`); throw new Error(data.error); }
-    const { spec } = data;
+    const base = data.spec;
     $('titulo').textContent = data.titulo || 'Video';
-    $('info').innerHTML = `${esc(data.estilo || '')} · ${spec.formato} · ${spec.escenas.length} escenas${data.broll === false ? '<br>⚠️ Sin tomas reales: falta configurar PEXELS_API_KEY.' : ''}`;
-    $('scenes').innerHTML = spec.escenas.map((e, i) => `<div><b>${i + 1}.</b> ${esc(e.texto || '—')} <span class="msg">· ${e.duracion}s · ${e.transicion}${e.fondo.clip ? ` · 🎥 ${esc(e.fondo.clip.autor)}` : e.fondo.tipo === 'broll' ? ` · (${esc(e.fondo.busqueda)})` : ''}</span></div>`).join('');
-    const player = await createPlayer($('cv'), spec, {
-      logoUrl: data.logoUrl, fileUrl: (r) => `/api/clients/${data.clientId}/files/raw?path=${encodeURIComponent(r)}`,
-      onTime: (t, total) => { $('prog').style.width = `${(t / total) * 100}%`; },
-    });
-    let on = true;
-    const toggle = () => { on ? player.pause() : player.play(); on = !on; $('pp').textContent = on ? '⏸️ Pausa' : '▶️ Reproducir'; };
-    $('cv').onclick = toggle; $('pp').onclick = toggle;
+    $('selLook').innerHTML = LOOK_NAMES.map((l) => `<option>${l}</option>`).join('');
+    const deLook = (s) => s.look || (s.nivel >= 3 ? 'cine' : 'natural');
+    $('selNivel').value = String(base.nivel || 2); $('selLook').value = deLook(base);
+
+    function info() {
+      $('info').innerHTML = `${esc(data.estilo || '')} · ${base.formato} · ${base.escenas.length} escenas · música ${esc(base.musica || 'pop')}${data.broll === false ? '<br>⚠️ Sin tomas reales: falta configurar PEXELS_API_KEY.' : ''}`;
+      $('scenes').innerHTML = base.escenas.map((e, i) => `<div><b>${i + 1}.</b> ${esc(e.texto || '—')} ${e.emoji || ''} <span class="msg">· ${e.duracion}s · ${e.transicion}${e.fondo.clip ? ` · 🎥 ${esc(e.fondo.clip.autor)}` : e.fondo.tipo === 'broll' ? ` · (${esc(e.fondo.busqueda)})` : ''}</span></div>`).join('');
+    }
+    info();
+
+    let player = null, on = true;
+    const spec = () => ({ ...base, nivel: +$('selNivel').value, look: $('selLook').value });
+    async function crear() {
+      player?.destroy();
+      player = await createPlayer($('cv'), spec(), {
+        logoUrl: data.logoUrl, fileUrl: (r) => `/api/clients/${data.clientId}/files/raw?path=${encodeURIComponent(r)}`,
+        audio: !lite, scale: lite ? 0.4 : movil || full ? 0.67 : 0.8, fps: lite ? 30 : 60,
+        onTime: (t, total) => { $('prog').style.width = `${(t / total) * 100}%`; },
+      });
+      on = true; $('pp').textContent = '⏸️ Pausa'; pintarSonido();
+    }
+    await crear();
+
+    // ----- Sonido: solo se activa con un toque (regla de los navegadores) -----
+    function pintarSonido() {
+      const sonando = player.sonando;
+      $('snd').textContent = sonando ? '🔊 Sonido: sí' : '🔇 Activar sonido';
+      $('hMute').textContent = sonando ? '🔊' : '🔇';
+      $('sound').style.display = full && !sonando && player.audio ? 'flex' : 'none';
+    }
+    async function toggleSonido() {
+      if (player.sonando) { player.silenciar(true); } else { await player.activarSonido(); }
+      pintarSonido();
+    }
+    $('sound').onclick = async (e) => { e.stopPropagation(); await player.activarSonido(); pintarSonido(); ocultaHud(); };
+    $('snd').onclick = toggleSonido; $('hMute').onclick = toggleSonido;
+    const voz = () => { player.setVoz(!player.voz); $('voz').textContent = player.voz ? '🗣️ Voz: sí' : '🗣️ Voz en off'; $('hVoz').textContent = player.voz ? '🗣️ Voz: sí' : '🗣️ Voz'; if (player.voz && !player.sonando) player.activarSonido().then(pintarSonido); };
+    $('voz').onclick = voz; $('hVoz').onclick = voz;
+
+    const pausa = () => { on ? player.pause() : player.play(); on = !on; $('pp').textContent = on ? '⏸️ Pausa' : '▶️ Reproducir'; $('hPause').textContent = on ? '⏸️' : '▶️'; };
+    $('pp').onclick = pausa; $('hPause').onclick = pausa;
+    let hudT; const ocultaHud = () => { clearTimeout(hudT); hudT = setTimeout(() => $('hud').classList.remove('on'), 3000); };
+    $('cv').onclick = () => { if (full) { $('hud').classList.add('on'); ocultaHud(); if (!player.sonando && player.audio) pintarSonido(); } else pausa(); };
+    $('selNivel').onchange = $('selLook').onchange = crear;
+
+    $('fs').onclick = () => { const el = $('stage'); (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el); };
+    if (!document.fullscreenEnabled && !document.webkitFullscreenEnabled) $('fs').style.display = 'none';
+
+    // ----- Exportar con música y efectos -----
     $('exp').onclick = async () => {
       $('exp').disabled = true;
       try {
-        const { blob, ext } = await player.exportar((p) => ($('expmsg').textContent = `Grabando… ${Math.round(p * 100)}% (no cierres esta pestaña)`));
-        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${(data.titulo || 'video').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\- ]+/g, '').trim() || 'video'}.${ext}` });
-        a.click(); $('expmsg').textContent = `✓ Listo (${ext.toUpperCase()}, ${(blob.size / 1e6).toFixed(1)} MB)`;
+        const { blob, ext, conAudio } = await player.exportar((p) => ($('expmsg').textContent = `Grabando… ${Math.round(p * 100)}% (no cierres esta pestaña)`));
+        const nombre = (data.titulo || 'video').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w\- ]+/g, '').trim() || 'video';
+        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${nombre}.${ext}` });
+        a.click();
+        $('expmsg').innerHTML = `✓ Listo (${ext.toUpperCase()}, ${(blob.size / 1e6).toFixed(1)} MB${conAudio ? ', con música y efectos' : ''}).${q.get('id') ? ' <a href="#" id="guardar">💾 Guardar también en el archivo del cliente</a>' : ''}`;
+        const g = $('guardar');
+        if (g) g.onclick = async (ev) => { ev.preventDefault(); g.textContent = 'Guardando…'; try { const r = await fetch(`/api/pieces/${q.get('id')}/video?ext=${ext}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: blob }); const j = await r.json(); if (!r.ok) throw new Error(j.error); g.textContent = `✓ Guardado en ${j.ruta}`; } catch (err) { g.textContent = `No se pudo guardar: ${err.message}`; } };
       } catch (e) { $('expmsg').textContent = `No se pudo exportar: ${e.message}`; }
       $('exp').disabled = false;
     };
+
+    // ----- Aprobar o rechazar aquí mismo (enlaces de Telegram y del archivo) -----
+    if (q.get('id') && !embed) {
+      const p = (await api('/api/archive')).pieces.find((x) => x.id === q.get('id'));
+      if (p?.estado === 'pendiente') {
+        $('decide').classList.add('on');
+        const decidir = async (aprobado) => {
+          const comentario = aprobado ? '' : (prompt('¿Qué le cambiarías? (opcional)') || '');
+          $('decide').innerHTML = '<span class="msg">Enviando…</span>';
+          try { await api(`/api/pieces/${p.id}`, { aprobado, comentario }); $('decide').innerHTML = `<b>${aprobado ? '✅ Aprobado' : '❌ Rechazado'}</b>`; } catch (e) { $('decide').innerHTML = `<span class="msg">${esc(e.message)}</span>`; }
+        };
+        $('dOk').onclick = () => decidir(true); $('dNo').onclick = () => decidir(false);
+      } else if (p) { $('decide').classList.add('on'); $('decide').innerHTML = `<span class="msg">Estado: <b>${esc(p.estado)}</b></span>`; }
+    }
+    if (embed) { $('selNivel').closest('.row').style.display = 'none'; }
+    // Mensajes con el padre (visor del feed)
+    addEventListener('message', async (ev) => {
+      if (ev.origin !== location.origin) return;
+      if (ev.data === 'activar-sonido') { await player.activarSonido(); pintarSonido(); }
+    });
   </script>
 </body>
 </html>

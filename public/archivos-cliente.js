@@ -18,7 +18,7 @@ export function subir(url, file, onProgress) {
   });
 }
 
-export function openFiles(cliente) {
+export function openFiles(cliente, carpetaInicial = 'Referencias del cliente') {
   let dlg = document.getElementById('dlgFiles');
   if (!dlg) {
     dlg = document.createElement('dialog');
@@ -27,7 +27,8 @@ export function openFiles(cliente) {
     document.body.append(dlg);
     dlg.addEventListener('click', (e) => e.target === dlg && dlg.close());
   }
-  let data = [], actual = { carpeta: 'Logos', sub: '' };
+  let data = [], actual = { carpeta: carpetaInicial, sub: '' };
+  const ICONO = { 'Referencias del cliente': '📸', 'Material en crudo': '🎞️', 'Resultado final': '✅' };
   const base = `/api/clients/${cliente.id}`;
 
   async function load() { data = (await api(`${base}/files`)).carpetas; render(); }
@@ -38,10 +39,10 @@ export function openFiles(cliente) {
     const lista = sub ? sub.archivos : c.archivos;
     const destinos = data.flatMap((x) => [x.carpeta, ...x.subcarpetas.map((s) => `${x.carpeta}/${s.nombre}`)]);
     dlg.innerHTML = `<div class="body" style="max-height:86vh">
-      <div class="head"><h3>📁 Archivos de ${esc(cliente.nombre)}</h3><span style="flex:1"></span><button id="fx">✕</button></div>
+      <div class="head"><h3>📁 Archivos de ${esc(cliente.nombre)}</h3><span style="flex:1"></span><button id="flink" title="Enlace y QR para que tu cliente suba sus fotos">📱 Que el cliente suba fotos</button><button id="fx">✕</button></div>
       <div class="fm">
         <nav class="fm-side">${data.map((x) => `
-          <button class="fm-f ${x.carpeta === actual.carpeta && !actual.sub ? 'on' : ''}" data-c="${esc(x.carpeta)}">📂 ${esc(x.carpeta)} <span>${x.archivos.length + x.subcarpetas.reduce((n, s) => n + s.archivos.length, 0)}</span></button>
+          <button class="fm-f ${x.carpeta === actual.carpeta && !actual.sub ? 'on' : ''}" data-c="${esc(x.carpeta)}">${ICONO[x.carpeta] || '📂'} ${esc(x.carpeta)} <span>${x.archivos.length + x.subcarpetas.reduce((n, s) => n + s.archivos.length, 0)}</span></button>
           ${x.subcarpetas.map((s) => `<button class="fm-s ${x.carpeta === actual.carpeta && s.nombre === actual.sub ? 'on' : ''}" data-c="${esc(x.carpeta)}" data-s="${esc(s.nombre)}">↳ ${esc(s.nombre)} <span>${s.archivos.length}</span></button>`).join('')}`).join('')}
         </nav>
         <section class="fm-main">
@@ -49,6 +50,7 @@ export function openFiles(cliente) {
           <div class="fm-acts">
             <label class="fm-up primary-like">⬆️ Subir archivos<input type="file" multiple hidden id="fin"></label>
             ${sub ? `<button id="fdel">🗑️ Borrar subcarpeta</button>` : `<button id="fnew">＋ Subcarpeta</button>`}
+            ${c.carpeta === 'Resultado final' ? `<a href="${base}/zip" download><button class="primary">⬇️ Descargar todo lo autorizado (ZIP)</button></a>` : `<a href="${base}/zip?todo=1" download><button>⬇️ Todo el archivo (ZIP)</button></a>`}
           </div>
           <div class="fm-drop" id="fdrop">Arrastra aquí tus archivos · imágenes, videos, PDF, documentos o fuentes · máx. 250 MB c/u</div>
           <div class="fm-prog" id="fprog"></div>
@@ -62,6 +64,21 @@ export function openFiles(cliente) {
         </section>
       </div></div>`;
     dlg.querySelector('#fx').onclick = () => dlg.close();
+    dlg.querySelector('#flink').onclick = async () => {
+      try {
+        const r = await api(`${base}/upload-link`, {});
+        let q = document.getElementById('dlgLink');
+        if (!q) { q = document.createElement('dialog'); q.id = 'dlgLink'; q.style.width = 'min(420px, calc(100vw - 24px))'; document.body.append(q); q.addEventListener('click', (e) => e.target === q && q.close()); }
+        q.innerHTML = `<div class="body"><div class="head"><h3>📱 Que ${esc(cliente.nombre)} suba sus fotos</h3><span style="flex:1"></span><button id="lx">✕</button></div>
+          <p class="empty" style="margin:0">Comparte este código o enlace. Se abre una página muy sencilla donde tu cliente elige fotos y videos de su galería: las <b>referencias</b> van a su carpeta de referencias y el <b>material sin editar</b> a la de material en crudo. No ve nada más de tu agencia.</p>
+          <div style="background:#fff;border-radius:16px;padding:14px;width:min(280px,100%);align-self:center">${r.svg}</div>
+          <input readonly value="${esc(r.url)}" onclick="this.select()">
+          <div class="actions" style="justify-content:center"><button id="lc">Copiar enlace</button><a target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`Hola ${cliente.nombre}, sube aquí tus fotos y videos de referencia: ${r.url}`)}"><button>Enviar por WhatsApp</button></a></div></div>`;
+        q.querySelector('#lx').onclick = () => q.close();
+        q.querySelector('#lc').onclick = (e) => { navigator.clipboard?.writeText(r.url); e.target.textContent = '✓ Copiado'; };
+        q.showModal();
+      } catch (e) { alert(e.message); }
+    };
     dlg.querySelectorAll('[data-c]').forEach((b) => (b.onclick = () => { actual = { carpeta: b.dataset.c, sub: b.dataset.s || '' }; render(); }));
     const subirTodos = async (lista) => {
       const prog = dlg.querySelector('#fprog');

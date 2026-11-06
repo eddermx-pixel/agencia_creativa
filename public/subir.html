@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sube tus fotos</title>
+  <style>
+    :root { color-scheme: dark; --bg: #0b0b12; --panel: #161622; --chip: #23233a; --ink: #f1f0f7; --muted: #9a98ad; --line: #2b2b44; --accent: #8b7bff; --ok: #22c993; --no: #ff5d6c; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: radial-gradient(900px 500px at 20% -10%, #1b1640, transparent 60%), var(--bg); color: var(--ink); font: 17px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .app { max-width: 520px; margin: 0 auto; padding: 18px 18px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 16px; }
+    .top img { max-height: 40px; max-width: 170px; object-fit: contain; } .top b { font-size: 18px; }
+    h1 { font-size: 26px; line-height: 1.2; margin: 6px 0 0; } p { margin: 0; color: var(--muted); }
+    .big { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; border-radius: 22px; padding: 26px 18px; cursor: pointer; font-weight: 800; font-size: 20px; border: 0; color: #fff; -webkit-tap-highlight-color: transparent; }
+    .big small { font-weight: 500; font-size: 14px; opacity: .85; }
+    .big .e { font-size: 44px; }
+    .a { background: linear-gradient(135deg, #8b7bff, #6a5cff); box-shadow: 0 10px 30px rgba(106,92,255,.35); }
+    .b { background: var(--panel); border: 1px solid var(--line); color: var(--ink); }
+    .list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .it { aspect-ratio: 1; border-radius: 12px; background: var(--chip); overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+    .it img { width: 100%; height: 100%; object-fit: cover; }
+    .it i { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--accent); width: 0; transition: width .2s; }
+    .it.ok::after { content: '✓'; position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; border-radius: 50%; background: var(--ok); color: #04140e; font-size: 14px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+    .it.err { outline: 2px solid var(--no); }
+    .total { text-align: center; color: var(--muted); font-size: 15px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="top" id="top"></div>
+    <div id="msg"></div>
+    <div id="main" hidden>
+      <h1 id="hola">Comparte tus fotos</h1>
+      <p style="margin:6px 0 16px">Escoge desde tu galería. Nosotros las ordenamos en carpetas, tú no tienes que hacer nada más.</p>
+      <label class="big a"><span class="e">📸</span>Fotos y videos de referencia<small>Tu logo, posts o videos que te gustan, tu marca</small><input type="file" id="f1" multiple accept="image/*,video/*,.pdf,.svg" hidden></label>
+      <div style="height:12px"></div>
+      <label class="big b"><span class="e">🎬</span>Mis fotos y videos sin editar<small>Tu producto, tu local, tu equipo (opcional)</small><input type="file" id="f2" multiple accept="image/*,video/*" hidden></label>
+      <div class="list" id="list" style="margin-top:18px"></div>
+      <div class="total" id="total"></div>
+    </div>
+  </div>
+  <script>
+    const t = new URLSearchParams(location.search).get('t');
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    let n = 0;
+    function subir(file, carpeta, card) {
+      return new Promise((ok) => {
+        const x = new XMLHttpRequest();
+        x.open('PUT', `/api/alta/${t}/files?carpeta=${encodeURIComponent(carpeta)}&nombre=${encodeURIComponent(file.name)}`);
+        x.setRequestHeader('Content-Type', 'application/octet-stream');
+        x.upload.onprogress = (e) => e.lengthComputable && (card.querySelector('i').style.width = `${(e.loaded / e.total) * 100}%`);
+        x.onload = () => { if (x.status < 300) { card.classList.add('ok'); card.querySelector('i').style.width = '100%'; n++; $('total').textContent = `${n} archivo${n === 1 ? '' : 's'} enviado${n === 1 ? '' : 's'} ✓`; } else { card.classList.add('err'); let m = ''; try { m = JSON.parse(x.responseText).error; } catch {} alert(`${file.name}: ${m || 'No se pudo subir'}`); } ok(); };
+        x.onerror = () => { card.classList.add('err'); alert(`${file.name}: error de red`); ok(); };
+        x.send(file);
+      });
+    }
+    function conectar(input, carpeta) {
+      input.onchange = async () => {
+        for (const f of [...input.files]) {
+          const c = document.createElement('div'); c.className = 'it';
+          c.innerHTML = (f.type.startsWith('image/') ? `<img src="${URL.createObjectURL(f)}" alt="">` : f.type.startsWith('video/') ? '🎬' : '📄') + '<i></i>';
+          $('list').prepend(c);
+          await subir(f, carpeta, c);
+        }
+        input.value = '';
+      };
+    }
+    (async () => {
+      try {
+        const r = await fetch(`/api/alta/${t}`); const info = await r.json();
+        if (!r.ok) throw new Error(info.error);
+        $('top').innerHTML = info.agencia.tieneLogo ? `<img src="/api/agency/logo" alt="">` : `<b>${esc(info.agencia.nombre)}</b>`;
+        $('hola').textContent = info.cliente ? `Hola, ${info.cliente.nombre} 👋` : 'Comparte tus fotos';
+        $('main').hidden = false; conectar($('f1'), info.REF || 'Referencias del cliente'); conectar($('f2'), info.CRUDO || 'Material en crudo');
+      } catch (e) { $('msg').innerHTML = `<h1>😕 Ups</h1><p>${esc(e.message)}</p>`; }
+    })();
+  </script>
+</body>
+</html>

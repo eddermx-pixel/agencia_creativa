@@ -1,5 +1,7 @@
 // Utilidades compartidas: conexión en vivo, API y dibujo de personajes pixel-art.
 
+import { notifyTick } from './notify.js';
+
 export async function api(path, body) {
   const res = await fetch(path, body === undefined ? {} : {
     method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
@@ -31,6 +33,7 @@ export function connect(onChange) {
       else if (type === 'usage') store.uso = data;
       else if (type === 'agency') store.agencia = data;
       paintHeader();
+      notifyTick(store, type, data, byId);
       onChange(type, data);
     };
     ws.onclose = () => {

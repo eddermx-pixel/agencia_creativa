@@ -2,6 +2,9 @@
 // los agentes reales (Claude) como el modo demo.
 import { setAgent, log, askBoss, submitPiece, setPhase, addMemory } from './hub.js';
 import { isSpec, normalizeSpec, resolveBroll, brollDisponible } from './video.js';
+import * as ws from './workspace.js';
+import * as entregables from './entregables.js';
+import { db } from './store.js';
 
 // `key` = id de la llamada del agente; permite retomar sin duplicar tras un reinicio.
 export function makeActions(agentId, campaign, key = null) {
@@ -60,6 +63,7 @@ export function makeActions(agentId, campaign, key = null) {
         motor = 'v2';
       }
       setAgent(agentId, { estado: 'entregando', burbuja: `Esperando tu swipe: ${titulo}`.slice(0, 140) });
+      try { const pz = { tipo, titulo, version, motor }; ws.entrega(agentId, campaign, pz, entregables.cuerpo({ ...pz, campaignId: cid, contenido }), entregables.extDe(pz)); } catch {}
       const p = await submitPiece({ agente: agentId, campaignId: cid, tipo, titulo, descripcion, contenido, version, key, motor });
       setAgent(agentId, {
         estado: 'trabajando',

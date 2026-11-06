@@ -159,3 +159,10 @@ button.mini { padding: 5px 10px; font-size: 12px; margin-top: 6px; }
 .fm-m { font-size: 11px; color: var(--muted); padding: 0 8px; }
 .fm-b { display: flex; gap: 4px; padding: 6px; }
 .fm-b select { font-size: 12px; padding: 4px 6px; } .fm-b button { padding: 4px 8px; }
+
+/* Campana de decisiones */
+.chip.bell { text-decoration: none; }
+.chip.bell .bn { background: var(--no); color: #fff; border-radius: 99px; font-size: 12px; font-weight: 800; padding: 0 6px; min-width: 18px; text-align: center; }
+.chip.bell .bn:empty { display: none; }
+.chip.bell.on { border-color: var(--no); animation: bob 1.6s ease-in-out infinite; }
+.req-pieza .row a { text-decoration: none; }

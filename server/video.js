@@ -30,8 +30,16 @@ export const ESTILOS = [
 ];
 export const estiloById = Object.fromEntries(ESTILOS.map((e) => [e.id, e]));
 
-export const TRANSICIONES = ['corte', 'fundido', 'deslizar', 'zoom', 'barrido', 'glitch', 'flash'];
-export const ANIMACIONES = ['pop', 'slide', 'typewriter', 'zoom', 'bounce'];
+export const TRANSICIONES = ['corte', 'fundido', 'deslizar', 'zoom', 'zoomblur', 'whip', 'barrido', 'iris', 'glitch', 'rgb', 'flash'];
+export const ANIMACIONES = ['pop', 'slide', 'typewriter', 'zoom', 'bounce', 'palabras', 'giro'];
+export const CAMARAS = ['push', 'pull', 'izq', 'der', 'shake', 'fija'];
+export const LOOKS = ['natural', 'cine', 'calido', 'frio', 'neon', 'vhs', 'bn', 'pastel'];
+export const PARTICULAS = ['ninguna', 'polvo', 'chispas', 'confeti', 'bokeh'];
+export const MUSICAS = ['pop', 'energia', 'lofi', 'epica', 'urbano', 'suave', 'ninguna'];
+export const ESTILOS_TEXTO = ['impacto', 'caja', 'neon', 'contorno'];
+export const NIVELES = { 1: 'Básico', 2: 'Movimiento', 3: 'Profesional' };
+// Música sugerida por estilo viral
+const MUSICA_DE = { 'gancho-pregunta': 'pop', 'antes-despues': 'energia', pov: 'lofi', 'top-3': 'pop', tutorial: 'suave', testimonio: 'suave', 'detras-camaras': 'lofi', 'cuenta-regresiva': 'urbano', storytelling: 'epica', 'texto-rebota': 'energia' };
 export const FORMATOS = { '9:16': [1080, 1920], '4:5': [1080, 1350], '1:1': [1080, 1080], '16:9': [1920, 1080] };
 
 // Sugerencia simple por rubro (cuando no hay IA disponible)
@@ -45,15 +53,22 @@ export function sugerirEstilos(cliente = {}) {
 }
 
 // Instrucciones para Max (y para quien arme videos)
-export function videoGuide(estilosCliente = []) {
+export function videoGuide(estilosCliente = [], prefs = {}) {
   const elegidos = estilosCliente.map((id) => estiloById[id]).filter(Boolean);
-  return `GUION DE VIDEO (motor v2). Entrega cada video con entregar_pieza tipo "video" y en "contenido" un JSON válido (sin comentarios ni texto extra) con esta forma:
+  const pf = Object.entries({ nivel: prefs.nivel && `nivel ${prefs.nivel}`, look: prefs.look, musica: prefs.musica && `música ${prefs.musica}`, subtitulos: prefs.subtitulos && `subtítulos ${prefs.subtitulos}`, estiloTexto: prefs.estiloTexto && `texto ${prefs.estiloTexto}`, sensacion: prefs.sensacion && `sensación ${prefs.sensacion}`, emojis: prefs.emojis === false ? 'sin emojis' : prefs.emojis ? 'con emojis' : '', sfx: prefs.sfx === false ? 'sin efectos de sonido' : '' }).filter(([, v]) => v).map(([, v]) => v);
+  return `GUION DE VIDEO (motor v2.1). Entrega cada video con entregar_pieza tipo "video" y en "contenido" un JSON válido (sin comentarios ni texto extra) con esta forma:
 {
   "formato": "9:16" | "4:5" | "1:1" | "16:9",
-  "estilo": id del estilo,
+  "estilo": id del estilo viral,
+  "nivel": 1 | 2 | 3,
+  "look": ${LOOKS.map((x) => `"${x}"`).join(' | ')},
   "paleta": { "fondo": "#hex", "texto": "#hex", "acento": "#hex" },
   "fuente": "Impact" | "Arial Black" | "Georgia" | "Helvetica",
-  "subtitulos": "palabra" (resalta palabra por palabra, estilo TikTok) | "bloque" | "ninguno",
+  "estiloTexto": ${ESTILOS_TEXTO.map((x) => `"${x}"`).join(' | ')},
+  "subtitulos": "palabra" (resalta palabra por palabra) | "bloque" | "ninguno",
+  "musica": ${MUSICAS.map((x) => `"${x}"`).join(' | ')},
+  "sfx": true | false,
+  "particulas": ${PARTICULAS.map((x) => `"${x}"`).join(' | ')},
   "escenas": [
     { "duracion": 1-6 (segundos),
       "fondo": { "tipo": "broll", "busqueda": "toma real en INGLÉS, concreta y visual (ej. 'woman smiling eating fresh bread', 'barista pouring latte art close up')" }
@@ -62,13 +77,31 @@ export function videoGuide(estilosCliente = []) {
       "subtitulo": "lo que diría una voz en off (opcional)",
       "animacion": ${ANIMACIONES.map((a) => `"${a}"`).join(' | ')},
       "transicion": ${TRANSICIONES.map((a) => `"${a}"`).join(' | ')} (cómo ENTRA esta escena),
+      "camara": ${CAMARAS.map((a) => `"${a}"`).join(' | ')},
+      "emoji": "🔥" (opcional, nivel 2 o 3),
+      "posicion": "arriba" | "centro" | "abajo",
       "logo": true|false }
   ],
   "cierre": { "cta": "llamado a la acción corto", "logo": true }
 }
-Reglas: 10 a 25 segundos en total; 4 a 8 escenas; gancho fuerte en la escena 1 (máx. 2 s); usa B-roll real en la mayoría de las escenas, con búsquedas variadas y concretas; texto corto y legible; colores de la marca. El sistema busca las tomas reales y pone el logo.
+NIVELES DE EDICIÓN (elige uno según el objetivo y avisa cuál usaste en la descripción de la pieza):
+- Nivel 1 · Básico: cortes limpios, subtítulos y animaciones simples. Para mucho volumen y videos casuales. Algo se mueve cada 2–4 s.
+- Nivel 2 · Movimiento (por defecto): + golpes de zoom, textos con estilo, barra de progreso, emojis. Algo se mueve cada 1.5–3 s.
+- Nivel 3 · Profesional: + partículas, cámara en movimiento, brillo/neón, grano y fugas de luz, look de cine. Para anuncios y lanzamientos. Casi siempre hay movimiento.
+Un buen guion con nivel 1 le gana a uno flojo con nivel 3: primero la idea, luego el acabado.
+
+DOCTRINA DE EDICIÓN:
+- Cada elemento en pantalla debe decir algo de lo que se está diciendo en ese momento. Si no significa nada, quítalo.
+- Las transiciones se eligen con intención: la salida de una escena prepara la entrada de la siguiente (mismo eje y misma dirección: si algo sale deslizando a la izquierda, lo que sigue entra desde la derecha). No repitas la misma transición en todo el video; combina 3 o 4.
+- Los subtítulos van al frente, fieles a lo que se dice (el relleno se quita). Resalta una palabra clave de vez en cuando, pero solo una palabra grande y protagonista por momento fuerte. Nunca muevas ni encojas el contenido "para dejar espacio" a los subtítulos.
+- Antes del momento más fuerte, deja respirar: una escena más quieta (cámara fija, sin partículas) hace que el golpe pegue más.
+- Gancho en la escena 1 (máx. 2 s). Después del gancho, varía el ritmo: rápido, rápido, un respiro, remate.
+- El movimiento debe actuar, no "respirar" sin razón: nada de zooms o vaivenes decorativos sin propósito.
+
+Reglas: 10 a 25 segundos en total; 4 a 8 escenas; usa B-roll real en la mayoría de las escenas, con búsquedas variadas y concretas; texto corto y legible; colores de la marca. El sistema busca las tomas reales, genera la música y los efectos de sonido, y pone el logo.
 ESTILOS VIRALES DISPONIBLES: ${ESTILOS.map((e) => `${e.id} (${e.nombre}: ${e.descripcion} Ritmo: ${e.ritmo}. Transiciones: ${e.transiciones.join(', ')})`).join(' · ')}
-${elegidos.length ? `ESTILOS QUE ELIGIÓ ESTE CLIENTE (úsalos primero): ${elegidos.map((e) => e.nombre).join(', ')}.` : ''}`;
+${elegidos.length ? `ESTILOS QUE ELIGIÓ ESTE CLIENTE (úsalos primero): ${elegidos.map((e) => e.nombre).join(', ')}.` : ''}
+${pf.length ? `PREFERENCIAS DE VIDEO DE ESTE CLIENTE (respétalas): ${pf.join(', ')}.` : ''}`;
 }
 
 // ---------- Validación del guion ----------
@@ -89,6 +122,9 @@ export function normalizeSpec(input) {
     subtitulo: String(e.subtitulo || '').slice(0, 200),
     animacion: ANIMACIONES.includes(e.animacion) ? e.animacion : 'pop',
     transicion: TRANSICIONES.includes(e.transicion) ? e.transicion : 'corte',
+    camara: CAMARAS.includes(e.camara) ? e.camara : undefined,
+    emoji: typeof e.emoji === 'string' ? [...e.emoji].slice(0, 2).join('') : '',
+    posicion: ['arriba', 'centro', 'abajo'].includes(e.posicion) ? e.posicion : 'centro',
     logo: !!e.logo,
   }));
   if (!escenas.length) throw new Error('El guion no tiene escenas.');
@@ -96,6 +132,12 @@ export function normalizeSpec(input) {
     v: 2,
     formato: FORMATOS[s.formato] ? s.formato : '9:16',
     estilo: estiloById[s.estilo] ? s.estilo : null,
+    nivel: [1, 2, 3].includes(+s.nivel) ? +s.nivel : 2,
+    look: LOOKS.includes(s.look) ? s.look : undefined,
+    estiloTexto: ESTILOS_TEXTO.includes(s.estiloTexto) ? s.estiloTexto : undefined,
+    particulas: PARTICULAS.includes(s.particulas) ? s.particulas : undefined,
+    musica: MUSICAS.includes(s.musica) ? s.musica : (MUSICA_DE[s.estilo] || 'pop'),
+    sfx: s.sfx !== false,
     paleta: { fondo: hex(s.paleta?.fondo, '#1d1a4f'), texto: hex(s.paleta?.texto, '#ffffff'), acento: hex(s.paleta?.acento, '#ffb547') },
     fuente: ['Impact', 'Arial Black', 'Georgia', 'Helvetica', 'Arial'].includes(s.fuente) ? s.fuente : 'Arial Black',
     subtitulos: ['palabra', 'bloque', 'ninguno'].includes(s.subtitulos) ? s.subtitulos : 'palabra',
@@ -168,11 +210,12 @@ export function demoSpec(estiloId, marca = {}, textos = null) {
   const c = marca.colores || [];
   const QUERIES = ['people smiling city lifestyle', 'hands working close up', 'happy customer shopping', 'friends laughing cafe', 'product close up slow motion', 'sunrise city timelapse'];
   return normalizeSpec({
-    formato: '9:16', estilo: e.id, fuente: 'Arial Black', subtitulos: e.subtitulos,
+    formato: '9:16', estilo: e.id, fuente: 'Arial Black', subtitulos: e.subtitulos, nivel: marca.nivel || 2, look: marca.look, musica: marca.musica,
     paleta: { fondo: c[0] || '#1d1a4f', texto: '#ffffff', acento: c[2] || c[1] || '#ffb547' },
     escenas: e.plantilla.map(([texto, animacion, transicion], i) => ({
       duracion: e.id === 'cuenta-regresiva' ? 1.1 : 2.2, texto: textos?.[i] || texto, animacion, transicion,
       subtitulo: i === 0 ? `${e.nombre} para ${marca.nombre || 'tu marca'}` : '',
+      emoji: ['🔥', '✨', '👀', '💥'][i % 4], animacion: i === 1 ? 'palabras' : animacion,
       fondo: { tipo: 'broll', busqueda: textos?.busquedas?.[i] || QUERIES[i % QUERIES.length] },
     })),
     cierre: { cta: textos?.cta || 'Escríbenos hoy', logo: true },

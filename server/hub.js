@@ -3,6 +3,8 @@
 // que la interfaz (WebSocket) y Telegram se enteren al instante.
 import { EventEmitter } from 'node:events';
 import { db, save, newId } from './store.js';
+import * as ws from './workspace.js';
+import * as entregables from './entregables.js';
 import { ROSTER } from './roster.js';
 
 export const bus = new EventEmitter();
@@ -66,8 +68,8 @@ export function answerRequest(id, { respuesta = '', aprobado = null, respuestas 
     addMemory({ campaignId: r.campaignId, texto: `${r.tipo === 'concepto' ? 'Sobre el concepto' : 'Sobre una autorización'} «${r.texto.replace(/^["«]|["»]$/g, '')}», el jefe dijo (${aprobado ? 'aprobando' : 'pidiendo cambios'}): ${respuesta}`, origen: 'comentario del jefe' });
   }
   const camp = db.campaigns.find((c) => c.id === r.campaignId);
-  if (camp && r.tipo === 'cuestionario') { camp.respuestas = respuesta; bus.emit('campaign', camp); }
-  if (camp && r.tipo === 'concepto' && aprobado) { camp.concepto = { titulo: r.texto, detalle: r.detalle }; camp.fase = 'produccion'; bus.emit('campaign', camp); }
+  if (camp && r.tipo === 'cuestionario') { camp.respuestas = respuesta; bus.emit('campaign', camp); try { ws.respuestas(camp, respuesta); } catch {} }
+  if (camp && r.tipo === 'concepto' && aprobado) { camp.concepto = { titulo: r.texto, detalle: r.detalle }; camp.fase = 'produccion'; bus.emit('campaign', camp); try { ws.concepto(camp); } catch {} }
   bus.emit('request', r);
   requestWaiters.get(id)?.(r);
   requestWaiters.delete(id);
@@ -98,6 +100,7 @@ export function judgePiece(id, { aprobado, comentario = '', via = 'web' }) {
   const p = db.pieces.find((x) => x.id === id);
   if (!p || p.estado !== 'pendiente') return null;
   Object.assign(p, { estado: aprobado ? 'aprobada' : 'rechazada', comentario, via, juzgada: Date.now() });
+  if (aprobado) p.archivo = entregables.guardar(p) || p.archivo;
   save();
   log('jefe', `${aprobado ? '✅ Aprobó' : '❌ Rechazó'} "${p.titulo}"${comentario ? `: ${comentario}` : ''} (${via})`, p.campaignId);
   if (comentario) addMemory({ campaignId: p.campaignId, texto: `En la pieza (${p.tipo}) "${p.titulo}", el jefe ${aprobado ? 'la aprobó y comentó' : 'la rechazó y pidió'}: ${comentario}`, origen: 'feed' });
@@ -258,6 +261,7 @@ export function startMeeting({ campaignId, tema, contexto = '', convoca = 'direc
 export function addAporte(m, agente, texto) {
   m.aportes = m.aportes.filter((a) => a.agente !== agente);
   m.aportes.push({ agente, texto: String(texto).trim().slice(0, 1500), t: Date.now() });
+  try { ws.junta(agente, m, String(texto).trim().slice(0, 1500)); } catch {}
   save();
   log(agente, `💬 En la junta: ${texto}`, m.campaignId);
   bus.emit('meeting', m);

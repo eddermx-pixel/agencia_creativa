@@ -11,6 +11,7 @@ import { db, save, newId } from './store.js';
 import { videoGuide } from './video.js';
 import { resumenParaAgentes, imagenesReferencia } from './files.js';
 import { aprendizajes, parseCurso } from './cursos.js';
+import * as ws from './workspace.js';
 import { makeActions, withAgent } from './actions.js';
 
 const client = new Anthropic({ maxRetries: 4, timeout: 6 * 60 * 1000 });
@@ -23,12 +24,13 @@ const REGLAS = `Trabajas en una agencia de marketing operada por agentes de IA. 
 - Si te falta información importante para hacer bien tu trabajo, pregunta antes de producir (preguntar_al_jefe); es mejor una pregunta que una pieza que no se va a usar. Ofrece opciones concretas cuando sea posible.
 - Pide autorización (pedir_autorizacion) antes de cualquier acción que gaste dinero, publique, o contacte al cliente.
 - Lee la MEMORIA y las campañas anteriores (abajo): son preferencias reales del jefe y del cliente; respétalas. Cuando aprendas algo que servirá en futuras campañas (algo que al jefe o al cliente le gusta o no), guárdalo con guardar_memoria en una frase clara.
+- Tienes una computadora con carpetas (ver_archivos, leer_archivo, guardar_nota). Tus compañeros y el jefe pueden leer lo que guardes, y tú puedes leer lo suyo y la carpeta "compartido" de la campaña. Apóyate en el trabajo ya hecho antes de rehacerlo.
 - Escribe siempre en español.`;
 
 function systemFor(agent, campaign) {
   const cl = db.clients.find((c) => c.id === campaign.clientId);
   const mem = memoryText(campaign.clientId, campaign.id);
-  const guia = ['video', 'director'].includes(agent.id) ? `\n\n${videoGuide(cl?.estilosVideo || [])}` : '';
+  const guia = ['video', 'director'].includes(agent.id) ? `\n\n${videoGuide(cl?.estilosVideo || [], cl?.videoPrefs || {})}` : '';
   const archivos = resumenParaAgentes(cl?.id);
   const cursos = aprendizajes(agent.id);
   return `${REGLAS}\n\n${agent.prompt}${guia}\n\n${personaText(agent)}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${archivos ? `\n\n${archivos}` : ''}${cursos ? `\n\n${cursos}` : ''}${mem ? `\n\n${mem}` : ''}`;
@@ -45,6 +47,18 @@ const TOOLS = {
   pedir_autorizacion: {
     description: 'Pide autorización al jefe antes de una acción sensible (gastar, publicar, contactar al cliente). Devuelve AUTORIZADO o NO AUTORIZADO.',
     input_schema: obj({ accion: { type: 'string' }, detalle: { type: 'string' } }, ['accion']),
+  },
+  ver_archivos: {
+    description: 'Lista los archivos de una computadora: la tuya (por defecto), la de otro agente (escribe su nombre: Dani, Iris, Teo, Luna, Max o Rita) o la carpeta "compartido" (brief, respuestas, concepto aprobado y piezas aprobadas de cada campaña). Todos pueden leer todo.',
+    input_schema: obj({ espacio: { type: 'string', description: 'id del agente o "compartido"' } }, []),
+  },
+  leer_archivo: {
+    description: 'Lee un archivo de texto de una computadora (la tuya, la de otro agente o "compartido"). Úsalo para apoyarte en el trabajo de tus compañeros (por ejemplo, el copy aprobado o la investigación).',
+    input_schema: obj({ espacio: { type: 'string' }, ruta: { type: 'string', description: 'ruta tal como la devuelve ver_archivos' } }, ['espacio', 'ruta']),
+  },
+  guardar_nota: {
+    description: 'Guarda una nota o borrador en TU computadora (carpeta notas/), para que tus compañeros y el jefe puedan leerla.',
+    input_schema: obj({ nombre: { type: 'string', description: 'nombre del archivo, ej. ideas-reel.md' }, contenido: { type: 'string' } }, ['nombre', 'contenido']),
   },
   guardar_memoria: {
     description: 'Guarda un aprendizaje para futuras campañas (preferencias del cliente o del jefe). alcance "cliente" (por defecto) o "agencia" si aplica a todos los clientes.',
@@ -84,7 +98,7 @@ const TOOLS = {
 };
 
 function toolDefs(agentId) {
-  const names = ['estado', 'preguntar_al_jefe', 'pedir_autorizacion', 'guardar_memoria'];
+  const names = ['estado', 'preguntar_al_jefe', 'pedir_autorizacion', 'guardar_memoria', 'ver_archivos', 'leer_archivo', 'guardar_nota'];
   if (byId[agentId].puedeEntregar) names.push('entregar_pieza');
   const defs = names.map((name) => ({ name, ...TOOLS[name] }));
   if (agentId === 'director') {
@@ -107,6 +121,9 @@ async function runTool(job, block, campaign) {
     case 'preguntar_al_jefe': return a.preguntar(i.pregunta || '', i.opciones || []);
     case 'pedir_autorizacion': return a.autorizar(i.accion || '', i.detalle || '');
     case 'guardar_memoria': return a.memoria(i.texto || '', i.alcance);
+    case 'ver_archivos': return ws.resumenListado(i.espacio ? i.espacio : job.agentId);
+    case 'leer_archivo': return ws.leer(i.espacio || job.agentId, i.ruta || '');
+    case 'guardar_nota': { const n = String(i.nombre || 'nota.md'); return `Guardado en ${ws.escribir(job.agentId, `notas/${/\.[a-z]+$/i.test(n) ? n : `${n}.md`}`, i.contenido || '')}`; }
     case 'entregar_pieza':
       if (!i.contenido || !i.tipo) throw new Error('Faltan tipo o contenido de la pieza');
       return a.entregar(i);
@@ -159,6 +176,7 @@ async function loop(job) {
   // se fijan una sola vez, con la memoria y el historial de ese momento.
   if (!job.system) { job.system = systemFor(agent, campaign); save(); }
   setAgent(job.agentId, { estado: 'trabajando', burbuja: job.messages.length > 1 ? 'Retomando donde me quedé…' : 'Empezando…', campaignId: campaign.id });
+  try { ws.tareaActual(job.agentId, job, campaign.cliente, job.messages.length > 1 ? 'Retomada tras un reinicio' : 'Empezando'); } catch {}
   if (job.messages.length === 1) log(job.agentId, `Nueva tarea: ${job.task.slice(0, 200)}`, campaign.id);
   else log(job.agentId, 'Retomo mi tarea donde me quedé.', campaign.id);
 
@@ -327,6 +345,7 @@ function finish(job, text) {
   job.terminado = Date.now();
   delete job.messages; // ya no hace falta: libera espacio
   save();
+  try { const c = db.campaigns.find((x) => x.id === job.campaignId); ws.resultado(job.agentId, c?.cliente || 'campaña', job.resultado); ws.tareaActual(job.agentId, job, c?.cliente || '', `✅ Terminada. ${job.resultado.slice(0, 300)}`); } catch {}
   log(job.agentId, `Terminé: ${job.resultado.slice(0, 300)}`, job.campaignId);
   return job.resultado;
 }

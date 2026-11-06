@@ -12,6 +12,8 @@ import { startTelegram } from './telegram.js';
 import { makeZip } from './zip.js';
 import * as files from './files.js';
 import { initCursos, proponer, cursosDe } from './cursos.js';
+import * as ws from './workspace.js';
+import * as entregables from './entregables.js';
 import QRCode from 'qrcode';
 import crypto from 'node:crypto';
 import { ESTILOS, estiloById, demoSpec, resolveBroll, proxyBroll, brollDisponible, sugerirEstilos } from './video.js';
@@ -57,7 +59,7 @@ app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
 app.use((req, res, next) => {
   const q = new URL(req.url, 'http://x').searchParams.get('key');
   if (KEY && q === KEY) res.setHeader('Set-Cookie', keyCookie());
-  if (authorized(req) || req.path === '/api/agency/logo' || req.path === '/alta.html' || req.path.startsWith('/api/alta/')) return next();
+  if (authorized(req) || req.path === '/api/agency/logo' || req.path === '/alta.html' || req.path === '/subir.html' || req.path.startsWith('/api/alta/')) return next();
   if (req.method === 'GET' && !req.path.startsWith('/api/')) return res.status(401).sendFile(path.join(here, 'login.html'));
   res.status(401).json({ error: 'Acceso restringido' });
 });
@@ -116,6 +118,18 @@ function cleanClient(body, prev = {}) {
   const c = { ...prev };
   for (const f of CLIENT_FIELDS) if (f in body) c[f] = String(body[f] || '').trim().slice(0, 1500);
   if (Array.isArray(body.colores)) c.colores = body.colores.filter((x) => /^#[0-9a-f]{6}$/i.test(x)).slice(0, 5);
+  if (body.videoPrefs && typeof body.videoPrefs === 'object') {
+    const v = body.videoPrefs; const o = {};
+    if ([1, 2, 3].includes(+v.nivel)) o.nivel = +v.nivel;
+    if (['natural', 'cine', 'calido', 'frio', 'neon', 'vhs', 'bn', 'pastel'].includes(v.look)) o.look = v.look;
+    if (['pop', 'energia', 'lofi', 'epica', 'urbano', 'suave', 'ninguna'].includes(v.musica)) o.musica = v.musica;
+    if (['palabra', 'bloque', 'ninguno'].includes(v.subtitulos)) o.subtitulos = v.subtitulos;
+    if (['impacto', 'caja', 'neon', 'contorno'].includes(v.estiloTexto)) o.estiloTexto = v.estiloTexto;
+    if (typeof v.sensacion === 'string') o.sensacion = v.sensacion.slice(0, 40);
+    if (typeof v.emojis === 'boolean') o.emojis = v.emojis;
+    if (typeof v.sfx === 'boolean') o.sfx = v.sfx;
+    c.videoPrefs = o;
+  }
   for (const k of ['redes', 'contacto']) if (body[k] && typeof body[k] === 'object') c[k] = Object.fromEntries(Object.entries(body[k]).slice(0, 8).map(([a, v]) => [String(a).slice(0, 20), String(v || '').trim().slice(0, 200)]));
   if (Array.isArray(body.estilosVideo)) c.estilosVideo = body.estilosVideo.filter((x) => estiloById[x]).slice(0, 6);
   if (body.logo === null) delete c.logo;
@@ -195,6 +209,15 @@ app.post('/api/invites', async (req, res) => {
   const url = `${baseUrl(req)}/alta.html?t=${inv.token}`;
   res.json({ ...inv, url, svg: await QRCode.toString(url, { type: 'svg', margin: 1, color: { dark: '#14141f', light: '#ffffff' } }) });
 });
+// Enlace/QR para que un cliente que ya existe suba fotos y material (sin cuestionario)
+app.post('/api/clients/:id/upload-link', async (req, res) => {
+  const c = db.clients.find((x) => x.id === req.params.id);
+  if (!c) return res.status(404).json({ error: 'Cliente inexistente' });
+  let inv = db.invites.find((i) => i.clientId === c.id && i.tipo === 'subida' && i.expira > Date.now() + 86400000);
+  if (!inv) { inv = { token: crypto.randomBytes(12).toString('base64url'), creado: Date.now(), expira: Date.now() + 90 * 86400000, clientId: c.id, estado: 'abierta', tipo: 'subida', nota: '' }; db.invites.push(inv); save(); }
+  const url = `${baseUrl(req)}/subir.html?t=${inv.token}`;
+  res.json({ url, svg: await QRCode.toString(url, { type: 'svg', margin: 1, color: { dark: '#14141f', light: '#ffffff' } }) });
+});
 app.get('/api/invites', async (req, res) => {
   res.json(await Promise.all(db.invites.slice(-15).reverse().map(async (i) => ({ ...i, url: `${baseUrl(req)}/alta.html?t=${i.token}`, cliente: db.clients.find((c) => c.id === i.clientId)?.nombre || null }))));
 });
@@ -210,7 +233,7 @@ app.get('/api/alta/:t', (req, res) => {
     agencia: { nombre: db.agency.nombre || 'la agencia', tieneLogo: !!db.agency.logo },
     estilos: ESTILOS.map(({ id, emoji, nombre, descripcion }) => ({ id, emoji, nombre, descripcion })),
     carpetas: files.CARPETAS.map((n) => ({ nombre: n, ayuda: files.AYUDA[n] })),
-    cliente: c ? clientSummary(c) : null, estado: i.estado,
+    cliente: c ? clientSummary(c) : null, estado: i.estado, tipo: i.tipo || 'alta', REF: files.REF, CRUDO: files.CRUDO,
   });
 });
 app.post('/api/alta/:t', (req, res) => {
@@ -240,10 +263,13 @@ app.put('/api/alta/:t/files', async (req, res) => {
   if (!i.clientId) return res.status(400).json({ error: 'Primero escribe el nombre de tu marca' });
   if (Number(req.headers['content-length'] || 0) > 100 * 1024 * 1024) return res.status(400).json({ error: 'Máximo 100 MB por archivo' });
   try {
-    const r = await files.recibir(req, i.clientId, String(req.query.carpeta || ''), '', String(req.query.nombre || ''));
+    const carpeta = String(req.query.carpeta || files.REF);
+    if (![files.REF, files.CRUDO].includes(carpeta)) return res.status(400).json({ error: 'Esa carpeta no está disponible' });
+    const sub = String(req.query.sub || '').slice(0, 40) === 'Logos' ? 'Logos' : '';
+    const r = await files.recibir(req, i.clientId, carpeta, sub, String(req.query.nombre || ''));
     // Si es su logo y aún no tiene uno en su kit de marca, se usa automáticamente.
     const c = db.clients.find((x) => x.id === i.clientId);
-    if (c && !c.logo && r.ruta.startsWith('Logos/') && /\.(png|jpe?g|webp|svg)$/i.test(r.nombre) && r.tam < 650000) {
+    if (c && !c.logo && r.ruta.startsWith(`${files.REF}/Logos/`) && /\.(png|jpe?g|webp|svg)$/i.test(r.nombre) && r.tam < 650000) {
       const ext = r.nombre.split('.').pop().toLowerCase();
       c.logo = `data:image/${ext === 'jpg' ? 'jpeg' : ext === 'svg' ? 'svg+xml' : ext};base64,${fs.readFileSync(files.safePath(c.id, r.ruta).full).toString('base64')}`;
       c.actualizado = Date.now(); save(); bus.emit('client', clientSummary(c));
@@ -281,6 +307,7 @@ app.post('/api/campaigns', (req, res) => {
   save();
   log('jefe', `Nueva campaña: ${c.cliente}`, c.id);
   bus.emit('campaign', c);
+  try { ws.brief(c); } catch (e) { console.warn('[ws]', e.message); }
   track(c, runtime.runCampaign(c));
   res.json(c);
 });
@@ -388,6 +415,67 @@ app.post('/api/memories/:id', (req, res) => {
   bus.emit('memory', { ...m, borrada: !!req.body?.borrar });
   res.json({ ok: true });
 });
+
+// ---- Entregables: guardar el video exportado y descargar todo lo aprobado ----
+app.put('/api/pieces/:id/video', async (req, res) => {
+  const p = db.pieces.find((x) => x.id === req.params.id);
+  const donde = p && entregables.carpetaPieza(p);
+  if (!donde) return res.status(404).json({ error: 'Esta pieza no tiene cliente asignado' });
+  const ext = ['mp4', 'webm'].includes(req.query.ext) ? req.query.ext : 'mp4';
+  try {
+    files.ensureFolders(donde.clientId);
+    const nombre = `${(ws.slug(p.titulo) || 'video')}.${ext}`;
+    const r = await files.recibir(req, donde.clientId, files.FINAL, donde.sub, nombre);
+    log('jefe', `💾 Guardó el video "${p.titulo}" en ${r.ruta}`, p.campaignId); bus.emit('files', { clientId: donde.clientId });
+    res.json(r);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// Todo lo aprobado de un cliente (o sus archivos completos con ?todo=1) en un ZIP
+app.get('/api/clients/:id/zip', (req, res) => {
+  const c = db.clients.find((x) => x.id === req.params.id);
+  if (!c) return res.status(404).end();
+  const raiz = files.clientDir(c.id);
+  const lista = [];
+  const rec = (dir, pre) => { if (!fs.existsSync(dir)) return; for (const d of fs.readdirSync(dir, { withFileTypes: true })) { if (d.name.startsWith('.')) continue; const f = path.join(dir, d.name); d.isDirectory() ? rec(f, `${pre}${d.name}/`) : lista.push({ f, n: `${pre}${d.name}` }); } };
+  rec(req.query.todo ? raiz : path.join(raiz, files.FINAL), '');
+  const total = lista.reduce((n, x) => n + fs.statSync(x.f).size, 0);
+  if (total > 400 * 1024 * 1024) return res.status(413).json({ error: 'Es demasiado grande para un solo ZIP. Descarga por campaña desde el Archivo.' });
+  if (!lista.length) return res.status(404).json({ error: 'Todavía no hay entregables aprobados de este cliente.' });
+  res.setHeader('Content-Disposition', `attachment; filename="${slug(c.nombre)}-${req.query.todo ? 'archivos' : 'aprobados'}.zip"`);
+  res.type('application/zip').send(makeZip(lista.map((x) => ({ name: x.n, data: fs.readFileSync(x.f) }))));
+});
+
+// ---- Computadora de cada agente ----
+app.get('/api/agents/:id/pc', (req, res) => {
+  const a = publicRoster().find((x) => x.id === req.params.id);
+  if (!a) return res.status(404).json({ error: 'Agente inexistente' });
+  const st = agentState[a.id] || {};
+  const job = [...db.jobs].reverse().find((j) => j.agentId === a.id && j.estado === 'activo') || [...db.jobs].reverse().find((j) => j.agentId === a.id);
+  const camp = db.campaigns.find((c) => c.id === (st.campaignId || job?.campaignId));
+  let dicho = '', herramientas = [];
+  for (const m of [...(job?.messages || [])].reverse()) {
+    if (m.role !== 'assistant' || !Array.isArray(m.content)) continue;
+    dicho = m.content.filter((b) => b.type === 'text').map((b) => b.text).join(' ').trim().slice(0, 600);
+    herramientas = m.content.filter((b) => b.type === 'tool_use').map((b) => b.name);
+    break;
+  }
+  const mias = db.pieces.filter((p) => p.agente === a.id);
+  res.json({
+    agente: a,
+    ahora: { estado: st.estado || 'libre', burbuja: st.burbuja || '', pensandoDesde: st.pensando || null },
+    campana: camp ? { id: camp.id, cliente: camp.cliente, fase: camp.fase || null, estado: camp.estado, brief: camp.brief.slice(0, 300) } : null,
+    tarea: job && job.estado !== 'terminado' ? job.task.slice(0, 700) : null,
+    ultimaTarea: job && job.estado === 'terminado' ? { tarea: job.task.slice(0, 300), resultado: String(job.resultado || '').slice(0, 600) } : null,
+    dicho, herramientas,
+    esperando: { solicitudes: db.requests.filter((r) => r.agente === a.id && r.estado === 'pendiente').map((r) => ({ tipo: r.tipo, texto: r.texto })), piezas: mias.filter((p) => p.estado === 'pendiente').map((p) => p.titulo) },
+    entregas: { total: mias.length, aprobadas: mias.filter((p) => p.estado === 'aprobada').length, rechazadas: mias.filter((p) => p.estado === 'rechazada').length },
+    reciente: db.log.filter((l) => l.agente === a.id).slice(-12).reverse(),
+    espacio: ws.listar(a.id),
+    compartido: ws.listar(ws.COMPARTIDO),
+  });
+});
+app.get('/api/espacios/:id/archivo', (req, res) => { try { ws.enviar(res, req.params.id, String(req.query.path || '')); } catch (e) { res.status(400).json({ error: e.message }); } });
 
 // ---- Video v2: estilos virales, guion del video y tomas reales ----
 app.get('/api/estilos', (req, res) => res.json({ estilos: ESTILOS, broll: brollDisponible() }));

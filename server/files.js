@@ -4,13 +4,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { DATA_DIR } from './store.js';
 
-export const CARPETAS = ['Logos', 'Referencias visuales', 'Estilo de video', 'Fotos y videos de producto', 'Documentos'];
+// Tres carpetas por cliente, siempre las mismas:
+export const REF = 'Referencias del cliente';   // lo que el cliente comparte: logo, fotos, posts y videos que le gustan
+export const CRUDO = 'Material en crudo';        // fotos y videos propios, sin editar
+export const FINAL = 'Resultado final';          // lo autorizado, una subcarpeta por campaña (se guarda solo)
+export const CARPETAS = [REF, CRUDO, FINAL];
 export const AYUDA = {
-  'Logos': 'Logo en PNG o SVG (de preferencia con fondo transparente) y variantes.',
-  'Referencias visuales': 'Diseños, posts o marcas que te gustan: colores, composición, tipografía.',
-  'Estilo de video': 'Videos o capturas con el estilo de edición que buscas (ritmo, transiciones, subtítulos).',
-  'Fotos y videos de producto': 'Material propio para usar en las piezas: producto, local, equipo.',
-  'Documentos': 'Manual de marca, catálogo, precios, presentaciones.',
+  [REF]: 'Todo lo que el cliente quiere que veamos: su logo, fotos de referencia, posts o videos que le gustan, manual de marca.',
+  [CRUDO]: 'Fotos y videos propios sin editar: producto, local, equipo. De aquí toman los agentes para armar las piezas.',
+  [FINAL]: 'Lo que ya autorizaste, una carpeta por campaña. Se guarda solo cuando apruebas una pieza.',
 };
 const EXT_OK = /\.(png|jpe?g|webp|gif|svg|heic|mp4|mov|webm|m4v|pdf|docx?|pptx?|xlsx?|txt|csv|ttf|otf|woff2?|ai|psd|zip)$/i;
 const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', svg: 'image/svg+xml', heic: 'image/heic', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', m4v: 'video/mp4', pdf: 'application/pdf', txt: 'text/plain; charset=utf-8', csv: 'text/csv; charset=utf-8' };
@@ -29,7 +31,24 @@ export function safePath(clientId, rel) {
   return { full, partes };
 }
 
+// Mueve (sin perder nada) lo que estaba en las carpetas anteriores a las tres nuevas.
+const ANTES = [['Logos', `${REF}/Logos`], ['Referencias visuales', REF], ['Estilo de video', `${REF}/Estilo de video`], ['Documentos', `${REF}/Documentos`], ['Fotos y videos de producto', CRUDO], ['Entregables', FINAL]];
+function mover1(src, dst) {
+  fs.mkdirSync(dst, { recursive: true });
+  for (const d of fs.readdirSync(src, { withFileTypes: true })) {
+    let to = path.join(dst, d.name);
+    for (let i = 2; fs.existsSync(to); i++) to = path.join(dst, d.isDirectory() ? `${d.name} (${i})` : d.name.replace(/(\.[^.]*)?$/, ` (${i})$1`));
+    fs.renameSync(path.join(src, d.name), to);
+  }
+  fs.rmdirSync(src);
+}
+export function migrar(clientId) {
+  const base = clientDir(clientId);
+  if (!fs.existsSync(base)) return;
+  for (const [viejo, nuevo] of ANTES) { const src = path.join(base, viejo); if (fs.existsSync(src) && fs.statSync(src).isDirectory()) { try { mover1(src, path.join(base, nuevo)); } catch (e) { console.warn('[migrar]', e.message); } } }
+}
 export function ensureFolders(clientId) {
+  migrar(clientId);
   for (const c of CARPETAS) fs.mkdirSync(path.join(clientDir(clientId), c), { recursive: true });
 }
 
@@ -118,6 +137,7 @@ export function resumenParaAgentes(clientId) {
   if (!clientId || !fs.existsSync(clientDir(clientId))) return '';
   const lineas = [];
   for (const c of listar(clientId)) {
+    if (c.carpeta === FINAL) continue;
     const todos = [...c.archivos, ...c.subcarpetas.flatMap((s) => s.archivos)];
     if (todos.length) lineas.push(`- ${c.carpeta}: ${todos.slice(0, 12).map((a) => a.ruta.split('/').slice(1).join('/')).join(', ')}${todos.length > 12 ? ` (+${todos.length - 12})` : ''}`);
   }
@@ -128,7 +148,7 @@ const b64cache = new Map();
 export function imagenesReferencia(clientId, max = 4) {
   if (!clientId || !fs.existsSync(clientDir(clientId))) return [];
   const out = [];
-  for (const c of ['Referencias visuales', 'Estilo de video', 'Logos']) {
+  for (const c of [REF]) {
     const ent = listar(clientId).find((x) => x.carpeta === c);
     for (const a of [...ent.archivos, ...ent.subcarpetas.flatMap((s) => s.archivos)]) {
       if (out.length >= max) break;

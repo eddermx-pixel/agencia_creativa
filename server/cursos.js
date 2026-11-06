@@ -4,6 +4,7 @@
 import { db, save, newId } from './store.js';
 import { ROSTER, byId } from './roster.js';
 import { bus, askBoss, setAgent, agentState, log } from './hub.js';
+import * as ws from './workspace.js';
 
 export const TEMAS = {
   director: ['Dirección creativa de campañas en redes 2026', 'Cómo presentar conceptos que el cliente aprueba', 'Métricas que importan en campañas de redes sociales'],
@@ -70,6 +71,7 @@ async function decidir(r) {
   try {
     const r2 = await runtime.estudiar(a, c.tema);
     Object.assign(c, { estado: 'terminado', fin: Date.now(), apuntes: r2.apuntes || [], skills: r2.skills || [], fuentes: r2.fuentes || [] });
+    try { ws.curso(a.id, c); } catch {}
     log(a.id, `🎓 Terminé el curso "${c.tema}". Aprendí: ${(c.skills || []).map((s) => s.nombre).join(', ') || 'técnicas nuevas'}.`);
   } catch (e) {
     Object.assign(c, { estado: 'error', error: e.message });

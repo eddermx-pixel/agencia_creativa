@@ -16,9 +16,10 @@ function render() {
       <div class="logo">${c.tieneLogo ? `<img src="/api/clients/${esc(c.id)}/logo?v=${esc(String(c.actualizado || ''))}" alt="">` : esc(c.nombre.slice(0, 2).toUpperCase())}</div>
       <div><div class="n">${esc(c.nombre)}</div><div class="r">${esc(c.rubro || 'Sin rubro')}${c.tono ? ` · ${esc(c.tono)}` : ''}</div></div>
       <div class="sw">${(c.colores || []).map((h) => `<span style="background:${esc(h)}"></span>`).join('')}</div>`;
-    el.insertAdjacentHTML('beforeend', '<div class="acts2"><button class="ed">✏️ Kit de marca</button><button class="fl">📁 Archivos</button></div>');
+    el.insertAdjacentHTML('beforeend', '<div class="acts2"><button class="ed">✏️ Kit de marca</button><button class="fl">📁 Archivos</button></div><div class="acts2" style="margin-top:6px"><button class="fn">✅ Resultado final</button></div>');
     el.querySelector('.ed').onclick = (e) => { e.stopPropagation(); open(c); };
     el.querySelector('.fl').onclick = (e) => { e.stopPropagation(); openFiles(c); };
+    el.querySelector('.fn').onclick = (e) => { e.stopPropagation(); openFiles(c, 'Resultado final'); };
     el.onclick = () => open(c);
     return el;
   }), Object.assign(document.createElement('button'), { className: 'cl new', textContent: '＋ Nuevo cliente', onclick: () => open(null) }));
