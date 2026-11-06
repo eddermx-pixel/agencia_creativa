@@ -9,7 +9,7 @@ let office = null;
 // ---------- Paneles ----------
 const $ = (id) => document.getElementById(id);
 
-const TIPOS = { autorizacion: '🔐 pide autorización', cuestionario: '📝 tiene preguntas', concepto: '💡 presenta el concepto', pregunta: '❓ pregunta' };
+const TIPOS = { curso: '🎓 quiere tomar un curso', autorizacion: '🔐 pide autorización', cuestionario: '📝 tiene preguntas', concepto: '💡 presenta el concepto', pregunta: '❓ pregunta' };
 
 function reqElement(r) {
   const a = byId(r.agente);
@@ -21,10 +21,10 @@ function reqElement(r) {
   const send = async (body) => { el.querySelectorAll('button').forEach((b) => (b.disabled = true)); try { await api(`/api/requests/${r.id}`, body); } catch (e) { alert(e.message); el.querySelectorAll('button').forEach((b) => (b.disabled = false)); } };
   const mk = (tag, props = {}) => Object.assign(document.createElement(tag), props);
 
-  if (r.tipo === 'autorizacion') {
+  if (r.tipo === 'autorizacion' || r.tipo === 'curso') {
     const inp = mk('input', { placeholder: 'Comentario (opcional)' });
-    const ok = mk('button', { className: 'ok', textContent: 'Autorizar', onclick: () => send({ aprobado: true, respuesta: inp.value }) });
-    const no = mk('button', { className: 'no', textContent: 'No', onclick: () => send({ aprobado: false, respuesta: inp.value }) });
+    const ok = mk('button', { className: 'ok', textContent: r.tipo === 'curso' ? '🎓 Aprobar curso' : 'Autorizar', onclick: () => send({ aprobado: true, respuesta: inp.value }) });
+    const no = mk('button', { className: 'no', textContent: r.tipo === 'curso' ? 'Ahora no' : 'No', onclick: () => send({ aprobado: false, respuesta: inp.value }) });
     row.append(inp, ok, no);
   } else if (r.tipo === 'concepto') {
     row.classList.add('col');

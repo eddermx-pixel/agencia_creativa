@@ -531,7 +531,7 @@ export function createOffice(container, { onAgent, onBoss, onFeed }) {
         name = a?.nombre || it.id;
         const req = pendingReqs(it.id)[0];
         if (req) {
-          const icon = { autorizacion: '🔐', cuestionario: '📝', concepto: '💡' }[req.tipo] || '❓';
+          const icon = { curso: '🎓', autorizacion: '🔐', cuestionario: '📝', concepto: '💡' }[req.tipo] || '❓';
           bub = `<b>${icon}</b> ${esc(small ? '' : req.texto)}`; cls = 'alert';
         } else if (pendingPieces(it.id).length) { bub = small ? '📱' : '📱 Esperando tu swipe'; cls = 'feed'; }
         else if (st.estado === 'junta') {

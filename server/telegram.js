@@ -55,7 +55,7 @@ const h = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;'
 
 function onRequest(r) {
   if (r.estado !== 'pendiente') {
-    const nota = { autorizacion: r.aprobado ? '✅ Autorizado' : '❌ No autorizado', concepto: r.aprobado ? '✅ Concepto aprobado' : `✏️ Cambios pedidos: ${r.respuesta}`, cuestionario: '✅ Cuestionario respondido' }[r.tipo] || `💬 Respondido: ${r.respuesta}`;
+    const nota = { curso: r.aprobado ? '🎓 Curso aprobado' : 'Curso pospuesto', autorizacion: r.aprobado ? '✅ Autorizado' : '❌ No autorizado', concepto: r.aprobado ? '✅ Concepto aprobado' : `✏️ Cambios pedidos: ${r.respuesta}`, cuestionario: '✅ Cuestionario respondido' }[r.tipo] || `💬 Respondido: ${r.respuesta}`;
     return markDone(r.id, nota);
   }
   const oficina = link('/');
@@ -69,9 +69,9 @@ function onRequest(r) {
       `💡 <b>${h(quien(r.agente))}</b> presenta el concepto: <b>${h(r.texto)}</b>\n\n${h(r.detalle).slice(0, 3200)}\n\n<i>Para pedir cambios, responde a este mensaje.</i>`,
       [[{ text: '✅ Aprobar concepto', callback_data: `r:${r.id}:1` }]]);
   }
-  if (r.tipo === 'autorizacion') {
+  if (r.tipo === 'autorizacion' || r.tipo === 'curso') {
     return send('r', r.id,
-      `🔐 <b>${h(quien(r.agente))}</b> pide autorización:\n\n${h(r.texto)}${r.detalle ? `\n<i>${h(r.detalle)}</i>` : ''}${oficina ? `\n\n<a href="${oficina}">Abrir oficina</a>` : ''}`,
+      `${r.tipo === 'curso' ? '🎓' : '🔐'} <b>${h(quien(r.agente))}</b> ${r.tipo === 'curso' ? 'quiere tomar un curso' : 'pide autorización'}:\n\n${h(r.texto)}${r.detalle ? `\n<i>${h(r.detalle)}</i>` : ''}${oficina ? `\n\n<a href="${oficina}">Abrir oficina</a>` : ''}`,
       [[{ text: '✅ Autorizar', callback_data: `r:${r.id}:1` }, { text: '❌ No', callback_data: `r:${r.id}:0` }]]);
   }
   const kb = (r.opciones || []).slice(0, 4).map((o, i) => [{ text: o.slice(0, 60), callback_data: `q:${r.id}:${i}` }]);

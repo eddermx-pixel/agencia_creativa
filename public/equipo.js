@@ -1,5 +1,5 @@
 // Currículum de cada agente: vista de 4 ángulos, personalidad, skills e historial.
-import { api, store, connect, esc, usd, drawCrew } from './common.js';
+import { api, store, connect, esc, usd, drawCrew, hace } from './common.js';
 
 const TIPOS = { astronauta: 'Astronauta', alien: 'Alienígena', robot: 'Robot', perro: 'Perro espacial' };
 let team = [];
@@ -32,7 +32,11 @@ function render() {
         </div>
       </div>
       <div class="body">
-        <div class="sec"><b>Habilidades</b>${a.cv.skills.map(([n, v]) => `<div class="skill"><div>${esc(n)}</div><div class="track"><i style="width:${v}%;background:${esc(a.color)}"></i></div><span>${v}</span></div>`).join('')}</div>
+        <div class="sec"><b>Habilidades</b>${a.cv.skills.map(([n, v]) => `<div class="skill"><div>${esc(n)}</div><div class="track"><i style="width:${v}%;background:${esc(a.color)}"></i></div><span>${v}</span></div>`).join('')}
+          ${a.cursos.filter((c) => c.estado === 'terminado').flatMap((c) => c.skills || []).map((k) => `<div class="skill"><div>🆕 ${esc(k.nombre)}</div><div class="track"><i style="width:${k.nivel}%;background:var(--accent2)"></i></div><span>${k.nivel}</span></div>`).join('')}</div>
+        <div class="sec"><b>🎓 Cursos de actualización</b>
+          ${a.cursos.length ? a.cursos.map((c) => `<details class="curso"><summary>${{ terminado: '✅', en_curso: '⏳', propuesto: '🕐', rechazado: '⏸️', error: '⚠️' }[c.estado] || ''} ${esc(c.tema)} <span class="empty">· ${hace(c.creado)}</span></summary>${(c.apuntes || []).length ? `<ul>${c.apuntes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : `<div class="empty">${c.estado === 'propuesto' ? 'Esperando tu aprobación en "Te necesitan".' : c.estado === 'en_curso' ? 'Estudiando…' : c.error ? esc(c.error) : ''}</div>`}${(c.fuentes || []).length ? `<div class="empty" style="font-size:12px">Fuentes: ${c.fuentes.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(new URL(u).hostname)}</a>`).join(' · ')}</div>` : ''}</details>`).join('') : '<div class="empty">Aún no toma cursos. Cada cierto tiempo te pedirá permiso para actualizarse.</div>'}
+          <button class="mini curso-btn" data-id="${a.id}" style="margin-top:8px">🎓 Proponer un curso ahora</button></div>
         <div class="sec"><b>Lo que hace en la agencia</b><div class="chips">${a.cv.herramientas.map((h) => `<span>${esc(h)}</span>`).join('')}</div></div>
         <div class="sec"><b>Historial real</b><div class="stats">
           <div class="stat"><div class="v">${s.campanas}</div><div class="l">campañas</div></div>
@@ -45,6 +49,7 @@ function render() {
         <div class="sec"><b>Dato curioso</b>${esc(a.cv.dato)}</div>
       </div>`;
     el.querySelector('.turn').append(turnaround(a));
+    el.querySelector('.curso-btn').onclick = async (ev) => { ev.target.disabled = true; try { await api(`/api/team/${a.id}/curso`, {}); ev.target.textContent = '✓ Te lo pidió en la oficina (Te necesitan)'; load(); } catch (e) { alert(e.message); ev.target.disabled = false; } };
     return el;
   }));
   const h = location.hash.slice(1);
@@ -52,4 +57,4 @@ function render() {
 }
 
 async function load() { team = await api('/api/team'); render(); }
-connect((type) => { if (type === 'snapshot') load(); });
+connect((type, d) => { if (type === 'snapshot' || type === 'course' || (type === 'request' && d?.tipo === 'curso')) load(); });

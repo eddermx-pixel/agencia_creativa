@@ -11,6 +11,7 @@ import { bus, agentState, answerRequest, judgePiece, log, pieceSummary, usageSum
 import { startTelegram } from './telegram.js';
 import { makeZip } from './zip.js';
 import * as files from './files.js';
+import { initCursos, proponer, cursosDe } from './cursos.js';
 import QRCode from 'qrcode';
 import crypto from 'node:crypto';
 import { ESTILOS, estiloById, demoSpec, resolveBroll, proxyBroll, brollDisponible, sugerirEstilos } from './video.js';
@@ -82,6 +83,7 @@ function snapshot() {
 
 app.get('/api/state', (req, res) => res.json(snapshot()));
 app.get('/api/usage', (req, res) => res.json(usageReport()));
+app.post('/api/team/:id/curso', (req, res) => { try { res.json(proponer(req.params.id, req.body?.tema ? String(req.body.tema).slice(0, 120) : null)); } catch (e) { res.status(400).json({ error: e.message }); } });
 
 // Currículum + estadísticas reales de cada agente.
 app.get('/api/team', (req, res) => {
@@ -92,6 +94,7 @@ app.get('/api/team', (req, res) => {
     const campanas = new Set([...db.jobs.filter((j) => j.agentId === a.id).map((j) => j.campaignId), ...piezas.map((p) => p.campaignId), ...db.meetings.filter((m) => m.aportes.some((x) => x.agente === a.id)).map((m) => m.campaignId)]);
     return {
       ...a,
+      cursos: cursosDe(a.id).slice(-8).reverse(),
       stats: {
         campanas: campanas.size,
         entregadas: piezas.length,
@@ -471,10 +474,12 @@ bus.on('agency', (a) => broadcast('agency', a));
 bus.on('memory', (m) => broadcast('memory', { id: m.id, borrada: !!m.borrada }));
 bus.on('meeting', (m) => broadcast('meeting', m));
 bus.on('files', (f) => broadcast('files', f));
+bus.on('course', (c) => broadcast('course', c));
 
 startTelegram();
 // Retoma lo que estaba en curso antes del reinicio.
 for (const { campaign, promise } of runtime.boot()) track(campaign, promise);
+initCursos(runtime);
 server.listen(PORT, () => {
   console.log(`\n🏢 Agencia IA en http://localhost:${PORT}${KEY ? `/?key=${KEY}` : ''}`);
   console.log(DEMO ? '🎭 MODO DEMO (sin API key de Claude: los agentes siguen un guion)' : `🤖 Agentes reales con ${process.env.CLAUDE_MODEL || 'claude-opus-5-5'}`);

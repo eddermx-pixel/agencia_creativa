@@ -10,6 +10,7 @@ import { setAgent, log, addUsage, brandText, memoryText, setPhase, agentState, s
 import { db, save, newId } from './store.js';
 import { videoGuide } from './video.js';
 import { resumenParaAgentes, imagenesReferencia } from './files.js';
+import { aprendizajes, parseCurso } from './cursos.js';
 import { makeActions, withAgent } from './actions.js';
 
 const client = new Anthropic({ maxRetries: 4, timeout: 6 * 60 * 1000 });
@@ -29,7 +30,8 @@ function systemFor(agent, campaign) {
   const mem = memoryText(campaign.clientId, campaign.id);
   const guia = ['video', 'director'].includes(agent.id) ? `\n\n${videoGuide(cl?.estilosVideo || [])}` : '';
   const archivos = resumenParaAgentes(cl?.id);
-  return `${REGLAS}\n\n${agent.prompt}${guia}\n\n${personaText(agent)}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${archivos ? `\n\n${archivos}` : ''}${mem ? `\n\n${mem}` : ''}`;
+  const cursos = aprendizajes(agent.id);
+  return `${REGLAS}\n\n${agent.prompt}${guia}\n\n${personaText(agent)}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${archivos ? `\n\n${archivos}` : ''}${cursos ? `\n\n${cursos}` : ''}${mem ? `\n\n${mem}` : ''}`;
 }
 
 // ---------- Herramientas (definición para la API) ----------
@@ -372,4 +374,28 @@ export async function chatWithAgent(agentId, mensaje, contexto) {
   });
   addUsage(null, MODEL, res.usage, agentId);
   return textOf(res.content);
+}
+
+// ---------- Cursos: el agente investiga en internet y regresa con apuntes ----------
+export const estudiarCuesta = 'US$0.10–0.50';
+export async function estudiar(agent, tema) {
+  const messages = [{ role: 'user', content: `Toma este curso de actualización: "${tema}".
+Investiga en internet (prioriza fuentes de 2025-2026) las técnicas, herramientas, formatos y tendencias más actuales que sirvan para TU trabajo en la agencia (${agent.rol}).
+Al terminar responde ÚNICAMENTE con un JSON así:
+{"apuntes": ["8 a 10 aprendizajes concretos y accionables, en español"], "skills": [{"nombre": "habilidad nueva o mejorada", "nivel": 60-95}], "fuentes": ["https://..."]}` }];
+  for (let k = 0; k < 6; k++) {
+    const res = await client.messages.create({
+      model: MODEL,
+      max_tokens: 16000,
+      output_config: { effort: 'medium' },
+      system: `${REGLAS}\n\nEres ${agent.nombre}, ${agent.rol} de la agencia.\n${personaText(agent)}`,
+      tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 6 }],
+      messages,
+    });
+    addUsage(null, MODEL, res.usage, agent.id);
+    if (res.stop_reason === 'pause_turn') { messages.push({ role: 'assistant', content: res.content }); continue; }
+    if (res.stop_reason === 'refusal') throw new Error('El modelo no pudo completar el curso.');
+    return parseCurso(textOf(res.content));
+  }
+  throw new Error('El curso tardó demasiado');
 }

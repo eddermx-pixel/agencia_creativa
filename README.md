@@ -11,7 +11,14 @@ Una agencia de marketing operada por agentes de Claude, cada uno con su propio r
 - **No pierde el trabajo:** cada agente guarda su avance paso a paso. Si el servidor se reinicia (por ejemplo, cuando Railway instala una mejora), retoman donde se quedaron, sin repetir preguntas. El panel **📋 Pendientes** muestra qué espera tu respuesta, qué espera tu swipe y quién está trabajando. Si algo falla, el botón **↻ Reintentar** retoma desde el último paso guardado.
 - **Memoria:** los agentes recuerdan las preferencias de cada cliente, las reglas generales de la agencia y las campañas anteriores. Se llena sola con tus comentarios (feed y conceptos) y con lo que aprenden los agentes; en **☰ → 🧠 Memoria** puedes ver, editar, borrar o escribir reglas.
 - **Archivo:** en **☰ → 🗂️ Archivo** están todas las piezas de todas las campañas, con sus versiones y tus comentarios. Puedes descargar cada pieza (PNG, SVG, HTML o TXT) o la campaña completa en ZIP, con un resumen del brief, tus respuestas y el concepto aprobado.
+- **Videos v2:** Max entrega un guion de video con **tomas reales (B-roll de Pexels)**, transiciones, textos animados y **subtítulos palabra por palabra**. Se ven en el feed y se **exportan a video** desde el navegador. Necesita `PEXELS_API_KEY` (gratis) para las tomas reales.
+- **Estilos virales:** 10 formatos probados (gancho con pregunta, antes y después, POV, top 3, tutorial, testimonio, detrás de cámaras, cuenta regresiva, storytelling, texto que rebota). Eliges cuáles van con cada marca (☰ → 🎞️ Estilos) y Max te sugiere.
+- **Archivos por cliente:** carpetas fijas (Logos, Referencias visuales, Estilo de video, Fotos y videos de producto, Documentos) más subcarpetas. Luna y Max ven las referencias visuales al trabajar.
+- **Alta por QR:** genera un QR para un cliente nuevo; en su celular llena un cuestionario tipo quiz, se crea su ficha y sube sus materiales a sus carpetas.
+- **Cursos:** cada cierto tiempo un agente te pide permiso para tomar un curso; si apruebas, investiga en internet y regresa con apuntes y skills nuevas en su currículum.
 - **Telegram:** te llegan las preguntas, los conceptos, las autorizaciones y las piezas con botones. Para escribir una respuesta, contesta (reply) al mensaje.
+
+📄 **Avance completo, configuración y siguientes pasos:** [`docs/PROGRESO.md`](docs/PROGRESO.md) · Investigación de video: [`docs/investigacion-video.md`](docs/investigacion-video.md)
 
 ## El equipo
 

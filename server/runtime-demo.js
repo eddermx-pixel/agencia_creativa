@@ -296,3 +296,14 @@ export async function chatWithAgent(agentId) {
 // En modo demo los guiones no se pueden retomar: lo pendiente queda interrumpido.
 export function boot() { expirePending(); return []; }
 export function retryCampaign(campaign) { return runCampaign(campaign); }
+
+// Cursos en modo demo: apuntes de ejemplo (sin internet ni costo).
+export const estudiarCuesta = null;
+export async function estudiar(agent, tema) {
+  await sleep(8000);
+  return {
+    apuntes: [`Lo más importante de "${tema}" (ejemplo del modo demo)`, 'Probar 3 ganchos distintos para la misma idea', 'Subtítulos grandes y resaltados palabra por palabra', 'Cortes cada 1.5–2.5 s en los primeros segundos'],
+    skills: [{ nombre: tema.split(':')[0].slice(0, 40), nivel: 78 }],
+    fuentes: [],
+  };
+}
