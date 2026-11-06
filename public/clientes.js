@@ -59,6 +59,9 @@ function open(c) {
   const f = $('form');
   f.reset();
   for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas']) f.elements[k].value = c?.[k] || '';
+  const vp = c?.videoPrefs || {};
+  for (const k of ['nivel', 'look', 'musica', 'subtitulos', 'estiloTexto', 'sensacion']) f.elements[`vp_${k}`].value = vp[k] ?? '';
+  f.elements.vp_emojis.checked = vp.emojis !== false; f.elements.vp_sfx.checked = vp.sfx !== false;
   colores = [...(c?.colores || [])];
   renderColors();
   renderLogo(c?.tieneLogo ? `/api/clients/${c.id}/logo?v=${Date.now()}` : '');
@@ -80,6 +83,9 @@ $('form').onsubmit = async (e) => {
   const f = e.target.elements;
   const body = { colores };
   for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas']) body[k] = f[k].value;
+  const vp = {};
+  for (const k of ['nivel', 'look', 'musica', 'subtitulos', 'estiloTexto', 'sensacion']) if (f[`vp_${k}`].value) vp[k] = f[`vp_${k}`].value;
+  vp.emojis = f.vp_emojis.checked; vp.sfx = f.vp_sfx.checked; body.videoPrefs = vp;
   if (logo !== undefined) body.logo = logo;
   body.actualizado = Date.now();
   try {

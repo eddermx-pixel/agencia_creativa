@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Decisiones</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 760px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .opts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .sec h2 { margin: 6px 0 8px; font-size: 15px; color: var(--muted); }
+    .sec { display: flex; flex-direction: column; gap: 10px; }
+    .fail { border: 1px solid rgba(255,93,108,.5); background: rgba(255,93,108,.08); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+    .big0 { text-align: center; padding: 48px 12px; color: var(--muted); font-size: 18px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a>
+    <span class="sp"></span>
+    <a id="usageChip" class="chip" href="uso.html"></a>
+  </header>
+  <main class="wrap">
+    <h1 style="margin:0">🔔 Decisiones pendientes</h1>
+    <div class="opts card" style="padding:10px 12px">
+      <button id="bNotif">🔔 Activar avisos en este dispositivo</button>
+      <button id="bSnd"></button>
+      <span class="empty" style="font-size:13px">También te llegan por Telegram si lo configuraste.</span>
+    </div>
+    <div id="lista" class="sec"></div>
+  </main>
+  <script type="module" src="decisiones.js"></script>
+</body>
+</html>

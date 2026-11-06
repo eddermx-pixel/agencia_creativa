@@ -1,6 +1,7 @@
 // La oficina: estación espacial 2D + paneles (solicitudes, campañas, equipo, bitácora).
 import { api, store, byId, connect, avatar, esc, hace, usd } from './common.js';
 import { createOffice } from './office2d.js';
+import { openPC } from './pc.js';
 import { reqElement, TIPOS } from './decisions.js';
 
 const pendingReqs = (id) => store.requests.filter((r) => r.agente === id && r.estado === 'pendiente');
@@ -154,7 +155,7 @@ function renderAgent(id, force = false) {
   if (body.contains(document.activeElement) && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) && !force) return;
   body.dataset.sig = sig;
   body.innerHTML = `
-    <div class="head"><div id="agAv"></div><div><h3>${esc(a.nombre)} <span style="font-size:20px">${a.icono || ''}</span></h3><div class="sub">${esc(a.rol)} · <a href="equipo.html#${a.id}">📄 Ver currículum</a></div></div><span class="sp" style="flex:1"></span><button id="agClose">✕</button></div>
+    <div class="head"><div id="agAv"></div><div><h3>${esc(a.nombre)} <span style="font-size:20px">${a.icono || ''}</span></h3><div class="sub">${esc(a.rol)} · <a href="equipo.html#${a.id}">📄 Ver currículum</a></div></div><span class="sp" style="flex:1"></span><button id="agPC" title="Ver en qué trabaja y sus archivos">🖥️ Su computadora</button><button id="agClose">✕</button></div>
     <div><b>Ahora:</b> ${esc(st.burbuja || (st.estado === 'libre' || !st.estado ? 'Libre, esperando trabajo' : st.estado))}</div>
     <div class="empty" style="font-size:13px">${esc(a.personalidad || '')}</div>
     <div id="agReqs"></div>
@@ -163,6 +164,7 @@ function renderAgent(id, force = false) {
     <div class="card" style="box-shadow:none"><h2>Lo último que hizo</h2><div class="log" id="agLog"></div></div>`;
   body.querySelector('#agAv').append(avatar(a, 64));
   body.querySelector('#agClose').onclick = () => $('dlgAgent').close();
+  body.querySelector('#agPC').onclick = () => openPC(id);
   body.querySelector('#agReqs').append(...reqs.map(reqElement));
   body.querySelector('#agChat').replaceChildren(...(chatHistory[id] || []).map(([who, t]) => Object.assign(document.createElement('div'), { innerHTML: `<b>${who === 'yo' ? 'Tú' : esc(a.nombre)}:</b> ${esc(t)}` })));
   body.querySelector('#agLog').replaceChildren(...store.log.filter((l) => l.agente === id).slice(-12).reverse().map((l) => Object.assign(document.createElement('div'), { innerHTML: `${esc(l.texto)} <time>${hace(l.t)}</time>` })));
@@ -207,6 +209,7 @@ connect((type, data) => {
     try {
       office = createOffice($('office'), {
         onAgent: openAgent,
+        onPC: (id) => openPC(id),
         onBoss: () => $('reqCard').scrollIntoView({ behavior: 'smooth' }),
         onFeed: () => (location.href = 'feed.html'),
       });

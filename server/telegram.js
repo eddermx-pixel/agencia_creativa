@@ -87,7 +87,7 @@ function onPiece(p) {
   const preview = p.tipo === 'texto' ? `\n\n${h(p.contenido.slice(0, 700))}` : '';
   return send('p', p.id,
     `${icon} <b>${h(quien(p.agente))}</b> entregó: <b>${h(p.titulo)}</b>\n${h(p.descripcion || '')}${preview}${feed ? `\n\n👉 <a href="${feed}">Verla en el feed</a>` : ''}\n\n<i>Para rechazar con comentario, responde a este mensaje.</i>`,
-    [[{ text: '✅ Aprobar', callback_data: `p:${p.id}:1` }, { text: '❌ Rechazar', callback_data: `p:${p.id}:0` }]]);
+    [[{ text: '✅ Aprobar', callback_data: `p:${p.id}:1` }, { text: '❌ Rechazar', callback_data: `p:${p.id}:0` }], ...(feed ? [[{ text: p.tipo === 'video' ? '🎬 Ver con sonido' : '👁️ Verla', url: feed }]] : [])]);
 }
 
 async function handle(update) {
@@ -132,12 +132,29 @@ async function handle(update) {
   }
 }
 
+// Recordatorio (máx. 3) si algo sigue sin respuesta. RECORDATORIO_MIN=minutos (0 = apagado, por defecto 45)
+const RECORD_MIN = Number(process.env.RECORDATORIO_MIN ?? 45);
+const recordados = new Map();
+function recordatorios() {
+  if (!RECORD_MIN) return;
+  setInterval(() => {
+    const pend = [...db.requests.filter((r) => r.estado === 'pendiente').map((r) => ({ id: r.id, t: r.creada || r.t, x: r.texto })), ...db.pieces.filter((p) => p.estado === 'pendiente').map((p) => ({ id: p.id, t: p.creada, x: p.titulo }))];
+    for (const it of pend) {
+      const n = recordados.get(it.id) || { n: 0, t: it.t || Date.now() };
+      if (n.n >= 3 || Date.now() - n.t < RECORD_MIN * 60000) { recordados.set(it.id, n); continue; }
+      api('sendMessage', { chat_id: CHAT, text: `⏰ Sigues teniendo una decisión pendiente: ${it.x}`, reply_to_message_id: msgFor.get(it.id) }).catch(() => {});
+      recordados.set(it.id, { n: n.n + 1, t: Date.now() });
+    }
+  }, 60000).unref?.();
+}
+
 export function startTelegram() {
   if (!TOKEN) {
     console.log('[telegram] Sin TELEGRAM_BOT_TOKEN: notificaciones desactivadas.');
     return false;
   }
   if (CHAT) {
+    recordatorios();
     bus.on('request', (r) => onRequest(r).catch((e) => console.warn('[telegram]', e.message)));
     bus.on('piece', (p) => onPiece(p).catch((e) => console.warn('[telegram]', e.message)));
     bus.on('nuevo-cliente', (c) => {

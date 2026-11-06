@@ -90,6 +90,18 @@
       <label>Reglas y notas para el equipo
         <textarea name="notas" placeholder="Ej. Nunca usar la palabra 'barato'. Siempre mencionar envío gratis. Evitar fotos de personas."></textarea>
       </label>
+      <details><summary><b>🎬 Preferencias de video</b> (opcional)</summary>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <label>Nivel de edición<select name="vp_nivel"><option value="">Que decida el equipo</option><option value="1">1 · Básico (subtítulos y textos)</option><option value="2">2 · Movimiento (zooms, íconos)</option><option value="3">3 · Profesional (cámara, partículas, color)</option></select></label>
+          <label>Look de color<select name="vp_look"><option value="">Automático</option><option>natural</option><option>cine</option><option>calido</option><option>frio</option><option>neon</option><option>vhs</option><option>bn</option><option>pastel</option></select></label>
+          <label>Música<select name="vp_musica"><option value="">Automática</option><option>pop</option><option>energia</option><option>lofi</option><option>epica</option><option>urbano</option><option>suave</option><option>ninguna</option></select></label>
+          <label>Subtítulos<select name="vp_subtitulos"><option value="">Automático</option><option value="palabra">Palabra por palabra</option><option value="bloque">En bloque</option><option value="ninguno">Sin subtítulos</option></select></label>
+          <label>Estilo del texto<select name="vp_estiloTexto"><option value="">Automático</option><option>impacto</option><option>caja</option><option>neon</option><option>contorno</option></select></label>
+          <label>Sensación buscada<input name="vp_sensacion" placeholder="Ej. energética, elegante, cálida"></label>
+        </div>
+        <label style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="vp_emojis"> Usar emojis e íconos</label>
+        <label style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="vp_sfx"> Efectos de sonido</label>
+      </details>
       <div class="actions">
         <button type="button" id="cancel">Cancelar</button>
         <button class="primary">Guardar</button>

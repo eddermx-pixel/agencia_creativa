@@ -107,3 +107,19 @@ public/
 docs/
   PROGRESO.md, investigacion-video.md
 ```
+
+## Actualización: carpetas, skills, computadoras de agentes y avisos
+
+- **Tres carpetas por cliente**: `Referencias del cliente` (el cliente sube fotos con un enlace/QR sencillo: `/subir.html`), `Material en crudo` y `Resultado final` (solo lo aprobado, ordenado por campaña). Las carpetas antiguas se migran solas.
+- **Entregables automáticos**: al aprobar una pieza se guarda en `Resultado final/<fecha brief>/`. ZIP por cliente desde Clientes → Archivos.
+- **Computadora de cada agente**: clic en su escritorio (o botón "🖥️ Su computadora") → resumen de lo que hace, sus archivos y la carpeta compartida con visor de texto.
+- **Bandeja de decisiones** (`/decisiones.html`): preguntas, autorizaciones, piezas por aprobar y campañas detenidas (con Reintentar). Campana 🔔 con contador en todas las páginas, número en la pestaña, sonido, vibración y avisos del navegador.
+- **Telegram**: botones Aprobar/Rechazar, botón con enlace al visor (video con sonido) y recordatorios (`RECORDATORIO_MIN`, 45 por defecto, 0 = apagado, máx. 3 por asunto).
+- **Video**: niveles 1-3, looks, grano, partículas, 11 transiciones, música/efectos sintetizados y exportación MP4 con audio (verificado: pista Opus). Visor a pantalla completa en el celular con toque para activar sonido.
+- **Preferencias de video por cliente** (nivel, look, música, subtítulos, estilo de texto, sensación, emojis, efectos) en el kit de marca.
+- **Skills** de Remotion, HyperFrames y edición en 3 niveles instaladas con `scripts/instalar-skills.sh`.
+
+### Notas de licencia y límites
+- HyperFrames: Apache-2.0. Lemo Opuscar: MIT. **Remotion requiere licencia de pago para empresas**; por eso solo se usan sus skills como referencia, no se incluye su software.
+- Las películas completas de Lemo Opuscar y el render del lado del servidor necesitan Chromium + ffmpeg (Railway necesitaría un Dockerfile); hoy el render ocurre en el navegador. Catálogo de estilos de Lemo: pendiente.
+- Sin probar con servicios reales: Claude API, Pexels, cursos con búsqueda web y el bot de Telegram (solo con simulaciones).
