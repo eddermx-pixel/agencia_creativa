@@ -123,3 +123,11 @@ docs/
 - HyperFrames: Apache-2.0. Lemo Opuscar: MIT. **Remotion requiere licencia de pago para empresas**; por eso solo se usan sus skills como referencia, no se incluye su software.
 - Las películas completas de Lemo Opuscar y el render del lado del servidor necesitan Chromium + ffmpeg (Railway necesitaría un Dockerfile); hoy el render ocurre en el navegador. Catálogo de estilos de Lemo: pendiente.
 - Sin probar con servicios reales: Claude API, Pexels, cursos con búsqueda web y el bot de Telegram (solo con simulaciones).
+
+## Planeación mensual, búsqueda, métricas y GoHighLevel
+
+- **Objetivos de marca**: el kit del cliente ahora tiene objetivo, metas/KPIs del mes y estrategia de ads; los agentes los reciben en su prompt para alinear el contenido con los anuncios. Cada campaña puede tener objetivo (reconocimiento, tráfico, leads, ventas, fidelización, lanzamiento, comunidad), mes y etiquetas.
+- **Plan del mes** (`/plan.html`): calendario por cliente, ideas por objetivo/plataforma/formato; "Generar plan con IA" (usa kit, metas, ads, memoria y métricas previas; en demo usa una plantilla); "Producir ahora" convierte la idea en campaña.
+- **Buscar campañas** (`/campanas.html`): texto, cliente, objetivo, mes, estado; editar objetivo y etiquetas.
+- **Métricas** (`/metricas.html`): captura manual por pieza (alcance, interacciones, clics, leads, ventas, gasto); compara por estilo de video, tipo, objetivo, plataforma y agente; lo que mejor funciona se le da al generador del plan.
+- **GoHighLevel** (`server/planeacion.js`): variables `GHL_TOKEN` (Private Integration), `GHL_LOCATION_ID` (o por cliente), opcional `GHL_USER_ID`. Lista redes conectadas, programa en Social Planner manualmente o solo al aprobar (fecha del plan). Videos MP4 guardados en el archivo del cliente se entregan a GHL con un enlace firmado de solo lectura (`/pub/...`). Probado únicamente contra un servidor simulado: el formato exacto de GHL debe confirmarse con tu cuenta. Limitación: el arte (HTML) aún no se convierte a PNG, así que hoy se programan textos y videos.

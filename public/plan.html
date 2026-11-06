@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Plan del mes</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .bar select, .bar input { width: auto; }
+    .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+    .dow { text-align: center; font-size: 12px; color: var(--muted); }
+    .day { min-height: 96px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; min-width: 0; }
+    .day.out { opacity: .25; pointer-events: none; }
+    .day.hoy { border-color: var(--accent); }
+    .day .n { font-size: 11px; color: var(--muted); }
+    .it { font-size: 11px; line-height: 1.25; border-radius: 6px; padding: 3px 5px; background: var(--chip); border-left: 3px solid var(--c, #8b7bff); overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+    .it.s-aprobada, .it.s-programada, .it.s-publicada { background: rgba(34,201,147,.14); }
+    .it.s-en_produccion { background: rgba(255,181,71,.14); }
+    .leg { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--muted); }
+    .leg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; background: var(--c); }
+    .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+    dialog label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+    dialog .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    @media (max-width: 700px) { .day { min-height: 64px; } .it { font-size: 10px; } .day .it span { display: none; } }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a>
+    <span class="sp"></span>
+    <a id="usageChip" class="chip" href="uso.html"></a>
+  </header>
+  <main class="wrap">
+    <h1 style="margin:0">🗓️ Plan del mes</h1>
+    <div class="bar card" style="padding:10px 12px">
+      <select id="cl"></select>
+      <button id="prev">‹</button><b id="mes" style="min-width:130px;text-align:center"></b><button id="next">›</button>
+      <span class="sp" style="flex:1"></span>
+      <button id="nueva">＋ Idea</button>
+      <button class="primary" id="gen">✨ Generar plan con IA</button>
+    </div>
+    <div class="meta" id="meta"></div>
+    <div class="leg" id="leg"></div>
+    <div class="cal" id="cal"></div>
+    <div class="card" id="resumen"></div>
+  </main>
+  <dialog id="dlg"><div class="body" id="dlgB" style="min-width:min(520px,90vw)"></div></dialog>
+  <script type="module" src="plan.js"></script>
+</body>
+</html>

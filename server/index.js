@@ -15,6 +15,7 @@ import { initCursos, proponer, cursosDe } from './cursos.js';
 import * as ws from './workspace.js';
 import * as entregables from './entregables.js';
 import QRCode from 'qrcode';
+import * as planeacion from './planeacion.js';
 import crypto from 'node:crypto';
 import { ESTILOS, estiloById, demoSpec, resolveBroll, proxyBroll, brollDisponible, sugerirEstilos } from './video.js';
 
@@ -59,9 +60,19 @@ app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
 app.use((req, res, next) => {
   const q = new URL(req.url, 'http://x').searchParams.get('key');
   if (KEY && q === KEY) res.setHeader('Set-Cookie', keyCookie());
-  if (authorized(req) || req.path === '/api/agency/logo' || req.path === '/alta.html' || req.path === '/subir.html' || req.path.startsWith('/api/alta/')) return next();
+  if (authorized(req) || req.path === '/api/agency/logo' || req.path === '/alta.html' || req.path.startsWith('/pub/') || req.path === '/subir.html' || req.path.startsWith('/api/alta/')) return next();
   if (req.method === 'GET' && !req.path.startsWith('/api/')) return res.status(401).sendFile(path.join(here, 'login.html'));
   res.status(401).json({ error: 'Acceso restringido' });
+});
+
+// Enlaces públicos firmados para que GoHighLevel pueda descargar un archivo aprobado (sin abrir el resto)
+db.agency.pubSecret ||= crypto.randomBytes(24).toString('hex'); save();
+const firma = (cid, ruta) => crypto.createHmac('sha256', db.agency.pubSecret).update(`${cid}|${ruta}`).digest('hex').slice(0, 40);
+planeacion.setUrlPublica((cid, ruta, base) => `${base}/pub/${cid}/${firma(cid, ruta)}/${encodeURIComponent(path.basename(ruta))}?p=${encodeURIComponent(ruta)}`);
+app.get('/pub/:cid/:sig/:nombre', (req, res) => {
+  const ruta = String(req.query.p || '');
+  if (req.params.sig !== firma(req.params.cid, ruta) || !ruta.startsWith(`${files.FINAL}/`)) return res.status(403).end();
+  try { const { full } = files.safePath(req.params.cid, ruta); res.sendFile(full); } catch { res.status(404).end(); }
 });
 
 app.use(express.static(path.join(here, '..', 'public')));
@@ -112,12 +123,14 @@ app.get('/api/team', (req, res) => {
 
 // ---- Clientes (kit de marca) ----
 const clientSummary = ({ logo, ...c }) => ({ ...c, tieneLogo: !!logo });
-const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas', 'objetivo', 'competencia'];
+const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas', 'objetivo', 'competencia', 'metas', 'ads', 'ghlLocationId', 'ghlUserId'];
 
 function cleanClient(body, prev = {}) {
   const c = { ...prev };
   for (const f of CLIENT_FIELDS) if (f in body) c[f] = String(body[f] || '').trim().slice(0, 1500);
   if (Array.isArray(body.colores)) c.colores = body.colores.filter((x) => /^#[0-9a-f]{6}$/i.test(x)).slice(0, 5);
+  if (Array.isArray(body.ghlCuentas)) c.ghlCuentas = body.ghlCuentas.map((x) => String(x).slice(0, 80)).slice(0, 20);
+  if (typeof body.ghlAuto === 'boolean') c.ghlAuto = body.ghlAuto;
   if (body.videoPrefs && typeof body.videoPrefs === 'object') {
     const v = body.videoPrefs; const o = {};
     if ([1, 2, 3].includes(+v.nivel)) o.nivel = +v.nivel;
@@ -302,7 +315,7 @@ app.post('/api/campaigns', (req, res) => {
   }
   const cliente = cl?.nombre || req.body?.cliente;
   if (!cliente?.trim() || !brief?.trim()) return res.status(400).json({ error: 'Falta cliente o brief' });
-  const c = { id: newId('c'), clientId: cl?.id || null, cliente: cliente.trim(), brief: brief.trim(), estado: 'en_curso', creada: Date.now(), costo: 0 };
+  const c = { id: newId('c'), clientId: cl?.id || null, cliente: cliente.trim(), brief: brief.trim(), estado: 'en_curso', creada: Date.now(), costo: 0, objetivo: req.body?.objetivo || null, mes: /^\d{4}-\d{2}$/.test(req.body?.mes || '') ? req.body.mes : new Date().toISOString().slice(0, 7), etiquetas: [] };
   db.campaigns.push(c);
   save();
   log('jefe', `Nueva campaña: ${c.cliente}`, c.id);
@@ -328,6 +341,8 @@ function track(c, promise) {
     .catch((e) => { c.estado = 'error'; c.resumen = e.message; })
     .finally(() => { save(); bus.emit('campaign', c); });
 }
+
+planeacion.registrar(app, { baseUrl, runCampaign: (c) => runtime.runCampaign(c), track, clientSummary, ws });
 
 app.post('/api/campaigns/:id/retry', (req, res) => {
   const c = db.campaigns.find((x) => x.id === req.params.id);
@@ -426,6 +441,7 @@ app.put('/api/pieces/:id/video', async (req, res) => {
     files.ensureFolders(donde.clientId);
     const nombre = `${(ws.slug(p.titulo) || 'video')}.${ext}`;
     const r = await files.recibir(req, donde.clientId, files.FINAL, donde.sub, nombre);
+    p.mediaRuta = r.ruta; save();
     log('jefe', `💾 Guardó el video "${p.titulo}" en ${r.ruta}`, p.campaignId); bus.emit('files', { clientId: donde.clientId });
     res.json(r);
   } catch (e) { res.status(400).json({ error: e.message }); }

@@ -5,6 +5,7 @@ import { openFiles } from './archivos-cliente.js';
 const $ = (id) => document.getElementById(id);
 let editing = null;   // id del cliente en edición (null = nuevo)
 let colores = [];
+let ghlSel = [];
 let logo;             // undefined = sin cambios, null = quitar, string = nuevo
 
 function render() {
@@ -58,7 +59,9 @@ function open(c) {
   $('dlgTitle').textContent = c ? `Editar ${c.nombre}` : 'Nuevo cliente';
   const f = $('form');
   f.reset();
-  for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas']) f.elements[k].value = c?.[k] || '';
+  for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas', 'metas', 'ads', 'ghlLocationId']) f.elements[k].value = c?.[k] || '';
+  f.elements.ghlAuto.checked = !!c?.ghlAuto; ghlSel = [...(c?.ghlCuentas || [])];
+  $('ghlCuentas').textContent = ghlSel.length ? `${ghlSel.length} red(es) elegidas` : 'Aún no eliges redes.';
   const vp = c?.videoPrefs || {};
   for (const k of ['nivel', 'look', 'musica', 'subtitulos', 'estiloTexto', 'sensacion']) f.elements[`vp_${k}`].value = vp[k] ?? '';
   f.elements.vp_emojis.checked = vp.emojis !== false; f.elements.vp_sfx.checked = vp.sfx !== false;
@@ -82,7 +85,8 @@ $('form').onsubmit = async (e) => {
   e.preventDefault();
   const f = e.target.elements;
   const body = { colores };
-  for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas']) body[k] = f[k].value;
+  for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas', 'metas', 'ads', 'ghlLocationId']) body[k] = f[k].value;
+  body.ghlCuentas = ghlSel; body.ghlAuto = f.ghlAuto.checked;
   const vp = {};
   for (const k of ['nivel', 'look', 'musica', 'subtitulos', 'estiloTexto', 'sensacion']) if (f[`vp_${k}`].value) vp[k] = f[`vp_${k}`].value;
   vp.emojis = f.vp_emojis.checked; vp.sfx = f.vp_sfx.checked; body.videoPrefs = vp;
@@ -136,4 +140,13 @@ $('qrPrint').onclick = () => {
   const w = window.open('', '_blank');
   w.document.write(`<html><head><title>QR alta de cliente</title></head><body style="font-family:system-ui;text-align:center;padding:40px"><h1>¡Bienvenido!</h1><p>Escanea para registrar tu marca</p><div style="width:360px;margin:20px auto">${$('qrBox').innerHTML}</div><p style="font-size:12px;color:#666">${esc($('qrUrl').value)}</p><script>window.onload=()=>window.print()<\/script></body></html>`);
   w.document.close();
+};
+
+$('ghlLoad').onclick = async () => {
+  const box = $('ghlCuentas'); box.textContent = 'Consultando…';
+  try {
+    const l = await api(`/api/ghl/cuentas${editing ? `?clientId=${editing}` : ''}`);
+    box.innerHTML = l.length ? l.map((a) => `<label style="flex-direction:row;gap:6px;align-items:center"><input type="checkbox" value="${esc(a.id)}" ${ghlSel.includes(a.id) ? 'checked' : ''}> ${esc(a.plataforma || '')} · ${esc(a.nombre || a.id)}</label>`).join('') : 'No hay redes conectadas en esa subcuenta.';
+    box.querySelectorAll('input').forEach((i) => (i.onchange = () => { ghlSel = [...box.querySelectorAll('input:checked')].map((x) => x.value); }));
+  } catch (e) { box.textContent = e.message; }
 };

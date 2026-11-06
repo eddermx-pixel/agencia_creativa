@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Campañas</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 1000px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .f { display: flex; flex-wrap: wrap; gap: 8px; }
+    .f input, .f select { width: auto; flex: 1 1 150px; }
+    .row2 { display: flex; flex-direction: column; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+    .tags span { background: var(--chip); border-radius: 999px; padding: 2px 9px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a>
+    <span class="sp"></span>
+    <a id="usageChip" class="chip" href="uso.html"></a>
+  </header>
+  <main class="wrap">
+    <h1 style="margin:0">🔎 Campañas</h1>
+    <div class="f card" style="padding:10px 12px">
+      <input id="q" placeholder="Buscar por cliente, idea, objetivo o etiqueta…">
+      <select id="fcl"></select><select id="fob"></select><input type="month" id="fmes"><select id="fes"><option value="">Cualquier estado</option><option value="en_curso">En curso</option><option value="terminada">Terminada</option><option value="error">Con error</option><option value="interrumpida">Interrumpida</option></select>
+    </div>
+    <div id="n" class="empty"></div>
+    <div id="lista" style="display:flex;flex-direction:column;gap:10px"></div>
+  </main>
+  <script type="module" src="campanas.js"></script>
+</body>
+</html>

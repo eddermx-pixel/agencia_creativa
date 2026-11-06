@@ -33,7 +33,7 @@ function systemFor(agent, campaign) {
   const guia = ['video', 'director'].includes(agent.id) ? `\n\n${videoGuide(cl?.estilosVideo || [], cl?.videoPrefs || {})}` : '';
   const archivos = resumenParaAgentes(cl?.id);
   const cursos = aprendizajes(agent.id);
-  return `${REGLAS}\n\n${agent.prompt}${guia}\n\n${personaText(agent)}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${archivos ? `\n\n${archivos}` : ''}${cursos ? `\n\n${cursos}` : ''}${mem ? `\n\n${mem}` : ''}`;
+  return `${REGLAS}\n\n${agent.prompt}${guia}\n\n${personaText(agent)}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${campaign.objetivo ? `\n\nObjetivo de esta campaña: ${campaign.objetivo}. Toda pieza debe servir a ese objetivo y a la estrategia de ads de la marca.` : ''}${archivos ? `\n\n${archivos}` : ''}${cursos ? `\n\n${cursos}` : ''}${mem ? `\n\n${mem}` : ''}`;
 }
 
 // ---------- Herramientas (definición para la API) ----------

@@ -188,7 +188,7 @@ $('btnReqs').onclick = () => $('reqCard').scrollIntoView({ behavior: 'smooth' })
 $('formNew').addEventListener('submit', async (e) => {
   if (e.submitter?.value !== 'ok') return;
   const f = new FormData(e.target);
-  try { await api('/api/campaigns', { clientId: f.get('clientId'), cliente: f.get('cliente'), brief: f.get('brief') }); e.target.reset(); }
+  try { await api('/api/campaigns', { clientId: f.get('clientId'), cliente: f.get('cliente'), brief: f.get('brief'), objetivo: f.get('objetivo') }); e.target.reset(); }
   catch (err) { e.preventDefault(); alert(err.message); }
 });
 

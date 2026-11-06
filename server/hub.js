@@ -192,6 +192,8 @@ export function brandText(client) {
   if (client.tipografia) l.push(`- Tipografía preferida: ${client.tipografia} (si no está disponible, usa la fuente del sistema más parecida)`);
   if (client.notas) l.push(`- Reglas y notas: ${client.notas}`);
   if (client.objetivo) l.push(`- Objetivo principal: ${client.objetivo}`);
+  if (client.metas) l.push(`- Metas y KPIs del mes: ${client.metas}`);
+  if (client.ads) l.push(`- Estrategia de ads (el contenido debe alinearse con esto): ${client.ads}`);
   if (client.competencia) l.push(`- Competencia y marcas que admira: ${client.competencia}`);
   const redes = Object.entries(client.redes || {}).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`);
   if (redes.length) l.push(`- Redes: ${redes.join(' · ')}`);

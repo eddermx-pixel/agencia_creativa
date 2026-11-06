@@ -90,6 +90,18 @@
       <label>Reglas y notas para el equipo
         <textarea name="notas" placeholder="Ej. Nunca usar la palabra 'barato'. Siempre mencionar envío gratis. Evitar fotos de personas."></textarea>
       </label>
+      <label>📊 Metas del mes / KPIs
+        <textarea name="metas" rows="2" placeholder="Ej. 40 leads, 15 ventas, 20k de alcance, costo por lead menor a $80."></textarea>
+      </label>
+      <label>📢 Estrategia de ads (para alinear el contenido)
+        <textarea name="ads" rows="2" placeholder="Ej. Meta Ads $5,000/mes a mujeres 25-40 en CDMX, oferta 2x1 de temporada, mensaje: 'pan artesanal hecho hoy'. Google Ads por 'panadería cerca'."></textarea>
+      </label>
+      <details><summary><b>🔌 GoHighLevel</b> (publicar redes ya autorizadas)</summary>
+        <label>Location ID (subcuenta)<input name="ghlLocationId" placeholder="Si lo dejas vacío usa GHL_LOCATION_ID"></label>
+        <div id="ghlCuentas" class="empty" style="font-size:13px"></div>
+        <button type="button" id="ghlLoad">Cargar redes conectadas</button>
+        <label style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="ghlAuto"> Programar automáticamente al aprobar (usa la fecha del plan del mes)</label>
+      </details>
       <details><summary><b>🎬 Preferencias de video</b> (opcional)</summary>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
           <label>Nivel de edición<select name="vp_nivel"><option value="">Que decida el equipo</option><option value="1">1 · Básico (subtítulos y textos)</option><option value="2">2 · Movimiento (zooms, íconos)</option><option value="3">3 · Profesional (cámara, partículas, color)</option></select></label>
