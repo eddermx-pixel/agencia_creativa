@@ -6,6 +6,16 @@ import { DATA_DIR, db, save } from './store.js';
 
 const API = process.env.ELEVENLABS_API_URL || 'https://api.elevenlabs.io';
 const DIR = path.join(DATA_DIR, 'voz');
+// ELEVENLABS_VOICE_ID acepta una o varias voces separadas por coma. Con nombre: "Sofia:abc123, Carlos:def456".
+export function voces() {
+  return (process.env.ELEVENLABS_VOICE_ID || '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => { const i = x.indexOf(':'); return i > 0 ? { nombre: x.slice(0, i).trim(), id: x.slice(i + 1).trim() } : { nombre: x.slice(0, 6), id: x }; });
+}
+// Cada video usa una sola voz (consistente en todas sus escenas); entre videos van rotando.
+function elegirVoz(semilla) {
+  const l = voces(); if (!l.length) return '';
+  const h = crypto.createHash('sha1').update(String(semilla || Math.random())).digest()[0];
+  return l[h % l.length].id;
+}
 export const vozDisponible = () => !!process.env.ELEVENLABS_API_KEY;
 const MODELO = () => process.env.ELEVENLABS_MODEL || 'eleven_multilingual_v2';
 // USD por cada 1,000 caracteres (ajústalo con tu plan): ELEVENLABS_USD_POR_1000
@@ -29,7 +39,7 @@ async function sintetizar(texto, voiceId) {
 // Agrega e.voz (URL) a cada escena con narración. Si falla, el video sigue sin esa voz.
 export async function agregarVoz(spec, { campaignId = null, agente = 'video', voiceId = '' } = {}) {
   if (!vozDisponible()) return { usadas: 0, motivo: 'sin llave' };
-  const voz = voiceId || process.env.ELEVENLABS_VOICE_ID;
+  const voz = voiceId || elegirVoz(campaignId);
   if (!voz) return { usadas: 0, motivo: 'sin voz' };
   let chars = 0, usadas = 0, error = '';
   for (const e of spec.escenas) {
@@ -57,5 +67,5 @@ export function registrar(app) {
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.type('audio/mpeg').sendFile(f);
   });
-  app.get('/api/voz/estado', (req, res) => res.json({ disponible: vozDisponible(), voz: !!process.env.ELEVENLABS_VOICE_ID, modelo: MODELO() }));
+  app.get('/api/voz/estado', (req, res) => res.json({ disponible: vozDisponible(), voz: voces().length > 0, voces: voces().map((v) => v.nombre), modelo: MODELO() }));
 }
