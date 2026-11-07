@@ -31,7 +31,7 @@ function fitIframes(root) {
 // Solo la tarjeta de arriba carga el contenido pesado; la de atrás es un cartón ligero.
 function mediaHTML(p, arriba) {
   if (!arriba) return `<div class="ph">${ICONO[p.tipo] || '📦'}</div>`;
-  const src = `/api/pieces/${p.id}/render`;
+  const src = `/api/pieces/${p.id}/render?t=${p.rt}`;
   if (p.tipo === 'arte') return `<img src="${src}" alt="${esc(p.titulo)}" decoding="async" draggable="false">`;
   if (p.tipo === 'video') return ['v2', 'hf'].includes(p.motor)
     ? `<iframe class="v2" src="/player.html?id=${p.id}&embed=1&lite=1" title="${esc(p.titulo)}" tabindex="-1"></iframe>`
@@ -51,7 +51,7 @@ function cardEl(p, back) {
     <div class="media">${mediaHTML(p, !back)}${back ? '' : '<button class="zoom" title="Ver en pantalla completa" aria-label="Pantalla completa">⛶</button>'}</div>
     <div class="meta"><h3>${esc(p.titulo)}</h3><p>${esc(p.descripcion || '')}</p></div>`;
   el.querySelector('.who').prepend(avatar(a, 40));
-  if (!back && p.tipo === 'texto') fetch(`/api/pieces/${p.id}/render`).then((r) => r.text()).then((t) => { const pre = el.querySelector('pre'); if (pre) pre.textContent = t; });
+  if (!back && p.tipo === 'texto') fetch(`/api/pieces/${p.id}/render?t=${p.rt}`).then((r) => r.text()).then((t) => { const pre = el.querySelector('pre'); if (pre) pre.textContent = t; });
   return el;
 }
 
@@ -148,7 +148,7 @@ function openViewer(p, { acciones } = {}) {
   visto = p;
   const body = $('vBody'); body.innerHTML = '';
   $('vTitle').textContent = p.titulo;
-  const src = `/api/pieces/${p.id}/render`;
+  const src = `/api/pieces/${p.id}/render?t=${p.rt}`;
   if (p.tipo === 'video' && ['v2', 'hf'].includes(p.motor)) body.innerHTML = `<iframe class="v2" src="/player.html?id=${p.id}&embed=1&full=1" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`;
   else if (p.tipo === 'video') { body.innerHTML = `<iframe class="v1" sandbox="allow-scripts" src="${src}"></iframe><div class="nosound">Este video no tiene sonido (versión anterior)</div>`; fitViewer(); }
   else if (p.tipo === 'arte') body.innerHTML = `<img src="${src}" alt="${esc(p.titulo)}">`;
@@ -202,8 +202,8 @@ function renderGrid() {
   for (const p of list) {
     const t = document.createElement('div');
     t.className = 'tile';
-    const inner = p.tipo === 'arte' ? `<img src="/api/pieces/${p.id}/render" alt="" loading="lazy">`
-      : p.tipo === 'video' && !['v2', 'hf'].includes(p.motor) ? `<iframe class="v1" sandbox="allow-scripts" src="/api/pieces/${p.id}/render" loading="lazy" tabindex="-1"></iframe>`
+    const inner = p.tipo === 'arte' ? `<img src="/api/pieces/${p.id}/render?t=${p.rt}" alt="" loading="lazy">`
+      : p.tipo === 'video' && !['v2', 'hf'].includes(p.motor) ? `<iframe class="v1" sandbox="allow-scripts" src="/api/pieces/${p.id}/render?t=${p.rt}" loading="lazy" tabindex="-1"></iframe>`
       : `<div class="ph" style="font-size:40px">${ICONO[p.tipo] || '📦'}</div>`;
     t.innerHTML = `<div class="th">${inner}</div><div class="t">${esc(p.titulo)}<span>${esc(byId(p.agente)?.nombre || '')} · ${hace(p.creada)}</span></div>`;
     t.onclick = () => openViewer(p, { acciones: false });

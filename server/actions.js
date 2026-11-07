@@ -74,6 +74,7 @@ export function makeActions(agentId, campaign, key = null) {
 
     async entregar({ tipo, titulo, descripcion = '', contenido, version = 1 }) {
       let motor = null;
+      if (tipo === 'video' && ['video', 'editor2'].includes(agentId) && !(isSpec(contenido) || typeof contenido === 'object')) throw new Error('Los videos deben entregarse como el guion JSON del motor v2 (con voz, música y gráficos), no como HTML. Vuelve a entregar con el formato GUION DE VIDEO.');
       if (tipo === 'video' && (isSpec(contenido) || typeof contenido === 'object')) {
         const spec = normalizeSpec(contenido); // lanza error si el JSON no sirve: el agente lo corrige
         setAgent(agentId, { burbuja: brollDisponible() ? '🎥 Buscando tomas reales…' : 'Armando el video…' });

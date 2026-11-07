@@ -20,7 +20,7 @@ function fitIframes(root) {
 }
 
 function thumb(p) {
-  const src = `/api/pieces/${p.id}/render`;
+  const src = `/api/pieces/${p.id}/render?t=${p.rt}`;
   if (p.tipo === 'arte') return `<img src="${src}" alt="" loading="lazy">`;
   if (p.tipo === 'video') return `<iframe ${['v2', 'hf'].includes(p.motor) ? '' : 'sandbox="allow-scripts"'} src="${['v2', 'hf'].includes(p.motor) ? `/player.html?id=${p.id}&embed=1` : src}" loading="lazy" tabindex="-1"></iframe>`;
   return `<pre data-src="${src}">…</pre>`;
@@ -89,7 +89,7 @@ function showBrief(c) {
 }
 
 function showPiece(p, c) {
-  const src = `/api/pieces/${p.id}/render`;
+  const src = `/api/pieces/${p.id}/render?t=${p.rt}`;
   const versiones = data.pieces.filter((x) => x.campaignId === p.campaignId && x.agente === p.agente && x.tipo === p.tipo).sort((a, b) => a.creada - b.creada);
   const media = p.tipo === 'arte' ? `<img src="${src}" alt="">` : p.tipo === 'video' ? `<iframe ${['v2', 'hf'].includes(p.motor) ? '' : 'sandbox="allow-scripts"'} src="${['v2', 'hf'].includes(p.motor) ? `/player.html?id=${p.id}&embed=1` : src}"></iframe>` : `<pre data-src="${src}">…</pre>`;
   $('dlgBody').innerHTML = `

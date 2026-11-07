@@ -7,7 +7,7 @@ import express from 'express';
 import { WebSocketServer } from 'ws';
 import { db, save, newId } from './store.js';
 import { publicRoster, byId } from './roster.js';
-import { bus, agentState, answerRequest, judgePiece, log, pieceSummary, usageSummary, usageReport, addMemory } from './hub.js';
+import { bus, agentState, answerRequest, judgePiece, log, pieceSummary, tokenPieza, usageSummary, usageReport, addMemory } from './hub.js';
 import { startTelegram } from './telegram.js';
 import { makeZip } from './zip.js';
 import * as files from './files.js';
@@ -66,6 +66,8 @@ app.post('/login', express.urlencoded({ extended: false }), (req, res) => {
 app.use((req, res, next) => {
   const q = new URL(req.url, 'http://x').searchParams.get('key');
   if (KEY && q === KEY) res.setHeader('Set-Cookie', keyCookie());
+  const mr = /^\/api\/pieces\/([\w-]+)\/render$/.exec(req.path);
+  if (mr && new URL(req.url, 'http://x').searchParams.get('t') === tokenPieza(mr[1])) return next();
   if (authorized(req) || req.path === '/api/agency/logo' || req.path === '/alta.html' || req.path.startsWith('/pub/') || req.path === '/subir.html' || req.path.startsWith('/api/alta/')) return next();
   if (req.method === 'GET' && !req.path.startsWith('/api/')) return res.status(401).sendFile(path.join(here, 'login.html'));
   res.status(401).json({ error: 'Acceso restringido' });

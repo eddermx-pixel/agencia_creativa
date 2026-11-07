@@ -1,6 +1,7 @@
 // El "centro" de la oficina: estado de cada agente, solicitudes al jefe,
 // piezas para el feed y bitácora. Todo cambio se emite como evento para
 // que la interfaz (WebSocket) y Telegram se enteren al instante.
+import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { db, save, newId } from './store.js';
 import * as ws from './workspace.js';
@@ -110,9 +111,11 @@ export function judgePiece(id, { aprobado, comentario = '', via = 'web' }) {
   return p;
 }
 
+// Token para ver UNA pieza dentro de un iframe aislado, sin depender de cookies (algunos navegadores no las envían a iframes con sandbox)
+export const tokenPieza = (id) => crypto.createHmac('sha256', db.agency.pubSecret || 'x').update(`render|${id}`).digest('hex').slice(0, 24);
 export function pieceSummary(p) {
   const { contenido, ...rest } = p;
-  return rest;
+  return { ...rest, rt: tokenPieza(p.id) };
 }
 
 // ---- Costo de la API de Claude (aprox., USD por millón de tokens) ----
