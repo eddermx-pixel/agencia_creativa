@@ -13,7 +13,7 @@ import { resumenParaAgentes, imagenesReferencia } from './files.js';
 import { aprendizajes, parseCurso } from './cursos.js';
 import * as ws from './workspace.js';
 import { makeActions, withAgent } from './actions.js';
-import { hfGuide, estiloPelicula, hfDisponible } from './hyperframes.js';
+import { hfGuide, estiloPelicula, hfDisponible, buscarBloques, verBloque } from './hyperframes.js';
 import { remotionGuide, remotionDisponible } from './remotion.js';
 
 const client = new Anthropic({ maxRetries: 4, timeout: 6 * 60 * 1000 });
@@ -81,6 +81,7 @@ const TOOLS = {
     input_schema: obj({
       titulo: { type: 'string' }, descripcion: { type: 'string', description: 'Qué muestra el video y qué estilo usaste' },
       html: { type: 'string', description: 'El archivo index.html completo de la composición' },
+      bloques: { type: 'array', description: 'Nombres de bloques del registro que tu HTML usa (el servidor los instala)', items: { type: 'string' } },
       narraciones: { type: 'array', description: 'Voz en off: texto hablado y segundo de inicio', items: obj({ inicio: { type: 'number' }, texto: { type: 'string' } }, ['inicio', 'texto']) },
       musicaPrompt: { type: 'string', description: 'Estilo de la música instrumental (inglés, sin artistas)' },
       tomas: { type: 'array', description: 'Tomas de stock a descargar', items: obj({ id: { type: 'string' }, busqueda: { type: 'string' }, duracion: { type: 'number' } }, ['id', 'busqueda']) },
@@ -98,6 +99,14 @@ const TOOLS = {
       tomas: { type: 'array', items: obj({ id: { type: 'string' }, busqueda: { type: 'string' }, duracion: { type: 'number' } }, ['id', 'busqueda']) },
       version: { type: 'number' },
     }, ['titulo', 'codigo', 'duracion']),
+  },
+  buscar_bloques: {
+    description: 'Busca en el registro de ~450 bloques listos de HyperFrames (partículas, zoom, cámara, transiciones, glitch, títulos). Escribe palabras en inglés.',
+    input_schema: obj({ consulta: { type: 'string' } }, ['consulta']),
+  },
+  ver_bloque: {
+    description: 'Lee un bloque del registro: sus archivos y cómo montarlo en tu composición.',
+    input_schema: obj({ nombre: { type: 'string' } }, ['nombre']),
   },
   ver_estilo_pelicula: {
     description: 'Lee la guía de dirección de arte de uno de los 66 estilos de película (Lemo Opuscar) para aplicarla en tu composición HyperFrames.',
@@ -129,7 +138,7 @@ const TOOLS = {
 function toolDefs(agentId) {
   const names = ['estado', 'preguntar_al_jefe', 'pedir_autorizacion', 'guardar_memoria', 'ver_archivos', 'leer_archivo', 'guardar_nota'];
   if (byId[agentId].puedeEntregar) names.push('entregar_pieza');
-  if (agentId === 'editor2' && hfDisponible()) names.push('entregar_hyperframes', 'ver_estilo_pelicula');
+  if (agentId === 'editor2' && hfDisponible()) names.push('entregar_hyperframes', 'ver_estilo_pelicula', 'buscar_bloques', 'ver_bloque');
   if (agentId === 'editor2' && remotionDisponible()) names.push('entregar_remotion');
   const defs = names.map((name) => ({ name, ...TOOLS[name] }));
   if (agentId === 'director') {
@@ -164,6 +173,8 @@ async function runTool(job, block, campaign) {
     case 'entregar_remotion':
       if (!i.codigo) throw new Error('Falta el código del componente');
       return a.entregarRemotion(i);
+    case 'buscar_bloques': return buscarBloques(i.consulta);
+    case 'ver_bloque': return verBloque(i.nombre);
     case 'ver_estilo_pelicula': return estiloPelicula(i.slug);
     case 'hacer_preguntas': return a.cuestionario(i.intro, i.preguntas);
     case 'presentar_concepto': return a.concepto(i.titulo || 'Concepto', i.detalle || '');

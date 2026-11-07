@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Motores de video</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>.wrap{max-width:720px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:12px}.row{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--panel);border:1px solid var(--line);border-radius:12px}.ok{color:#22c993}.no{color:#ff5d6c}</style>
+</head>
+<body>
+  <header class="top"><a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a><a id="brand" class="brand" href="./"></a><span class="sp"></span></header>
+  <main class="wrap">
+    <h1 style="margin:0">🎞️ Motores de video</h1>
+    <div id="lista">Consultando…</div>
+    <div class="card" style="padding:12px"><b>Prueba real</b><p class="empty" style="font-size:13px;margin:6px 0">Renderiza un video de 2 segundos con cada motor en este servidor (tarda de 30 s a 2 min la primera vez).</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button id="bhf">▶️ Probar HyperFrames</button><button id="brm">▶️ Probar Remotion</button></div><div id="res" style="margin-top:10px"></div></div>
+  </main>
+  <script type="module">
+    import { esc } from './common.js';
+    const $ = (i) => document.getElementById(i);
+    const fila = (n, ok, d = '') => `<div class="row"><span>${esc(n)}</span><span class="${ok ? 'ok' : 'no'}">${ok ? '✅' : '❌'} ${esc(d)}</span></div>`;
+    async function estado() {
+      const d = await (await fetch('/api/motores/estado')).json();
+      $('lista').innerHTML = [fila('ffmpeg', !!d.ffmpeg, d.ffmpeg || 'no encontrado'), fila('Render en el servidor (Chromium)', d.render_servidor === 'listo', d.render_servidor), fila('HyperFrames', d.hyperframes.instalado, d.hyperframes.version ? `v${d.hyperframes.version}` : 'no instalado'), fila('Remotion', d.remotion.instalado, d.remotion.version ? `v${d.remotion.version}` : 'no instalado'), fila('Estilos de película (Lemo Opuscar)', d.estilos_de_pelicula > 0, `${d.estilos_de_pelicula} estilos`), fila('Voz en off (ElevenLabs)', d.voz_elevenlabs), fila('Música con IA (ElevenLabs)', d.musica_ia), fila('Tomas de stock (Coverr/otras)', d.tomas_stock)].join('');
+    }
+    async function probar(que, b) { b.disabled = true; $('res').textContent = 'Renderizando… no cierres esta página.'; try { const d = await (await fetch(`/api/motores/estado?probar=${que}`)).json(); const r = d.pruebas?.[que === 'hf' ? 'hyperframes' : 'remotion']; $('res').innerHTML = r?.ok ? `<span class="ok">✅ Funciona (${r.segundos} s)</span>` : `<span class="no">❌ Falló: ${esc(r?.error || 'sin respuesta')}</span>`; } catch (e) { $('res').textContent = e.message; } b.disabled = false; }
+    $('bhf').onclick = (e) => probar('hf', e.target); $('brm').onclick = (e) => probar('remotion', e.target);
+    estado();
+  </script>
+</body>
+</html>

@@ -57,10 +57,10 @@ export function makeActions(agentId, campaign, key = null) {
         : `CONCEPTO NO APROBADO. Cambios pedidos: ${r.respuesta || '(sin comentario: propón otra dirección)'}. Ajusta el concepto y vuelve a presentarlo antes de producir.`;
     },
 
-    async entregarHF({ titulo, descripcion = '', html, codigo, duracion, narraciones = [], musicaPrompt = '', tomas = [], version = 1 }, via = 'hf') {
+    async entregarHF({ titulo, descripcion = '', html, bloques = [], codigo, duracion, narraciones = [], musicaPrompt = '', tomas = [], version = 1 }, via = 'hf') {
       setAgent(agentId, { estado: 'trabajando', burbuja: '🎞️ Validando y renderizando el video…' });
       const clave = key || `${cid}-${Date.now()}`;
-      const r = via === 'remotion' ? await producirRemotion({ clave, codigo, duracion, narraciones, musicaPrompt, tomas, campaignId: cid, agente: agentId }) : await producir({ clave, html, narraciones, musicaPrompt, tomas, campaignId: cid, agente: agentId });
+      const r = via === 'remotion' ? await producirRemotion({ clave, codigo, duracion, narraciones, musicaPrompt, tomas, campaignId: cid, agente: agentId }) : await producir({ clave, html, bloques, narraciones, musicaPrompt, tomas, campaignId: cid, agente: agentId });
       const contenido = JSON.stringify({ hf: 1, clave: r.clave, archivo: r.archivo, duracion: r.duracion });
       setAgent(agentId, { estado: 'entregando', burbuja: `Esperando tu swipe: ${titulo}`.slice(0, 140) });
       const p = await submitPiece({ agente: agentId, campaignId: cid, tipo: 'video', titulo, descripcion: `${descripcion} (${r.resumen})`.trim(), contenido, version, key, motor: 'hf' });

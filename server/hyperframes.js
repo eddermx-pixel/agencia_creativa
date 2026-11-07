@@ -109,9 +109,44 @@ export async function generarAudio({ narraciones = [], musicaPrompt = '', duraci
   return { voces, musica };
 }
 
+// ---------- Registro de bloques listos (≈450: transiciones, partículas, zoom, cámara, glitch, títulos…) ----------
+export async function buscarBloques(consulta) {
+  const q = String(consulta || '').trim().slice(0, 80);
+  if (!q) throw new Error('Escribe qué buscas (en inglés), p. ej. "particles", "zoom", "camera shake", "glitch transition".');
+  const r = await correr(process.execPath, [HF_BIN, 'catalog', q, '--json'], { cwd: RAIZ, timeout: 60000 });
+  let d; try { d = JSON.parse(r.out); } catch { throw new Error('No se pudo consultar el catálogo.'); }
+  const l = (d.results || []).slice(0, 14).map((x) => `- ${x.name} (${x.type}): ${String(x.description || x.title || '').slice(0, 150)}`);
+  return l.length ? `${l.length} resultado(s) de ${d.total} bloques para "${q}":\n${l.join('\n')}\n\nUsa ver_bloque(nombre) para ver cómo se integra y pasa los nombres elegidos en "bloques" al entregar.` : `Sin resultados para "${q}". Prueba otra palabra en inglés.`;
+}
+export async function verBloque(nombre) {
+  const n = seguro(nombre); if (!n) throw new Error('Falta el nombre del bloque.');
+  const tmp = path.join(DATA_DIR, 'tmp-hf', `ver-${Date.now()}-${n}`);
+  fs.mkdirSync(tmp, { recursive: true });
+  try {
+    const r = await correr(process.execPath, [HF_BIN, 'add', n, '--json', '--no-clipboard'], { cwd: tmp, timeout: 90000 });
+    let d; try { d = JSON.parse(r.out); } catch { throw new Error(`No existe el bloque "${n}" o no se pudo leer. Búscalo con buscar_bloques.`); }
+    if (!d.ok) throw new Error(`No se pudo leer el bloque "${n}".`);
+    const archivos = (d.written || []).filter((f) => f.startsWith(tmp) && /\.(html|css|js|json|md)$/i.test(f)).slice(0, 3).map((f) => `// ${path.relative(tmp, f)}\n${fs.readFileSync(f, 'utf8').slice(0, 7000)}`);
+    return `BLOQUE ${n} (${d.type}). Se instala en: ${(d.written || []).map((f) => path.relative(tmp, f)).join(', ')}\nSnippet: ${d.snippet}\n\nUso: si es un BLOQUE (block) se monta como sub-composición: un host <div id="ID" data-composition-id="ID" data-composition-src="<ruta>" data-start data-duration data-width="1080" data-height="1920"></div> (el id del host, el de la escena y el de la línea de tiempo deben coincidir; pasa su nombre en "bloques" al entregar). Si es un COMPONENTE (component) copia su HTML, CSS y animación dentro de tu index.html (adáptalo a 1080×1920; no hace falta pasarlo en "bloques"). Contenido:\n\n${archivos.join('\n\n')}`;
+  } finally { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} }
+}
+async function instalarBloques(dir, bloques) {
+  for (const b of (bloques || []).slice(0, 8)) {
+    const n = seguro(b); if (!n) continue;
+    const r = await correr(process.execPath, [HF_BIN, 'add', n, '--json', '--no-clipboard'], { cwd: dir, timeout: 90000 });
+    let d; try { d = JSON.parse(r.out); } catch { d = null; }
+    if (!d?.ok) throw new Error(`No se pudo instalar el bloque "${n}": ${(r.err || r.out).slice(-150)}`);
+    // GSAP local (más rápido y sin depender de internet al renderizar)
+    for (const f of d.written || []) if (f.endsWith('.html') && fs.existsSync(f)) {
+      const t = fs.readFileSync(f, 'utf8'); const t2 = t.replace(/https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@[^"']*\/gsap\.min\.js/g, 'assets/gsap.min.js');
+      if (t2 !== t) fs.writeFileSync(f, t2);
+    }
+  }
+}
+
 // ---------- Entrega ----------
 // Devuelve { clave, archivo, duracion, resumen } o lanza Error con instrucciones para que el agente corrija.
-export async function producir({ clave, html, narraciones = [], musicaPrompt = '', tomas = [], campaignId = null, agente = 'editor2', formato = 'vertical' }) {
+export async function producir({ clave, html, bloques = [], narraciones = [], musicaPrompt = '', tomas = [], campaignId = null, agente = 'editor2', formato = 'vertical' }) {
   if (!hfDisponible()) throw new Error('HyperFrames no está instalado en este servidor.');
   const k = seguro(clave); const dir = path.join(HF_DIR, k); const final = path.join(dir, 'final.mp4');
   if (fs.existsSync(final)) return { clave: k, archivo: 'final.mp4', duracion: await dur(final), resumen: 'ya estaba renderizado' };
@@ -120,6 +155,7 @@ export async function producir({ clave, html, narraciones = [], musicaPrompt = '
   try {
     fs.copyFileSync(GSAP, path.join(dir, 'assets', 'gsap.min.js'));
     const notasTomas = await descargarTomas(dir, tomas, formato);
+    await instalarBloques(dir, bloques);
     fs.writeFileSync(path.join(dir, 'index.html'), limpio);
     return await conTurno(async () => {
       const c = await correr(process.execPath, [HF_BIN, 'check', '--json'], { cwd: dir, timeout: 240000 });
@@ -170,6 +206,8 @@ PLANTILLA MÍNIMA (cópiala y amplíala):
 <script>window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});
 tl.fromTo("#t1",{opacity:0,y:60},{opacity:1,y:0,duration:.6,ease:"power4.out"},.2).fromTo("#t2",{opacity:0,scale:.8},{opacity:1,scale:1,duration:.5,ease:"back.out(1.7)"},1.2).fromTo("#bar",{width:0},{width:800,duration:2,ease:"power2.inOut"},2);
 window.__timelines["main"]=tl;</script></body></html>
+
+BLOQUES LISTOS (≈450): partículas (confetti, starfield, snow…), zoom y cámara (camera-shake, cinematic-zoom, parallax-zoom, camera-dolly-zoom…), 75 transiciones (distorsión, radial, mecánicas, disolvencia…), glitch, títulos y textos cinéticos. Antes de dibujar algo a mano, búscalo: buscar_bloques("particles") → ver_bloque("nombre") → monta su archivo como sub-composición en tu index.html y pasa los nombres en "bloques" al entregar (el servidor los instala). Para movimiento de cámara en tu propio HTML: anima la escala/posición de un contenedor que envuelve toda la escena (zoom lento, push-in, shake con seno determinista).
 
 ESTILOS DE PELÍCULA (Lemo Opuscar, MIT): 66 direcciones de arte. Si el concepto pide un look distinto del genérico, elige UNO de la lista, lee su guía con ver_estilo_pelicula y aplica su paleta, materiales, tipografía y gramática de movimiento en tu HTML+GSAP (sin copiar obras ni personajes). Catálogo:
 ${catalogoEstilos()}`;

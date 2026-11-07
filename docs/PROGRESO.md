@@ -174,3 +174,7 @@ docs/
 - `remotion@4.0.541` (+ `@remotion/renderer`, `@remotion/bundler`, React 18) instalado. Micho tiene la herramienta `entregar_remotion`: escribe un componente React (TSX); el servidor valida los imports (lista permitida), lo compila con el bundler, lo renderiza (1080×1920, 30 fps), mezcla voz y música y lo manda a aprobación; al aprobar se guarda el MP4 igual que los videos HyperFrames. Si no compila o falla el render, el error vuelve a Micho para que lo corrija.
 - **Licencia**: el archivo `node_modules/remotion/LICENSE.md` dice que es gratis, incluso para uso comercial, para individuos y organizaciones con hasta 3 empleados, y que una empresa mayor necesita Company License (remotion.pro). Cambiará en la versión 5.0. Revisa tu caso si el equipo crece.
 - Variable `REMOTION_BROWSER` (opcional) fuerza un navegador concreto; por defecto Remotion usa el suyo, que el Dockerfile descarga al construir.
+
+## Motores: diagnóstico y bloques de HyperFrames
+- `/motores.html` (y `/api/motores/estado`) muestra si ffmpeg, el render en el servidor, HyperFrames, Remotion, los estilos de película, la voz y la música están disponibles, y tiene botones para una **prueba real** de 2 segundos con cada motor (`?probar=hf|remotion|todo`).
+- Micho ahora puede usar el **registro de ~450 bloques listos de HyperFrames** (partículas, zoom, cámara, 75 transiciones, glitch, títulos): `buscar_bloques`, `ver_bloque` y el campo `bloques` al entregar. Los bloques usan GSAP local para no depender de internet al renderizar.

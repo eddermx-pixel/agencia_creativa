@@ -19,6 +19,7 @@ import * as planeacion from './planeacion.js';
 import * as costos from './costos.js';
 import * as voz from './voz.js';
 import * as render from './render.js';
+import * as motores from './motores.js';
 import { rutaFinal as rutaFinalHF } from './hyperframes.js';
 import * as musica from './musica.js';
 import crypto from 'node:crypto';
@@ -352,6 +353,7 @@ function track(c, promise) {
 costos.registrar(app);
 voz.registrar(app);
 render.registrar(app);
+motores.registrar(app);
 musica.registrar(app);
 planeacion.registrar(app, { baseUrl, runCampaign: (c) => runtime.runCampaign(c), track, clientSummary, ws });
 
