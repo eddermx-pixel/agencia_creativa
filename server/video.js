@@ -74,7 +74,8 @@ export function videoGuide(estilosCliente = [], prefs = {}) {
       "fondo": { "tipo": "broll", "busqueda": "toma real en INGLÉS, concreta y visual (ej. 'woman smiling eating fresh bread', 'barista pouring latte art close up')" }
              | { "tipo": "color" } | { "tipo": "archivo", "ruta": "carpeta/archivo del cliente" },
       "texto": "texto grande en pantalla (máx. 7 palabras)",
-      "subtitulo": "lo que diría una voz en off (opcional)",
+      "subtitulo": "texto corto en pantalla (opcional)",
+      "narracion": "lo que dice la VOZ EN OFF en esta escena, natural y hablado, máx. 2 frases (opcional; si hay llave de voz se genera el audio)",
       "animacion": ${ANIMACIONES.map((a) => `"${a}"`).join(' | ')},
       "transicion": ${TRANSICIONES.map((a) => `"${a}"`).join(' | ')} (cómo ENTRA esta escena),
       "camara": ${CAMARAS.map((a) => `"${a}"`).join(' | ')},
@@ -120,6 +121,8 @@ export function normalizeSpec(input) {
       : e.fondo?.tipo === 'archivo' ? { tipo: 'archivo', ruta: String(e.fondo.ruta || '').slice(0, 300) } : { tipo: 'color' },
     texto: String(e.texto || '').slice(0, 90),
     subtitulo: String(e.subtitulo || '').slice(0, 200),
+    narracion: String(e.narracion || '').slice(0, 260),
+    voz: typeof e.voz === 'string' && /^\/api\/voz\/[a-f0-9]+\.mp3$/.test(e.voz) ? e.voz : undefined,
     animacion: ANIMACIONES.includes(e.animacion) ? e.animacion : 'pop',
     transicion: TRANSICIONES.includes(e.transicion) ? e.transicion : 'corte',
     camara: CAMARAS.includes(e.camara) ? e.camara : undefined,
@@ -168,6 +171,34 @@ async function pexelsSearch(query, orientation) {
   return vids;
 }
 
+// ---------- B-roll real (Pixabay, gratis con llave) ----------
+async function pixabaySearch(query, orientation) {
+  const key = process.env.PIXABAY_API_KEY;
+  if (!key || !query) return [];
+  const ck = `px|${query}|${orientation}`;
+  if (cache.has(ck)) return cache.get(ck);
+  const base = process.env.PIXABAY_API_URL || 'https://pixabay.com';
+  const r = await fetch(`${base}/api/videos/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(query)}&per_page=15&safesearch=true`);
+  if (!r.ok) { console.warn('[pixabay]', r.status); return []; }
+  const j = await r.json();
+  const vids = (j.hits || []).map((v) => {
+    const f = v.videos?.large?.url ? v.videos.large : v.videos?.medium?.url ? v.videos.medium : null;
+    if (!f) return null;
+    const vertical = f.height >= f.width;
+    if (orientation === 'portrait' && !vertical) return null;
+    if (orientation === 'landscape' && vertical) return null;
+    return { url: f.url, w: f.width, h: f.height, poster: v.picture_id ? `https://i.vimeocdn.com/video/${v.picture_id}_640x360.jpg` : '', autor: v.user || 'Pixabay', pagina: v.pageURL, dur: v.duration };
+  }).filter(Boolean);
+  cache.set(ck, vids);
+  return vids;
+}
+async function buscarTomas(query, orientation) {
+  const [a, b] = await Promise.all([pexelsSearch(query, orientation).catch(() => []), pixabaySearch(query, orientation).catch(() => [])]);
+  const out = []; // intercala fuentes para dar variedad
+  for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) out.push(a[i]); if (b[i]) out.push(b[i]); }
+  return out;
+}
+
 // Busca las tomas reales de cada escena (una distinta por escena cuando se puede).
 export async function resolveBroll(spec) {
   const orientation = spec.formato === '16:9' ? 'landscape' : spec.formato === '1:1' ? 'square' : 'portrait';
@@ -175,7 +206,7 @@ export async function resolveBroll(spec) {
   for (const e of spec.escenas) {
     if (e.fondo.tipo !== 'broll' || e.fondo.clip) continue;
     try {
-      const vids = await pexelsSearch(e.fondo.busqueda, orientation);
+      const vids = await buscarTomas(e.fondo.busqueda, orientation);
       const libre = vids.filter((v) => !usadas.has(v.url));
       const pick = libre[Math.floor(Math.random() * Math.min(3, libre.length))] || vids[0];
       if (pick) { e.fondo.clip = pick; usadas.add(pick.url); }
@@ -184,10 +215,10 @@ export async function resolveBroll(spec) {
   return spec;
 }
 
-export const brollDisponible = () => !!process.env.PEXELS_API_KEY;
+export const brollDisponible = () => !!(process.env.PEXELS_API_KEY || process.env.PIXABAY_API_KEY);
 
 // Proxy de video (permite reproducir y exportar sin bloqueos del navegador)
-const ALLOWED = ['videos.pexels.com', 'images.pexels.com', 'player.vimeo.com'];
+const ALLOWED = ['videos.pexels.com', 'images.pexels.com', 'player.vimeo.com', 'cdn.pixabay.com', 'i.vimeocdn.com'];
 export async function proxyBroll(req, res) {
   let u;
   try { u = new URL(String(req.query.u || '')); } catch { return res.status(400).end(); }
@@ -214,6 +245,7 @@ export function demoSpec(estiloId, marca = {}, textos = null) {
     paleta: { fondo: c[0] || '#1d1a4f', texto: '#ffffff', acento: c[2] || c[1] || '#ffb547' },
     escenas: e.plantilla.map(([texto, animacion, transicion], i) => ({
       duracion: e.id === 'cuenta-regresiva' ? 1.1 : 2.2, texto: textos?.[i] || texto, animacion, transicion,
+      narracion: textos?.[i] || texto,
       subtitulo: i === 0 ? `${e.nombre} para ${marca.nombre || 'tu marca'}` : '',
       emoji: ['🔥', '✨', '👀', '💥'][i % 4], animacion: i === 1 ? 'palabras' : animacion,
       fondo: { tipo: 'broll', busqueda: textos?.busquedas?.[i] || QUERIES[i % QUERIES.length] },

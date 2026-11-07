@@ -136,3 +136,8 @@ docs/
 - Cada llamada a la IA guarda sus tokens reales (y búsquedas web) con su campaña y cliente. El costo = tokens × precio por token (corregible con `PRECIOS_JSON` y `PRECIO_BUSQUEDA_USD`); es una **estimación**, no la factura.
 - Reporte mensual por cliente: IA, cargos fijos repartidos (Railway, GoHighLevel… igual o según uso), piezas aprobadas, costo por pieza, cobro mensual y margen.
 - "Factor de ajuste": compara con platform.claude.com → Billing y corrige todo el reporte. La conexión automática con la factura (Admin API) requiere una cuenta de organización; no disponible en cuentas personales.
+
+## Voz en off (ElevenLabs) y B-roll multi-fuente
+- Variables: `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` (o `vozId` por cliente), opcional `ELEVENLABS_MODEL`, `ELEVENLABS_USD_POR_1000` (costo, suma al reporte por cliente). Max escribe `narracion` por escena; el servidor genera un MP3 por escena (cache en disco) y el reproductor lo mezcla (música baja sola) y entra al MP4 exportado.
+- B-roll: Pexels (cerró temporalmente nuevas llaves) y Pixabay (`PIXABAY_API_KEY`, gratis); se intercalan las fuentes disponibles.
+- Probado solo con servidores simulados; formatos reales de ElevenLabs/Pixabay por confirmar.

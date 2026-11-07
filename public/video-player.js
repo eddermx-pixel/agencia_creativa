@@ -374,7 +374,7 @@ export async function createPlayer(canvas, spec, opts = {}) {
   const curT = () => (playing ? ((performance.now() - t0) / 1000) % total : pausedAt);
 
   function hablar(e) {
-    if (!voz || !('speechSynthesis' in window)) return;
+    if (!voz || e?.voz || !('speechSynthesis' in window)) return;
     speechSynthesis.cancel();
     const txt = e?.subtitulo || '';
     if (!txt) return;
@@ -457,7 +457,10 @@ function makeAudio(spec, escenas, acc, total, nivel) {
   const spk = ac.createGain(); spk.gain.value = 1;
   const dest = ac.createMediaStreamDestination();
   master.connect(spk); spk.connect(ac.destination); master.connect(dest);
-  const mus = ac.createGain(); mus.gain.value = 0.5; mus.connect(master);
+  const hayVoz = escenas.some((e) => e.voz);
+  const MUS = hayVoz ? 0.26 : 0.5; // la música baja cuando hay locución
+  const mus = ac.createGain(); mus.gain.value = MUS; mus.connect(master);
+  const vozG = ac.createGain(); vozG.gain.value = 1.25; vozG.connect(master);
   const fx = ac.createGain(); fx.gain.value = 0.9; fx.connect(master);
 
   const noiseBuf = (() => { const b = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; })();
@@ -512,14 +515,22 @@ function makeAudio(spec, escenas, acc, total, nivel) {
     sfx.sort((a, b) => a.t - b.t);
   }
 
+  // Locución (ElevenLabs): se descarga y se programa al inicio de cada escena
+  const vozBuf = new Map();
+  for (const e of escenas) if (e.voz && !vozBuf.has(e.voz)) {
+    vozBuf.set(e.voz, null);
+    fetch(e.voz).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status)))).then((ab) => ac.decodeAudioData(ab)).then((b) => vozBuf.set(e.voz, b)).catch((err) => console.warn('[voz]', err.message || err));
+  }
+  for (const e of escenas) if (e.voz) sfx.push({ t: e.ini + 0.12, f: (when) => { const b = vozBuf.get(e.voz); if (!b) return; const src = ac.createBufferSource(); src.buffer = b; src.connect(vozG); src.start(when); } });
+  sfx.sort((a, b) => a.t - b.t);
   let nextI = 0, sfxI = 0, silencio = false;
   const st = preset ? 60 / preset.bpm / 4 : 1;
   function reiniciar(v0) {
     nextI = preset ? Math.ceil(v0 / st) : 0;
     sfxI = Math.max(0, sfx.findIndex((x) => x.t >= v0 - 0.01)); if (sfx.findIndex((x) => x.t >= v0 - 0.01) < 0) sfxI = sfx.length;
     const n = ac.currentTime;
-    mus.gain.cancelScheduledValues(n); mus.gain.setValueAtTime(0.5, n);
-    mus.gain.setValueAtTime(0.5, n + Math.max(0, total - 0.8 - v0)); mus.gain.linearRampToValueAtTime(0.0001, n + Math.max(0.01, total - v0));
+    mus.gain.cancelScheduledValues(n); mus.gain.setValueAtTime(MUS, n);
+    mus.gain.setValueAtTime(MUS, n + Math.max(0, total - 0.8 - v0)); mus.gain.linearRampToValueAtTime(0.0001, n + Math.max(0.01, total - v0));
   }
   function programar(vNow) {
     if (silencio || ac.state !== 'running') return;

@@ -5,6 +5,7 @@ import { isSpec, normalizeSpec, resolveBroll, brollDisponible } from './video.js
 import * as ws from './workspace.js';
 import * as entregables from './entregables.js';
 import { db } from './store.js';
+import { agregarVoz } from './voz.js';
 
 // `key` = id de la llamada del agente; permite retomar sin duplicar tras un reinicio.
 export function makeActions(agentId, campaign, key = null) {
@@ -59,6 +60,8 @@ export function makeActions(agentId, campaign, key = null) {
         const spec = normalizeSpec(contenido); // lanza error si el JSON no sirve: el agente lo corrige
         setAgent(agentId, { burbuja: brollDisponible() ? '🎥 Buscando tomas reales…' : 'Armando el video…' });
         await resolveBroll(spec);
+        const cl = db.clients.find((c) => c.id === campaign.clientId);
+        await agregarVoz(spec, { campaignId: cid, agente: agentId, voiceId: cl?.vozId });
         contenido = JSON.stringify(spec);
         motor = 'v2';
       }
