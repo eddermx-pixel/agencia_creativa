@@ -283,3 +283,23 @@ export function demoSpec(estiloId, marca = {}, textos = null) {
     cierre: { cta: textos?.cta || 'Escríbenos hoy', logo: true },
   });
 }
+
+// Video de prueba: explica qué es un chatbot y por qué un negocio lo necesita. Sirve para verificar B-roll y voz.
+export function pruebaChatbot() {
+  const E = (texto, narracion, busqueda, duracion, animacion, transicion, emoji) => ({ texto, narracion, subtitulo: '', duracion, animacion, transicion, emoji, fondo: { tipo: 'broll', busqueda } });
+  return normalizeSpec({
+    formato: '9:16', estilo: 'gancho-pregunta', nivel: 3, look: 'cine', musica: 'suave', sfx: true, subtitulos: 'palabra', estiloTexto: 'impacto', particulas: 'polvo',
+    paleta: { fondo: '#0f1b3d', texto: '#ffffff', acento: '#2de2c5' },
+    escenas: [
+      E('¿Cuántos clientes pierdes cada noche?', '¿Cuántos clientes pierdes cada noche, mientras tu negocio está cerrado?', 'empty shop at night closed', 5, 'pop', 'corte', '🌙'),
+      E('Te escriben a las 11 pm', 'Tu cliente te escribe a las once de la noche, y nadie le contesta.', 'person typing on smartphone in bed at night', 4.5, 'palabras', 'flash', '📱'),
+      E('Y se va con tu competencia', 'Si tardas en responder, se va con quien sí contesta.', 'frustrated man looking at phone', 4, 'slide', 'zoom', '😤'),
+      E('Un chatbot responde por ti, 24/7', 'Un chatbot es un asistente que responde por ti, a toda hora.', 'chat messages on smartphone screen', 4.5, 'pop', 'deslizar', '🤖'),
+      E('Dudas, precios y horarios', 'Contesta dudas, precios y horarios en segundos.', 'customer service agent smiling laptop', 4, 'bounce', 'zoomblur', '⚡'),
+      E('Agenda citas y toma pedidos', 'Agenda citas, toma pedidos y guarda los datos de tu cliente.', 'woman using calendar app on phone', 5, 'palabras', 'barrido', '📅'),
+      E('Tú te enfocas en vender', 'Y cuando el cliente está listo, tú entras a cerrar la venta.', 'business owner shaking hands with customer', 4.5, 'zoom', 'fundido', '💰'),
+      E('Tu competencia ya tiene uno', 'Tu competencia ya tiene uno. ¿Y tú?', 'busy modern shop customers', 3.5, 'pop', 'flash', '👀'),
+    ],
+    cierre: { cta: 'Escríbenos hoy', logo: false },
+  });
+}

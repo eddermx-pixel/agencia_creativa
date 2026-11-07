@@ -260,7 +260,7 @@ export async function createPlayer(canvas, spec, opts = {}) {
   function credito(e) {
     if (!e.fondo?.clip?.autor) return;
     ctx.font = `600 ${Math.round(W * 0.018)}px Arial, sans-serif`; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillText(`Video: ${e.fondo.clip.autor} / Pexels`, W * 0.96, H * 0.985);
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillText(`Video: ${e.fondo.clip.autor}${/pexels/i.test(e.fondo.clip.pagina || e.fondo.clip.url) ? " / Pexels" : ""}`, W * 0.96, H * 0.985);
   }
   function progreso(t) {
     if (nivel < 2) { ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(0, H * 0.003, W * (t / total), H * 0.004); return; }

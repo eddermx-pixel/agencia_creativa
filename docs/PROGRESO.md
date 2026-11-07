@@ -142,3 +142,4 @@ docs/
 - B-roll: Pexels (cerró temporalmente nuevas llaves) y Pixabay (`PIXABAY_API_KEY`, gratis); se intercalan las fuentes disponibles.
 - Probado solo con servidores simulados; formatos reales de ElevenLabs/Pixabay por confirmar.
 - Coverr: variable `COVERR_API_KEY`; comprueba tu llave abriendo `/api/broll/estado`.
+- Video de prueba (chatbots): abre `/player.html?prueba=1`; muestra cuántas tomas reales y escenas con voz se generaron (`&nuevo=1` regenera).
