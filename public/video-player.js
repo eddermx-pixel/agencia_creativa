@@ -186,7 +186,7 @@ export async function createPlayer(canvas, spec, opts = {}) {
     let txt = e.texto.toUpperCase();
     if (e.animacion === 'typewriter') txt = txt.slice(0, Math.ceil(txt.length * Math.min(1, local / (e.duracion * 0.6))));
     const lines = wrap(txt, W * 0.84);
-    const lh = size * 1.1; const cy = H * (e.posicion === 'abajo' ? 0.62 : e.posicion === 'arriba' ? 0.26 : 0.42);
+    const lh = size * 1.1; const cy = H * (e.posicion === 'abajo' ? 0.62 : e.posicion === 'arriba' ? (e.grafico ? 0.2 : 0.26) : 0.42);
     const y0 = cy - ((lines.length - 1) * lh) / 2;
     const salida = nivel >= 2 ? clamp01((e.duracion - local) / 0.22) : 1; // sale con un fundido rápido
     ctx.save();
@@ -272,7 +272,66 @@ export async function createPlayer(canvas, spec, opts = {}) {
       ctx.fillStyle = '#fff'; ctx.fillRect(W * 0.05 + i * (w + gap), H * 0.02, w * f, 6);
     }
   }
-  function escena(e, local, t) { fondo(e, local, t); particulas(t); titulo(e, local); sticker(e, local); subtitulos(e, local); credito(e); if (e.logo) marca(false); }
+
+  // ---------- Gráficos animados (motion graphics) ----------
+  function grafico(e, local) {
+    const g = e.grafico; if (!g) return;
+    const salida = nivel >= 2 ? clamp01((e.duracion - local) / 0.22) : 1;
+    const top = H * 0.4, bottom = H * 0.9, ancho = W * 0.84, x0 = (W - ancho) / 2;
+    ctx.save(); ctx.globalAlpha = salida; ctx.textBaseline = 'middle';
+    if (g.tipo === 'chat') {
+      const ms = g.mensajes || []; const dt = Math.max(0.5, (e.duracion * 0.8) / Math.max(1, ms.length));
+      const size = Math.round(W * 0.052); ctx.font = font(size, 700); let y = top;
+      ms.forEach((m, i) => {
+        const t0 = 0.25 + i * dt; const pr = (local - t0) / 0.3; const bot = m.de === 'bot';
+        const lines = wrap(m.texto, ancho * 0.72); const lh = size * 1.25; const bw = Math.min(ancho * 0.8, Math.max(...lines.map((l) => ctx.measureText(l).width)) + size * 1.4); const bh = lines.length * lh + size * 0.9;
+        if (pr > 0) {
+          const typing = bot && local < t0 + 0.45; // los puntitos de "escribiendo…" antes del mensaje del bot
+          const s = back(pr); const bx = bot ? x0 : x0 + ancho - bw;
+          ctx.save(); ctx.translate(bx + bw / 2, y + bh / 2); ctx.scale(s, s); ctx.globalAlpha = salida * clamp01(pr * 3);
+          if (nivel >= 3) { ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8; }
+          ctx.fillStyle = bot ? P.acento : 'rgba(255,255,255,.95)'; ctx.beginPath(); ctx.roundRect(-bw / 2, -bh / 2, bw, bh, size * 0.9); ctx.fill(); ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; ctx.shadowColor = 'transparent';
+          ctx.fillStyle = bot ? contrast(P.acento) : '#141414'; ctx.textAlign = 'left';
+          if (typing) { for (let k = 0; k < 3; k++) { ctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(local * 9 + k)); ctx.beginPath(); ctx.arc(-size * 0.8 + k * size * 0.8, 0, size * 0.18, 0, 6.3); ctx.fill(); } }
+          else lines.forEach((l, li) => ctx.fillText(l, -bw / 2 + size * 0.7, -bh / 2 + size * 0.45 + lh * (li + 0.5)));
+          ctx.restore();
+        }
+        y += bh + size * 0.55;
+      });
+    } else if (g.tipo === 'lista') {
+      const it = g.items || []; const size = Math.round(W * 0.062); ctx.font = font(size, 800); const gap = size * 1.9;
+      it.forEach((txt, i) => {
+        const pr = (local - 0.2 - i * 0.35) / 0.4; if (pr <= 0) return; const q = ease(pr); const y = top + i * gap;
+        ctx.save(); ctx.globalAlpha = salida * clamp01(pr * 2.5); ctx.translate((1 - q) * -W * 0.25, 0);
+        ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.roundRect(x0, y - size * 0.8, ancho, size * 1.6, size * 0.8); ctx.fill();
+        ctx.fillStyle = P.acento; ctx.beginPath(); ctx.arc(x0 + size * 0.95, y, size * 0.55, 0, 6.3); ctx.fill();
+        ctx.strokeStyle = contrast(P.acento); ctx.lineWidth = size * 0.12; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; const c = clamp01((pr - 0.3) * 2.5);
+        ctx.beginPath(); ctx.moveTo(x0 + size * 0.7, y); if (c > 0) ctx.lineTo(x0 + size * (0.7 + 0.2 * Math.min(1, c * 2)), y + size * 0.2 * Math.min(1, c * 2)); if (c > 0.5) ctx.lineTo(x0 + size * (0.9 + 0.4 * (c - 0.5) * 2), y - size * 0.3 * (c - 0.5) * 2 + size * 0.2); ctx.stroke();
+        ctx.fillStyle = P.texto; ctx.textAlign = 'left'; ctx.fillText(String(txt).toUpperCase(), x0 + size * 1.85, y + 2);
+        ctx.restore();
+      });
+    } else if (g.tipo === 'contador') {
+      const pr = clamp01(local / Math.max(0.6, e.duracion * 0.7)); const val = (g.valor || 0) * ease(pr);
+      const n = Math.abs(g.valor) >= 100 || Number.isInteger(g.valor) ? Math.round(val).toLocaleString('es-MX') : val.toFixed(1);
+      const s = back(clamp01(local / 0.4));
+      ctx.save(); ctx.translate(W / 2, H * 0.58); ctx.scale(s, s); ctx.textAlign = 'center';
+      if (nivel >= 3) { ctx.shadowColor = P.acento; ctx.shadowBlur = 50; }
+      ctx.fillStyle = P.acento; ctx.font = font(Math.round(W * 0.26)); ctx.fillText(`${g.prefijo || ''}${n}${g.sufijo || ''}`, 0, 0); ctx.shadowBlur = 0;
+      if (g.etiqueta) { ctx.fillStyle = P.texto; ctx.font = font(Math.round(W * 0.06), 700); wrap(g.etiqueta.toUpperCase(), ancho).forEach((l, i) => ctx.fillText(l, 0, W * 0.2 + i * W * 0.075)); }
+      ctx.restore();
+    } else if (g.tipo === 'barras') {
+      const it = (g.items || []).slice(0, 5); const size = Math.round(W * 0.05); ctx.font = font(size, 800); const gap = size * 2.6; const bw = ancho * 0.62;
+      it.forEach((b, i) => {
+        const pr = clamp01((local - 0.2 - i * 0.25) / 0.7); const q = ease(pr); const y = top + i * gap;
+        ctx.globalAlpha = salida * clamp01(pr * 4); ctx.fillStyle = P.texto; ctx.textAlign = 'left'; ctx.fillText(String(b.etiqueta).toUpperCase(), x0, y - size * 0.9);
+        ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.beginPath(); ctx.roundRect(x0, y - size * 0.3, ancho, size * 1.0, size * 0.5); ctx.fill();
+        ctx.fillStyle = P.acento; ctx.beginPath(); ctx.roundRect(x0, y - size * 0.3, Math.max(size, ancho * clamp01((b.valor || 0) / 100) * q), size * 1.0, size * 0.5); ctx.fill();
+        ctx.fillStyle = contrast(P.acento); ctx.textAlign = 'right'; ctx.fillText(`${Math.round((b.valor || 0) * q)}%`, x0 + Math.max(size, ancho * clamp01((b.valor || 0) / 100) * q) - size * 0.4, y + size * 0.2);
+      });
+    }
+    ctx.restore();
+  }
+  function escena(e, local, t) { fondo(e, local, t); particulas(t); titulo(e, local); grafico(e, local); sticker(e, local); subtitulos(e, local); credito(e); if (e.logo) marca(false); }
   function cierre(local, t) {
     const g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, P.fondo); g.addColorStop(1, shade(P.fondo, -40));
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
@@ -486,7 +545,8 @@ function makeAudio(spec, escenas, acc, total, nivel) {
     urbano: { bpm: 140, fn(i, t, st) { const s = i % 16, [r] = PROG[Math.floor(i / 16) % 4]; if (s === 0 || s === 7 || s === 10) kick(t, 1.1); if (s === 8) { clap(t); snare(t, 0.5); } hat(t, false, 0.4 + ((i * 7) % 5) / 10); if (s === 14) { hat(t + st / 2, false, 0.5); hat(t + st * 0.75, false, 0.6); } if (s === 0 || s === 10) osc('sine', hz(r - 12 + 12), t, st * 6, 0.7, mus, hz(r - 12 + 12) * 0.85); } },
     suave: { bpm: 84, fn(i, t, st) { const s = i % 16, [r, ch] = PROG2[Math.floor(i / 16) % 4]; if (s === 0) { kick(t, 0.5); ch.forEach((m) => tono('sine', m, t, st * 16, 0.08, 1500, 0.3)); bajo(t, r, st * 8, 'sine', 260); } if (s % 4 === 0) tono('triangle', ch[(s >> 2) % 4] + 12, t, st * 3, 0.07, 2200); } },
   };
-  const preset = PRESETS[musica] || null;
+  const musicaIA = escenas.musicaUrl || spec.musicaUrl || null;
+  const preset = musicaIA ? null : (PRESETS[musica] || null);
 
   // Efectos de sonido sincronizados con la edición
   const whoosh = (t) => noise(t, 0.38, 'bandpass', 500, 0.5, fx, 0.7, 4200);
@@ -516,6 +576,9 @@ function makeAudio(spec, escenas, acc, total, nivel) {
   }
 
   // Locución (ElevenLabs): se descarga y se programa al inicio de cada escena
+  let musBuf = null;
+  if (musicaIA) fetch(musicaIA).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status)))).then((ab) => ac.decodeAudioData(ab)).then((b) => { musBuf = b; }).catch((err) => console.warn('[musica]', err.message || err));
+  let musSrc = null;
   const vozBuf = new Map();
   for (const e of escenas) if (e.voz && !vozBuf.has(e.voz)) {
     vozBuf.set(e.voz, null);
@@ -523,17 +586,19 @@ function makeAudio(spec, escenas, acc, total, nivel) {
   }
   for (const e of escenas) if (e.voz) sfx.push({ t: e.ini + 0.12, f: (when) => { const b = vozBuf.get(e.voz); if (!b) return; const src = ac.createBufferSource(); src.buffer = b; src.connect(vozG); src.start(when); } });
   sfx.sort((a, b) => a.t - b.t);
-  let nextI = 0, sfxI = 0, silencio = false;
+  let nextI = 0, sfxI = 0, silencio = false, musDesde = 0;
   const st = preset ? 60 / preset.bpm / 4 : 1;
   function reiniciar(v0) {
     nextI = preset ? Math.ceil(v0 / st) : 0;
     sfxI = Math.max(0, sfx.findIndex((x) => x.t >= v0 - 0.01)); if (sfx.findIndex((x) => x.t >= v0 - 0.01) < 0) sfxI = sfx.length;
+    if (musicaIA) { musDesde = v0; try { musSrc?.stop(); } catch {} musSrc = null; }
     const n = ac.currentTime;
     mus.gain.cancelScheduledValues(n); mus.gain.setValueAtTime(MUS, n);
     mus.gain.setValueAtTime(MUS, n + Math.max(0, total - 0.8 - v0)); mus.gain.linearRampToValueAtTime(0.0001, n + Math.max(0.01, total - v0));
   }
   function programar(vNow) {
     if (silencio || ac.state !== 'running') return;
+    if (musicaIA && musBuf && !musSrc) { musSrc = ac.createBufferSource(); musSrc.buffer = musBuf; musSrc.connect(mus); musSrc.start(0, Math.min(Math.max(0, vNow), Math.max(0, musBuf.duration - 0.1))); }
     if (preset) while (nextI * st < vNow + LOOK_AHEAD) { const vt = nextI * st; if (vt >= vNow - 0.02 && vt < total - 0.1) preset.fn(nextI, ac.currentTime + Math.max(0, vt - vNow), st); nextI++; }
     while (sfxI < sfx.length && sfx[sfxI].t < vNow + LOOK_AHEAD) { if (sfx[sfxI].t >= vNow - 0.02) sfx[sfxI].f(ac.currentTime + Math.max(0, sfx[sfxI].t - vNow)); sfxI++; }
   }

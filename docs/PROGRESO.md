@@ -147,3 +147,7 @@ docs/
 ## Render en el servidor (Dockerfile + Chromium + ffmpeg)
 - `Dockerfile` (Node 22, Chromium, ffmpeg) y `railway.json` con builder Dockerfile. Al aprobar un video v2 se renderiza solo a MP4 1080×1920 (H.264 + AAC, con voz, música y efectos) en `Resultado final/<campaña>/`; botón manual `POST /api/pieces/:id/render`; `RENDER_AUTO=0` lo apaga. `/api/render/estado` dice si el servidor puede renderizar.
 - El MP4 queda disponible para GoHighLevel. Probado localmente (Chromium + ffmpeg); la imagen Docker no se pudo construir en la sesión de desarrollo.
+
+## Motion graphics y música con IA
+- Nuevos **gráficos animados** por escena (`grafico`): conversación de chat (con "escribiendo…"), checklist que se marca, contador numérico y barras. Max los pide en su guion; el prompt le prohíbe inventar cifras.
+- **Música con ElevenLabs Music** (`server/musica.js`): Max escribe `musicaPrompt`; se genera una pista instrumental del largo del video (modelo `ELEVENLABS_MUSIC_MODEL`, por defecto `music_v2`, por confirmar; costo `ELEVENLABS_MUSIC_USD_POR_MIN`; `MUSICA_IA=0` la apaga). Si falla, queda la música sintética. Comprobar: `/api/musica/estado?probar=1`.

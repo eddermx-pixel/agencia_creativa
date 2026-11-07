@@ -6,6 +6,7 @@ import * as ws from './workspace.js';
 import * as entregables from './entregables.js';
 import { db } from './store.js';
 import { agregarVoz } from './voz.js';
+import { agregarMusica } from './musica.js';
 
 // `key` = id de la llamada del agente; permite retomar sin duplicar tras un reinicio.
 export function makeActions(agentId, campaign, key = null) {
@@ -61,6 +62,7 @@ export function makeActions(agentId, campaign, key = null) {
         setAgent(agentId, { burbuja: brollDisponible() ? '🎥 Buscando tomas reales…' : 'Armando el video…' });
         await resolveBroll(spec);
         await agregarVoz(spec, { campaignId: cid, agente: agentId });
+        await agregarMusica(spec, { campaignId: cid, agente: agentId });
         contenido = JSON.stringify(spec);
         motor = 'v2';
       }

@@ -68,6 +68,7 @@ export function videoGuide(estilosCliente = [], prefs = {}) {
   "subtitulos": "palabra" (resalta palabra por palabra) | "bloque" | "ninguno",
   "musica": ${MUSICAS.map((x) => `"${x}"`).join(' | ')},
   "sfx": true | false,
+  "musicaPrompt": "(opcional) descripción de la música para generarla con IA, en inglés y SIN nombres de artistas ni canciones, ej. 'warm uplifting instrumental, light percussion, 100 bpm'. Si hay generador de música se usa en lugar de las pistas de arriba",
   "particulas": ${PARTICULAS.map((x) => `"${x}"`).join(' | ')},
   "escenas": [
     { "duracion": 1-6 (segundos),
@@ -75,6 +76,11 @@ export function videoGuide(estilosCliente = [], prefs = {}) {
              | { "tipo": "color" } | { "tipo": "archivo", "ruta": "carpeta/archivo del cliente" },
       "texto": "texto grande en pantalla (máx. 7 palabras)",
       "subtitulo": "texto corto en pantalla (opcional)",
+      "grafico": (opcional, MOTION GRAPHIC animado sobre la toma; úsalo para explicar, no en todas las escenas) uno de:
+         { "tipo": "chat", "mensajes": [{ "de": "cliente" | "bot", "texto": "máx. 60 caracteres" }, ...máx. 4] }   (conversación tipo WhatsApp)
+         { "tipo": "lista", "items": ["punto corto", ...máx. 4] }   (checklist que se va marcando)
+         { "tipo": "contador", "valor": número, "prefijo": "$", "sufijo": "%", "etiqueta": "qué mide" }   (número que sube; NUNCA inventes cifras: usa solo datos del brief o del cliente)
+         { "tipo": "barras", "items": [{ "etiqueta": "texto", "valor": 0-100 }, ...máx. 4] }
       "narracion": "lo que dice la VOZ EN OFF en esta escena, natural y hablado, máx. 2 frases (opcional; si hay llave de voz se genera el audio)",
       "animacion": ${ANIMACIONES.map((a) => `"${a}"`).join(' | ')},
       "transicion": ${TRANSICIONES.map((a) => `"${a}"`).join(' | ')} (cómo ENTRA esta escena),
@@ -108,6 +114,16 @@ ${pf.length ? `PREFERENCIAS DE VIDEO DE ESTE CLIENTE (respétalas): ${pf.join(',
 // ---------- Validación del guion ----------
 const clampN = (v, a, b, d) => (Number.isFinite(+v) ? Math.min(b, Math.max(a, +v)) : d);
 const hex = (v, d) => (/^#[0-9a-f]{6}$/i.test(v || '') ? v : d);
+const txt = (v, n) => String(v ?? '').slice(0, n);
+function limpiaGrafico(g) {
+  if (!g || typeof g !== 'object') return undefined;
+  if (g.tipo === 'chat') { const m = (Array.isArray(g.mensajes) ? g.mensajes : []).slice(0, 4).map((x) => ({ de: x.de === 'bot' ? 'bot' : 'cliente', texto: txt(x.texto, 70) })).filter((x) => x.texto); return m.length ? { tipo: 'chat', mensajes: m } : undefined; }
+  if (g.tipo === 'lista') { const i = (Array.isArray(g.items) ? g.items : []).slice(0, 4).map((x) => txt(x, 40)).filter(Boolean); return i.length ? { tipo: 'lista', items: i } : undefined; }
+  if (g.tipo === 'contador') return Number.isFinite(+g.valor) ? { tipo: 'contador', valor: +g.valor, prefijo: txt(g.prefijo, 3), sufijo: txt(g.sufijo, 4), etiqueta: txt(g.etiqueta, 60) } : undefined;
+  if (g.tipo === 'barras') { const i = (Array.isArray(g.items) ? g.items : []).slice(0, 4).map((x) => ({ etiqueta: txt(x.etiqueta, 30), valor: Math.min(100, Math.max(0, +x.valor || 0)) })).filter((x) => x.etiqueta); return i.length ? { tipo: 'barras', items: i } : undefined; }
+  return undefined;
+}
+
 export function normalizeSpec(input) {
   let s = input;
   if (typeof s === 'string') {
@@ -127,7 +143,8 @@ export function normalizeSpec(input) {
     transicion: TRANSICIONES.includes(e.transicion) ? e.transicion : 'corte',
     camara: CAMARAS.includes(e.camara) ? e.camara : undefined,
     emoji: typeof e.emoji === 'string' ? [...e.emoji].slice(0, 2).join('') : '',
-    posicion: ['arriba', 'centro', 'abajo'].includes(e.posicion) ? e.posicion : 'centro',
+    posicion: ['arriba', 'centro', 'abajo'].includes(e.posicion) ? e.posicion : (e.grafico?.tipo ? 'arriba' : 'centro'),
+    grafico: limpiaGrafico(e.grafico),
     logo: !!e.logo,
   }));
   if (!escenas.length) throw new Error('El guion no tiene escenas.');
@@ -139,6 +156,8 @@ export function normalizeSpec(input) {
     look: LOOKS.includes(s.look) ? s.look : undefined,
     estiloTexto: ESTILOS_TEXTO.includes(s.estiloTexto) ? s.estiloTexto : undefined,
     particulas: PARTICULAS.includes(s.particulas) ? s.particulas : undefined,
+    musicaPrompt: typeof s.musicaPrompt === 'string' ? s.musicaPrompt.slice(0, 300) : undefined,
+    musicaUrl: typeof s.musicaUrl === 'string' && /^\/api\/musica\/[a-f0-9]+\.mp3$/.test(s.musicaUrl) ? s.musicaUrl : undefined,
     musica: MUSICAS.includes(s.musica) ? s.musica : (MUSICA_DE[s.estilo] || 'pop'),
     sfx: s.sfx !== false,
     paleta: { fondo: hex(s.paleta?.fondo, '#1d1a4f'), texto: hex(s.paleta?.texto, '#ffffff'), acento: hex(s.paleta?.acento, '#ffb547') },
@@ -286,17 +305,17 @@ export function demoSpec(estiloId, marca = {}, textos = null) {
 
 // Video de prueba: explica qué es un chatbot y por qué un negocio lo necesita. Sirve para verificar B-roll y voz.
 export function pruebaChatbot() {
-  const E = (texto, narracion, busqueda, duracion, animacion, transicion, emoji) => ({ texto, narracion, subtitulo: '', duracion, animacion, transicion, emoji, fondo: { tipo: 'broll', busqueda } });
+  const E = (texto, narracion, busqueda, duracion, animacion, transicion, emoji, grafico) => ({ grafico, texto, narracion, subtitulo: '', duracion, animacion, transicion, emoji, fondo: { tipo: 'broll', busqueda } });
   return normalizeSpec({
-    formato: '9:16', estilo: 'gancho-pregunta', nivel: 3, look: 'cine', musica: 'suave', sfx: true, subtitulos: 'palabra', estiloTexto: 'impacto', particulas: 'polvo',
+    formato: '9:16', estilo: 'gancho-pregunta', nivel: 3, look: 'cine', musica: 'suave', musicaPrompt: 'warm modern instrumental, light percussion, soft synth pads, confident and hopeful, 95 bpm', sfx: true, subtitulos: 'palabra', estiloTexto: 'impacto', particulas: 'polvo',
     paleta: { fondo: '#0f1b3d', texto: '#ffffff', acento: '#2de2c5' },
     escenas: [
       E('¿Cuántos clientes pierdes cada noche?', '¿Cuántos clientes pierdes cada noche, mientras tu negocio está cerrado?', 'empty shop at night closed', 5, 'pop', 'corte', '🌙'),
-      E('Te escriben a las 11 pm', 'Tu cliente te escribe a las once de la noche, y nadie le contesta.', 'person typing on smartphone in bed at night', 4.5, 'palabras', 'flash', '📱'),
+      E('Te escriben a las 11 pm', 'Tu cliente te escribe a las once de la noche, y nadie le contesta.', 'person typing on smartphone in bed at night', 4.5, 'palabras', 'flash', '📱', { tipo: 'chat', mensajes: [{ de: 'cliente', texto: 'Hola, ¿tienen disponible mañana?' }] }),
       E('Y se va con tu competencia', 'Si tardas en responder, se va con quien sí contesta.', 'frustrated man looking at phone', 4, 'slide', 'zoom', '😤'),
-      E('Un chatbot responde por ti, 24/7', 'Un chatbot es un asistente que responde por ti, a toda hora.', 'chat messages on smartphone screen', 4.5, 'pop', 'deslizar', '🤖'),
-      E('Dudas, precios y horarios', 'Contesta dudas, precios y horarios en segundos.', 'customer service agent smiling laptop', 4, 'bounce', 'zoomblur', '⚡'),
-      E('Agenda citas y toma pedidos', 'Agenda citas, toma pedidos y guarda los datos de tu cliente.', 'woman using calendar app on phone', 5, 'palabras', 'barrido', '📅'),
+      E('Un chatbot responde por ti, 24/7', 'Un chatbot es un asistente que responde por ti, a toda hora.', 'chat messages on smartphone screen', 4.5, 'pop', 'deslizar', '🤖', { tipo: 'chat', mensajes: [{ de: 'cliente', texto: '¿Cuánto cuesta y a qué hora abren?' }, { de: 'bot', texto: '¡Hola! Abrimos 9 a 7. ¿Te agendo una cita?' }, { de: 'cliente', texto: 'Sí, mañana a las 11' }] }),
+      E('Dudas, precios y horarios', 'Contesta dudas, precios y horarios en segundos.', 'customer service agent smiling laptop', 4, 'bounce', 'zoomblur', '⚡', { tipo: 'lista', items: ['Dudas', 'Precios', 'Horarios'] }),
+      E('Agenda citas y toma pedidos', 'Agenda citas, toma pedidos y guarda los datos de tu cliente.', 'woman using calendar app on phone', 5, 'palabras', 'barrido', '📅', { tipo: 'chat', mensajes: [{ de: 'bot', texto: '✅ Cita agendada: mañana 11:00' }, { de: 'bot', texto: 'Te enviaré un recordatorio' }] }),
       E('Tú te enfocas en vender', 'Y cuando el cliente está listo, tú entras a cerrar la venta.', 'business owner shaking hands with customer', 4.5, 'zoom', 'fundido', '💰'),
       E('Tu competencia ya tiene uno', 'Tu competencia ya tiene uno. ¿Y tú?', 'busy modern shop customers', 3.5, 'pop', 'flash', '👀'),
     ],

@@ -88,7 +88,7 @@
     $('selNivel').value = String(base.nivel || 2); $('selLook').value = deLook(base);
 
     function info() {
-      $('info').innerHTML = `${esc(data.estilo || '')} · ${base.formato} · ${base.escenas.length} escenas · música ${esc(base.musica || 'pop')}${data.broll === false ? '<br>⚠️ Sin tomas reales: falta configurar una llave de B-roll (Coverr).' : ''}${data.estado ? `<br>🎥 Tomas reales: ${data.estado.tomasReales}/${data.estado.escenas} · 🗣️ Voz: ${data.estado.voz?.usadas ? `${data.estado.voz.usadas} escenas con ElevenLabs` : data.estado.vozLlave ? `no se generó (${esc(data.estado.voz?.error || data.estado.voz?.motivo || 'revisa ELEVENLABS_VOICE_ID')})` : 'sin llave de ElevenLabs'}` : ''}`;
+      $('info').innerHTML = `${esc(data.estilo || '')} · ${base.formato} · ${base.escenas.length} escenas · música ${esc(base.musica || 'pop')}${data.broll === false ? '<br>⚠️ Sin tomas reales: falta configurar una llave de B-roll (Coverr).' : ''}${data.estado ? `<br>🎥 Tomas reales: ${data.estado.tomasReales}/${data.estado.escenas} · 🗣️ Voz: ${data.estado.voz?.usadas ? `${data.estado.voz.usadas} escenas con ElevenLabs` : data.estado.vozLlave ? `no se generó (${esc(data.estado.voz?.error || data.estado.voz?.motivo || 'revisa ELEVENLABS_VOICE_ID')})` : 'sin llave de ElevenLabs'} · 🎵 Música: ${data.estado.musica?.ok ? 'generada con IA' : `sintética (${esc(data.estado.musica?.error || data.estado.musica?.motivo || '—')})`}` : ''}`;
       $('scenes').innerHTML = base.escenas.map((e, i) => `<div><b>${i + 1}.</b> ${esc(e.texto || '—')} ${e.emoji || ''} <span class="msg">· ${e.duracion}s · ${e.transicion}${e.fondo.clip ? ` · 🎥 ${esc(e.fondo.clip.autor)}` : e.fondo.tipo === 'broll' ? ` · (${esc(e.fondo.busqueda)})` : ''}</span></div>`).join('');
     }
     info();

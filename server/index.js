@@ -19,6 +19,7 @@ import * as planeacion from './planeacion.js';
 import * as costos from './costos.js';
 import * as voz from './voz.js';
 import * as render from './render.js';
+import * as musica from './musica.js';
 import crypto from 'node:crypto';
 import { ESTILOS, estiloById, demoSpec, resolveBroll, proxyBroll, brollDisponible, sugerirEstilos, diagnosticoBroll, pruebaChatbot } from './video.js';
 
@@ -348,6 +349,7 @@ function track(c, promise) {
 costos.registrar(app);
 voz.registrar(app);
 render.registrar(app);
+musica.registrar(app);
 planeacion.registrar(app, { baseUrl, runCampaign: (c) => runtime.runCampaign(c), track, clientSummary, ws });
 
 app.post('/api/campaigns/:id/retry', (req, res) => {
@@ -523,7 +525,8 @@ app.get('/api/prueba/chatbot', async (req, res) => {
       const spec = pruebaChatbot();
       await resolveBroll(spec);
       const v = await voz.agregarVoz(spec, { campaignId: null, agente: 'video' });
-      pruebaCache = { spec, estado: { tomasReales: spec.escenas.filter((e) => e.fondo.clip).length, escenas: spec.escenas.length, voz: v, vozLlave: voz.vozDisponible(), fuentes: await diagnosticoBroll() } };
+      const mus = await musica.agregarMusica(spec, { campaignId: null, agente: 'video' });
+      pruebaCache = { spec, estado: { tomasReales: spec.escenas.filter((e) => e.fondo.clip).length, escenas: spec.escenas.length, voz: v, musica: mus, vozLlave: voz.vozDisponible(), fuentes: await diagnosticoBroll() } };
     }
     res.json({ ...pruebaCache, titulo: 'Prueba: chatbots para negocios', estilo: 'Video de prueba', broll: brollDisponible() });
   } catch (e) { res.status(500).json({ error: e.message }); }
