@@ -4,12 +4,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HF_DIR, TRABAJO, seguro, descargarTomas, generarAudio, mezclar, dur, guardarFinal, correr } from './hyperframes.js';
+import { HF_DIR, TRABAJO, POCA_MEMORIA, seguro, descargarTomas, generarAudio, mezclar, dur, guardarFinal, correr } from './hyperframes.js';
 import { conTurno } from './pesado.js';
 
 const aquí = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(aquí, '..');
-export const remotionDisponible = () => fs.existsSync(path.resolve('node_modules', '@remotion', 'renderer')) && fs.existsSync(path.resolve('node_modules', '@remotion', 'bundler'));
+export const remotionInstalado = () => fs.existsSync(path.resolve('node_modules', '@remotion', 'renderer')) && fs.existsSync(path.resolve('node_modules', '@remotion', 'bundler'));
+// Con menos de 2 GB de memoria Remotion se queda sin recursos (se comprobó en Railway con ~954 MB): se apaga solo. REMOTION_FORZAR=1 lo activa de todos modos.
+export const remotionActivo = () => remotionInstalado() && (!POCA_MEMORIA || process.env.REMOTION_FORZAR === '1');
+export const remotionDisponible = remotionActivo;
 const PERMITIDOS = new Set(['react', 'remotion', '@remotion/shapes', '@remotion/paths', '@remotion/transitions', '@remotion/motion-blur', '@remotion/noise', '@remotion/layout-utils', '@remotion/google-fonts', '@remotion/animated-emoji']);
 const PROHIBIDO = [/\bfetch\s*\(/, /XMLHttpRequest/, /WebSocket/, /\bimport\s*\(/, /\brequire\s*\(/, /\bprocess\b/, /child_process/, /\beval\s*\(/, /new Function/, /document\.cookie/, /localStorage/, /<iframe/i, /dangerouslySetInnerHTML/];
 
@@ -36,7 +39,7 @@ registerRoot(RemotionRoot);
 `;
 
 export async function producirRemotion({ clave, codigo, duracion = 10, narraciones = [], musicaPrompt = '', tomas = [], campaignId = null, agente = 'editor2' }) {
-  if (!remotionDisponible()) throw new Error('Remotion no está instalado en este servidor.');
+  if (!remotionDisponible()) throw new Error(remotionInstalado() ? 'Remotion está apagado en este servidor porque tiene poca memoria (se reiniciaría). Usa HyperFrames, o sube el plan de Railway.' : 'Remotion no está instalado en este servidor.');
   const k = seguro(clave); const dir = path.join(TRABAJO, k); const final = path.join(dir, 'final.mp4'); const persistente = path.join(HF_DIR, k, 'final.mp4');
   if (fs.existsSync(persistente)) return { clave: k, archivo: 'final.mp4', duracion: await dur(persistente), resumen: 'ya estaba renderizado' };
   validar(codigo);

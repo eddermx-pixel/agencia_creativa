@@ -20,7 +20,7 @@ export const HF_DIR = path.join(DATA_DIR, 'hf');
 // El trabajo pesado (frames, temporales) va al disco del contenedor, NO al volumen /data (que suele ser chico).
 export const TRABAJO = process.env.TRABAJO_DIR || path.join(os.tmpdir(), 'agencia-trabajo');
 const limiteMb = (() => { for (const f of ['/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes']) { try { const v = Number(fs.readFileSync(f, 'utf8').trim()); if (v > 0 && v < 1e13) return v / 1048576; } catch {} } return null; })();
-const POCA_MEMORIA = limiteMb !== null && limiteMb < 2048;
+export const POCA_MEMORIA = limiteMb !== null && limiteMb < 2048;
 export const HF_WORKERS = String(process.env.HF_WORKERS || (POCA_MEMORIA ? 1 : 2));
 export function guardarFinal(k, origen) { const d = path.join(HF_DIR, k); fs.mkdirSync(d, { recursive: true }); fs.copyFileSync(origen, path.join(d, 'final.mp4')); }
 export const hfDisponible = () => fs.existsSync(HF_BIN) && fs.existsSync(GSAP);

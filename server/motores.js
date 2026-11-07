@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { HF_DIR, TRABAJO, hfDisponible, catalogoEstilos, producir, correr } from './hyperframes.js';
-import { remotionDisponible, producirRemotion } from './remotion.js';
+import { remotionInstalado, remotionActivo, producirRemotion } from './remotion.js';
 import { renderDisponible } from './render.js';
 import { vozDisponible } from './voz.js';
 import { musicaDisponible } from './musica.js';
@@ -57,7 +57,7 @@ export function registrar(app) {
       ffmpeg: ff,
       render_servidor: r.ok ? 'listo' : r.motivo,
       hyperframes: { instalado: hfDisponible(), version: version('hyperframes') },
-      remotion: { instalado: remotionDisponible(), version: version('remotion') },
+      remotion: { instalado: remotionInstalado(), activo: remotionActivo(), version: version('remotion') },
       estilos_de_pelicula: catalogoEstilos().split('\n').filter(Boolean).length,
       disco: await espacio(), memoria: memoria(),
       voz_elevenlabs: vozDisponible(), musica_ia: musicaDisponible(), tomas_stock: brollDisponible(),
