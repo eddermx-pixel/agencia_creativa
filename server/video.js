@@ -192,11 +192,41 @@ async function pixabaySearch(query, orientation) {
   cache.set(ck, vids);
   return vids;
 }
+// ---------- B-roll real (Coverr, gratis con llave) ----------
+// El formato de respuesta se lee de forma flexible; /api/broll/estado sirve para comprobar tu llave.
+async function coverrSearch(query, orientation, diag) {
+  const key = process.env.COVERR_API_KEY;
+  if (!key || !query) return [];
+  const ck = `cv|${query}|${orientation}`;
+  if (cache.has(ck)) return cache.get(ck);
+  const base = process.env.COVERR_API_URL || 'https://api.coverr.co';
+  const r = await fetch(`${base}/videos?query=${encodeURIComponent(query)}&page_size=20&urls=true`, { headers: { Authorization: `Bearer ${key}`, 'x-api-key': key, Accept: 'application/json' } });
+  if (!r.ok) { const t = await r.text().catch(() => ''); console.warn('[coverr]', r.status, t.slice(0, 120)); if (diag) diag.error = `${r.status} ${t.slice(0, 120)}`; return []; }
+  const j = await r.json();
+  const lista = j.hits || j.videos || j.data || j.results || [];
+  if (diag) diag.crudos = lista.length;
+  const vids = lista.map((v) => {
+    const url = v.urls?.mp4 || v.urls?.mp4_download || v.urls?.mp4_preview || v.mp4 || v.url;
+    if (!url || !/^https:\/\//.test(url)) return null;
+    const vertical = v.is_vertical ?? (v.aspect_ratio ? String(v.aspect_ratio).split(':').reduce((a, b) => a / b) < 1 : null);
+    if (orientation === 'portrait' && vertical === false) return null;
+    if (orientation === 'landscape' && vertical === true) return null;
+    return { url, w: v.max_width || 0, h: v.max_height || 0, poster: v.thumbnail || v.poster || '', autor: 'Coverr', pagina: v.id ? `https://coverr.co/videos/${v.id}` : 'https://coverr.co', dur: v.duration };
+  }).filter(Boolean);
+  if (diag) diag.usables = vids.length;
+  cache.set(ck, vids);
+  return vids;
+}
 async function buscarTomas(query, orientation) {
-  const [a, b] = await Promise.all([pexelsSearch(query, orientation).catch(() => []), pixabaySearch(query, orientation).catch(() => [])]);
+  const listas = await Promise.all([pexelsSearch(query, orientation).catch(() => []), pixabaySearch(query, orientation).catch(() => []), coverrSearch(query, orientation).catch(() => [])]);
   const out = []; // intercala fuentes para dar variedad
-  for (let i = 0; i < Math.max(a.length, b.length); i++) { if (a[i]) out.push(a[i]); if (b[i]) out.push(b[i]); }
+  for (let i = 0; i < Math.max(...listas.map((l) => l.length)); i++) for (const l of listas) if (l[i]) out.push(l[i]);
   return out;
+}
+export async function diagnosticoBroll(query = 'coffee shop', orientation = 'portrait') {
+  const d = { coverr: { llave: !!process.env.COVERR_API_KEY }, pexels: { llave: !!process.env.PEXELS_API_KEY }, pixabay: { llave: !!process.env.PIXABAY_API_KEY } };
+  try { await coverrSearch(query, orientation, d.coverr); } catch (e) { d.coverr.error = e.message; }
+  return d;
 }
 
 // Busca las tomas reales de cada escena (una distinta por escena cuando se puede).
@@ -215,14 +245,14 @@ export async function resolveBroll(spec) {
   return spec;
 }
 
-export const brollDisponible = () => !!(process.env.PEXELS_API_KEY || process.env.PIXABAY_API_KEY);
+export const brollDisponible = () => !!(process.env.PEXELS_API_KEY || process.env.PIXABAY_API_KEY || process.env.COVERR_API_KEY);
 
 // Proxy de video (permite reproducir y exportar sin bloqueos del navegador)
 const ALLOWED = ['videos.pexels.com', 'images.pexels.com', 'player.vimeo.com', 'cdn.pixabay.com', 'i.vimeocdn.com'];
 export async function proxyBroll(req, res) {
   let u;
   try { u = new URL(String(req.query.u || '')); } catch { return res.status(400).end(); }
-  if (u.protocol !== 'https:' || !ALLOWED.includes(u.hostname)) return res.status(403).end();
+  if (u.protocol !== 'https:' || !(ALLOWED.includes(u.hostname) || /(^|\.)coverr\.co$/.test(u.hostname))) return res.status(403).end();
   const headers = {};
   if (req.headers.range) headers.Range = req.headers.range;
   const r = await fetch(u, { headers, redirect: 'follow' }).catch(() => null);

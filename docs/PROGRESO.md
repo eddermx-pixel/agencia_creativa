@@ -141,3 +141,4 @@ docs/
 - Variables: `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID` (o `vozId` por cliente), opcional `ELEVENLABS_MODEL`, `ELEVENLABS_USD_POR_1000` (costo, suma al reporte por cliente). Max escribe `narracion` por escena; el servidor genera un MP3 por escena (cache en disco) y el reproductor lo mezcla (música baja sola) y entra al MP4 exportado.
 - B-roll: Pexels (cerró temporalmente nuevas llaves) y Pixabay (`PIXABAY_API_KEY`, gratis); se intercalan las fuentes disponibles.
 - Probado solo con servidores simulados; formatos reales de ElevenLabs/Pixabay por confirmar.
+- Coverr: variable `COVERR_API_KEY`; comprueba tu llave abriendo `/api/broll/estado`.

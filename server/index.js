@@ -19,7 +19,7 @@ import * as planeacion from './planeacion.js';
 import * as costos from './costos.js';
 import * as voz from './voz.js';
 import crypto from 'node:crypto';
-import { ESTILOS, estiloById, demoSpec, resolveBroll, proxyBroll, brollDisponible, sugerirEstilos } from './video.js';
+import { ESTILOS, estiloById, demoSpec, resolveBroll, proxyBroll, brollDisponible, sugerirEstilos, diagnosticoBroll } from './video.js';
 
 // Carga .env si existe (sin dependencias extra).
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -513,6 +513,7 @@ app.post('/api/clients/:id/sugerir-estilos', (req, res) => {
   if (!cl) return res.status(404).json({ error: 'No existe' });
   res.json({ sugeridos: sugerirEstilos(cl) });
 });
+app.get('/api/broll/estado', async (req, res) => res.json(await diagnosticoBroll(String(req.query.q || 'coffee shop'), String(req.query.o || 'portrait'))));
 app.get('/api/broll/proxy', (req, res) => proxyBroll(req, res).catch(() => res.status(502).end()));
 app.get('/api/pieces/:id/spec', (req, res) => {
   const p = db.pieces.find((x) => x.id === req.params.id);
