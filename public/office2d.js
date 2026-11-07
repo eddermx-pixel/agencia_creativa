@@ -10,7 +10,7 @@ const CORRIDOR = 505;
 // acuario a la derecha y tu escritorio abajo a la derecha.
 const DESKS = {
   investigador: { x: 400, y: 390 }, copy: { x: 660, y: 390 }, disenador: { x: 920, y: 390 },
-  video: { x: 400, y: 640 }, calidad: { x: 660, y: 640 }, director: { x: 920, y: 640 },
+  video: { x: 400, y: 640 }, calidad: { x: 660, y: 640 }, director: { x: 920, y: 640 }, editor2: { x: 1180, y: 390 },
 };
 const EXTRA_DESKS = [{ x: 1180, y: 390 }, { x: 1180, y: 640 }];
 const BOSS = { x: 1250, y: 790 };

@@ -72,7 +72,7 @@ export function videoGuide(estilosCliente = [], prefs = {}) {
   "particulas": ${PARTICULAS.map((x) => `"${x}"`).join(' | ')},
   "escenas": [
     { "duracion": 1-6 (segundos),
-      "fondo": { "tipo": "broll", "busqueda": "toma real en INGLÉS, concreta y visual (ej. 'woman smiling eating fresh bread', 'barista pouring latte art close up')" }
+      "fondo": { "tipo": "broll", "busqueda": "toma real en INGLÉS, concreta y visual (ej. 'woman smiling eating fresh bread', 'barista pouring latte art close up')", "alternativas": ["(opcional) 1-2 búsquedas distintas por si la primera no encuentra nada"] }
              | { "tipo": "color" } | { "tipo": "archivo", "ruta": "carpeta/archivo del cliente" },
       "texto": "texto grande en pantalla (máx. 7 palabras)",
       "subtitulo": "texto corto en pantalla (opcional)",
@@ -81,6 +81,9 @@ export function videoGuide(estilosCliente = [], prefs = {}) {
          { "tipo": "lista", "items": ["punto corto", ...máx. 4] }   (checklist que se va marcando)
          { "tipo": "contador", "valor": número, "prefijo": "$", "sufijo": "%", "etiqueta": "qué mide" }   (número que sube; NUNCA inventes cifras: usa solo datos del brief o del cliente)
          { "tipo": "barras", "items": [{ "etiqueta": "texto", "valor": 0-100 }, ...máx. 4] }
+         { "tipo": "antes_despues", "antes": "situación sin la marca", "despues": "situación con la marca" }
+         { "tipo": "comparativa", "izquierda": { "titulo": "Sin chatbot", "items": ["máx. 3 puntos cortos"] }, "derecha": { "titulo": "Con chatbot", "items": ["..."] } }
+         { "tipo": "cuenta", "desde": 3, "final": "¡YA!" }   (cuenta regresiva para promociones o lanzamientos)
       "narracion": "lo que dice la VOZ EN OFF en esta escena, natural y hablado, máx. 2 frases (opcional; si hay llave de voz se genera el audio)",
       "animacion": ${ANIMACIONES.map((a) => `"${a}"`).join(' | ')},
       "transicion": ${TRANSICIONES.map((a) => `"${a}"`).join(' | ')} (cómo ENTRA esta escena),
@@ -120,6 +123,9 @@ function limpiaGrafico(g) {
   if (g.tipo === 'chat') { const m = (Array.isArray(g.mensajes) ? g.mensajes : []).slice(0, 4).map((x) => ({ de: x.de === 'bot' ? 'bot' : 'cliente', texto: txt(x.texto, 70) })).filter((x) => x.texto); return m.length ? { tipo: 'chat', mensajes: m } : undefined; }
   if (g.tipo === 'lista') { const i = (Array.isArray(g.items) ? g.items : []).slice(0, 4).map((x) => txt(x, 40)).filter(Boolean); return i.length ? { tipo: 'lista', items: i } : undefined; }
   if (g.tipo === 'contador') return Number.isFinite(+g.valor) ? { tipo: 'contador', valor: +g.valor, prefijo: txt(g.prefijo, 3), sufijo: txt(g.sufijo, 4), etiqueta: txt(g.etiqueta, 60) } : undefined;
+  if (g.tipo === 'antes_despues') return g.antes && g.despues ? { tipo: 'antes_despues', antes: txt(g.antes, 40), despues: txt(g.despues, 40) } : undefined;
+  if (g.tipo === 'comparativa') { const col = (c) => (c && c.titulo ? { titulo: txt(c.titulo, 20), items: (Array.isArray(c.items) ? c.items : []).slice(0, 3).map((x) => txt(x, 22)).filter(Boolean) } : null); const a = col(g.izquierda), b = col(g.derecha); return a && b ? { tipo: 'comparativa', izquierda: a, derecha: b } : undefined; }
+  if (g.tipo === 'cuenta') return { tipo: 'cuenta', desde: Math.min(10, Math.max(1, Math.round(+g.desde || 3))), final: txt(g.final || '¡YA!', 12) };
   if (g.tipo === 'barras') { const i = (Array.isArray(g.items) ? g.items : []).slice(0, 4).map((x) => ({ etiqueta: txt(x.etiqueta, 30), valor: Math.min(100, Math.max(0, +x.valor || 0)) })).filter((x) => x.etiqueta); return i.length ? { tipo: 'barras', items: i } : undefined; }
   return undefined;
 }
@@ -133,7 +139,7 @@ export function normalizeSpec(input) {
   }
   const escenas = (Array.isArray(s.escenas) ? s.escenas : []).slice(0, 12).map((e) => ({
     duracion: clampN(e.duracion, 0.8, 8, 2.5),
-    fondo: e.fondo?.tipo === 'broll' ? { tipo: 'broll', busqueda: String(e.fondo.busqueda || '').slice(0, 120), clip: e.fondo.clip || null }
+    fondo: e.fondo?.tipo === 'broll' ? { tipo: 'broll', busqueda: String(e.fondo.busqueda || '').slice(0, 120), alternativas: (Array.isArray(e.fondo.alternativas) ? e.fondo.alternativas : []).slice(0, 2).map((x) => String(x).slice(0, 120)).filter(Boolean), clip: e.fondo.clip || null }
       : e.fondo?.tipo === 'archivo' ? { tipo: 'archivo', ruta: String(e.fondo.ruta || '').slice(0, 300) } : { tipo: 'color' },
     texto: String(e.texto || '').slice(0, 90),
     subtitulo: String(e.subtitulo || '').slice(0, 200),
@@ -248,18 +254,22 @@ export async function diagnosticoBroll(query = 'coffee shop', orientation = 'por
   return d;
 }
 
-// Busca las tomas reales de cada escena (una distinta por escena cuando se puede).
+// Busca las tomas reales de cada escena: la más relevante (orden del proveedor) que dure lo bastante,
+// sin repetir; si no hay resultados prueba las búsquedas alternativas y una versión simplificada.
 export async function resolveBroll(spec) {
   const orientation = spec.formato === '16:9' ? 'landscape' : spec.formato === '1:1' ? 'square' : 'portrait';
   const usadas = new Set();
   for (const e of spec.escenas) {
     if (e.fondo.tipo !== 'broll' || e.fondo.clip) continue;
-    try {
-      const vids = await buscarTomas(e.fondo.busqueda, orientation);
-      const libre = vids.filter((v) => !usadas.has(v.url));
-      const pick = libre[Math.floor(Math.random() * Math.min(3, libre.length))] || vids[0];
-      if (pick) { e.fondo.clip = pick; usadas.add(pick.url); }
-    } catch (err) { console.warn('[pexels]', err.message); }
+    const consultas = [e.fondo.busqueda, ...(e.fondo.alternativas || []), e.fondo.busqueda.split(/\s+/).slice(0, 2).join(' ')].filter(Boolean);
+    for (const q of [...new Set(consultas)]) {
+      try {
+        const vids = await buscarTomas(q, orientation);
+        const libres = vids.filter((v) => !usadas.has(v.url));
+        const pick = libres.find((v) => !v.dur || v.dur >= e.duracion) || libres[0] || vids[0];
+        if (pick) { e.fondo.clip = pick; usadas.add(pick.url); break; }
+      } catch (err) { console.warn('[b-roll]', err.message); }
+    }
   }
   return spec;
 }

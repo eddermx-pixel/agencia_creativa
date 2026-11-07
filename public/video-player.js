@@ -319,6 +319,35 @@ export async function createPlayer(canvas, spec, opts = {}) {
       ctx.fillStyle = P.acento; ctx.font = font(Math.round(W * 0.26)); ctx.fillText(`${g.prefijo || ''}${n}${g.sufijo || ''}`, 0, 0); ctx.shadowBlur = 0;
       if (g.etiqueta) { ctx.fillStyle = P.texto; ctx.font = font(Math.round(W * 0.06), 700); wrap(g.etiqueta.toUpperCase(), ancho).forEach((l, i) => ctx.fillText(l, 0, W * 0.2 + i * W * 0.075)); }
       ctx.restore();
+    } else if (g.tipo === 'antes_despues') {
+      // Dos tarjetas; una línea las revela de "antes" a "después"
+      const pr = clamp01((local - 0.3) / Math.max(0.8, e.duracion * 0.55)); const q = ease(pr); const h = H * 0.34, y = top + H * 0.02;
+      const corte = x0 + ancho * q; const tarjeta = (texto, fill, txt, xi, w, etiq) => {
+        ctx.save(); ctx.beginPath(); ctx.rect(xi, y - 10, w, h + 20); ctx.clip();
+        ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(x0, y, ancho, h, W * 0.04); ctx.fill();
+        ctx.fillStyle = txt; ctx.textAlign = 'center'; ctx.font = font(Math.round(W * 0.045), 800); ctx.fillText(etiq, x0 + ancho / 2, y + h * 0.2);
+        ctx.font = font(Math.round(W * 0.07)); wrap(String(texto).toUpperCase(), ancho * 0.85).forEach((l, i, a) => ctx.fillText(l, x0 + ancho / 2, y + h * 0.58 + (i - (a.length - 1) / 2) * W * 0.085));
+        ctx.restore();
+      };
+      tarjeta(g.antes, 'rgba(255,93,108,.9)', '#fff', x0, Math.max(0, corte - x0), 'ANTES');
+      tarjeta(g.despues, P.acento, contrast(P.acento), corte, Math.max(0, x0 + ancho - corte), 'DESPUÉS');
+      ctx.fillStyle = '#fff'; ctx.fillRect(corte - 3, y - 14, 6, h + 28);
+    } else if (g.tipo === 'comparativa') {
+      const cols = [[g.izquierda, 'rgba(255,93,108,.9)', '✕', '#fff'], [g.derecha, P.acento, '✓', contrast(P.acento)]]; const w = ancho * 0.49; const size = Math.round(W * 0.036);
+      cols.forEach(([c, fill, marca, tx], ci) => {
+        if (!c) return; const pr = clamp01((local - 0.2 - ci * 0.3) / 0.4); if (pr <= 0) return; const xx = x0 + ci * (ancho - w); const q = back(pr);
+        ctx.save(); ctx.translate(xx + w / 2, top + H * 0.2); ctx.scale(q, q); ctx.globalAlpha = salida * clamp01(pr * 3);
+        const hh = H * 0.3; ctx.fillStyle = fill; ctx.beginPath(); ctx.roundRect(-w / 2, -hh / 2, w, hh, W * 0.035); ctx.fill();
+        ctx.fillStyle = tx; ctx.textAlign = 'center'; ctx.font = font(Math.round(W * 0.042)); ctx.fillText(String(c.titulo || '').toUpperCase(), 0, -hh / 2 + size * 1.6);
+        ctx.font = font(size, 700); (c.items || []).slice(0, 3).forEach((it, i) => { ctx.textAlign = 'left'; wrap(`${marca} ${String(it)}`, w - size * 1.2).slice(0, 2).forEach((l, li) => ctx.fillText(l, -w / 2 + size * 0.7, -hh / 2 + size * 3.4 + i * size * 2.6 + li * size * 1.15)); });
+        ctx.restore();
+      });
+    } else if (g.tipo === 'cuenta') {
+      const n = Math.max(1, Math.min(10, Math.round(g.desde || 3))); const per = Math.max(0.5, (e.duracion - 0.2) / (n + 1)); const k = Math.floor(local / per); const ph = (local % per) / per;
+      const txt = k < n ? String(n - k) : (g.final || '¡YA!'); const s = back(clamp01(ph * 3)) * (1 - 0.25 * ph);
+      ctx.save(); ctx.translate(W / 2, H * 0.6); ctx.scale(s, s); ctx.textAlign = 'center';
+      if (nivel >= 3) { ctx.shadowColor = P.acento; ctx.shadowBlur = 60; }
+      ctx.fillStyle = k < n ? P.acento : P.texto; ctx.font = font(Math.round(W * (txt.length > 2 ? 0.2 : 0.42))); ctx.fillText(txt, 0, 0); ctx.restore();
     } else if (g.tipo === 'barras') {
       const it = (g.items || []).slice(0, 5); const size = Math.round(W * 0.05); ctx.font = font(size, 800); const gap = size * 2.6; const bw = ancho * 0.62;
       it.forEach((b, i) => {

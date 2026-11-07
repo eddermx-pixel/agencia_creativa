@@ -156,3 +156,9 @@ docs/
 ## Campañas en paralelo y tablero de progreso
 - Causa del problema: cada agente tenía una sola fila de trabajo para todo el sistema, así que la directora de la campaña 2 esperaba a que terminara la 1. Ahora la fila es por agente **y campaña**: varias campañas avanzan a la vez. `MAX_CAMPANAS` (por defecto 3) limita cuántas trabajan al mismo tiempo; las demás quedan "en fila" y arrancan solas. Cada campaña activa gasta API en paralelo.
 - **Progreso** (`/progreso.html`, y clic en la TV de la sala de la oficina): barra por campaña (preguntas, junta, concepto, producción, tus aprobaciones, entrega), qué espera de ti y quién trabaja en ella.
+
+## Micho (gato editor explicativo) y gráficos nuevos
+- Nuevo agente **Micho** (`editor2`): gato astronauta, editor de videos explicativos con voz en off, gráficos animados y música con IA. Dani (directora) conoce a los dos editores: Max = reels virales de ritmo rápido; Micho = explicativos, comparativas y narración.
+- Gráficos nuevos: `antes_despues`, `comparativa`, `cuenta` (cuenta regresiva).
+- Selección de tomas: ya no al azar; se elige la más relevante que dure lo suficiente, sin repetir, con búsquedas `alternativas` y una versión simplificada si no hay resultados.
+- Pendiente (lo agregará el dueño): generación de clips con la API de video de Google.

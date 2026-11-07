@@ -30,7 +30,7 @@ const REGLAS = `Trabajas en una agencia de marketing operada por agentes de IA. 
 function systemFor(agent, campaign) {
   const cl = db.clients.find((c) => c.id === campaign.clientId);
   const mem = memoryText(campaign.clientId, campaign.id);
-  const guia = ['video', 'director'].includes(agent.id) ? `\n\n${videoGuide(cl?.estilosVideo || [], cl?.videoPrefs || {})}` : '';
+  const guia = ['video', 'editor2', 'director'].includes(agent.id) ? `\n\n${videoGuide(cl?.estilosVideo || [], cl?.videoPrefs || {})}` : '';
   const archivos = resumenParaAgentes(cl?.id);
   const cursos = aprendizajes(agent.id);
   return `${REGLAS}\n\n${agent.prompt}${guia}\n\n${personaText(agent)}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${campaign.objetivo ? `\n\nObjetivo de esta campaña: ${campaign.objetivo}. Toda pieza debe servir a ese objetivo y a la estrategia de ads de la marca.` : ''}${archivos ? `\n\n${archivos}` : ''}${cursos ? `\n\n${cursos}` : ''}${mem ? `\n\n${mem}` : ''}`;
@@ -49,7 +49,7 @@ const TOOLS = {
     input_schema: obj({ accion: { type: 'string' }, detalle: { type: 'string' } }, ['accion']),
   },
   ver_archivos: {
-    description: 'Lista los archivos de una computadora: la tuya (por defecto), la de otro agente (escribe su nombre: Dani, Iris, Teo, Luna, Max o Rita) o la carpeta "compartido" (brief, respuestas, concepto aprobado y piezas aprobadas de cada campaña). Todos pueden leer todo.',
+    description: 'Lista los archivos de una computadora: la tuya (por defecto), la de otro agente (escribe su nombre: Dani, Iris, Teo, Luna, Max, Micho o Rita) o la carpeta "compartido" (brief, respuestas, concepto aprobado y piezas aprobadas de cada campaña). Todos pueden leer todo.',
     input_schema: obj({ espacio: { type: 'string', description: 'id del agente o "compartido"' } }, []),
   },
   leer_archivo: {
@@ -281,7 +281,7 @@ async function loop(job) {
 // Diseñadora y video "ven" las imágenes de referencia del cliente. Se agregan al
 // enviar (no se guardan en la base de datos) y siempre las mismas en toda la tarea.
 function withRefs(job, campaign) {
-  if (!['disenador', 'video'].includes(job.agentId)) return job.messages;
+  if (!['disenador', 'video', 'editor2'].includes(job.agentId)) return job.messages;
   if (!job.refs) {
     job.refs = imagenesReferencia(campaign.clientId).map((i) => i.ruta);
     save();

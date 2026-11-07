@@ -1,7 +1,7 @@
 // Currículum de cada agente: vista de 4 ángulos, personalidad, skills e historial.
 import { api, store, connect, esc, usd, drawCrew, hace } from './common.js';
 
-const TIPOS = { astronauta: 'Astronauta', alien: 'Alienígena', robot: 'Robot', perro: 'Perro espacial' };
+const TIPOS = { astronauta: 'Astronauta', alien: 'Alienígena', robot: 'Robot', perro: 'Perro espacial', gato: 'Gato espacial' };
 let team = [];
 
 function turnaround(a) {
