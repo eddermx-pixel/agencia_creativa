@@ -3,9 +3,12 @@
 // de hasta 3 empleados (ver node_modules/remotion/LICENSE.md); una empresa mayor necesita Company License.
 import fs from 'node:fs';
 import path from 'node:path';
-import { HF_DIR, TRABAJO, seguro, descargarTomas, generarAudio, mezclar, dur, guardarFinal } from './hyperframes.js';
+import { fileURLToPath } from 'node:url';
+import { HF_DIR, TRABAJO, seguro, descargarTomas, generarAudio, mezclar, dur, guardarFinal, correr } from './hyperframes.js';
 import { conTurno } from './pesado.js';
 
+const aquí = path.dirname(fileURLToPath(import.meta.url));
+const RAIZ = path.resolve(aquí, '..');
 export const remotionDisponible = () => fs.existsSync(path.resolve('node_modules', '@remotion', 'renderer')) && fs.existsSync(path.resolve('node_modules', '@remotion', 'bundler'));
 const PERMITIDOS = new Set(['react', 'remotion', '@remotion/shapes', '@remotion/paths', '@remotion/transitions', '@remotion/motion-blur', '@remotion/noise', '@remotion/layout-utils', '@remotion/google-fonts', '@remotion/animated-emoji']);
 const PROHIBIDO = [/\bfetch\s*\(/, /XMLHttpRequest/, /WebSocket/, /\bimport\s*\(/, /\brequire\s*\(/, /\bprocess\b/, /child_process/, /\beval\s*\(/, /new Function/, /document\.cookie/, /localStorage/, /<iframe/i, /dangerouslySetInnerHTML/];
@@ -45,26 +48,21 @@ export async function producirRemotion({ clave, codigo, duracion = 10, narracion
     fs.writeFileSync(path.join(dir, 'src', 'Root.tsx'), ROOT(seg, 1080, 1920));
     fs.writeFileSync(path.join(dir, 'src', 'Comp.tsx'), codigo);
     return await conTurno(async () => {
-      const { bundle } = await import('@remotion/bundler');
-      const { renderMedia, selectComposition } = await import('@remotion/renderer');
-      let serveUrl;
-      try { serveUrl = await bundle({ entryPoint: path.join(dir, 'src', 'index.ts'), publicDir: path.join(dir, 'public'), onProgress: () => {} }); }
-      catch (e) { throw new Error(`El código no compila. Corrígelo y vuelve a entregar:\n${String(e.message).replace(/\x1b\[[0-9;]*m/g, '').slice(0, 900)}${notas.length ? `\nTomas: ${notas.join('; ')}` : ''}`); }
-      const browserExecutable = process.env.REMOTION_BROWSER || undefined;
-      const consola = [];
-      try {
-        const comp = await selectComposition({ serveUrl, id: 'Main', browserExecutable, onBrowserLog: (l) => consola.push(l.text) });
-        const silencio = path.join(dir, 'silencio.mp4');
-        await renderMedia({ composition: comp, serveUrl, codec: 'h264', outputLocation: silencio, browserExecutable, muted: true, concurrency: Number(process.env.RM_CONCURRENCY || 2), onBrowserLog: (l) => l.type === 'error' && consola.push(l.text), timeoutInMilliseconds: 120000 });
-        const d = await dur(silencio);
-        const { voces, musica } = await generarAudio({ narraciones, musicaPrompt, duracion: d, campaignId, agente });
-        await mezclar(silencio, final, { voces, musica, duracion: d });
-        fs.unlinkSync(silencio);
-        guardarFinal(k, final);
-        return { clave: k, archivo: 'final.mp4', duracion: d, resumen: `Remotion · ${d.toFixed(1)} s · ${voces.length} voz(es) · música ${musica ? 'IA' : 'no'}` };
-      } catch (e) {
-        throw new Error(`El render falló: ${String(e.message).replace(/\x1b\[[0-9;]*m/g, '').slice(0, 700)}${consola.length ? `\nConsola: ${consola.slice(0, 4).join(' | ').slice(0, 400)}` : ''}`);
+      const r = await correr(process.execPath, ['--max-old-space-size=600', path.join(aquí, 'remotion-worker.mjs'), JSON.stringify({ dir, seg, browser: process.env.REMOTION_BROWSER || '', concurrency: Number(process.env.RM_CONCURRENCY || 1) })], { cwd: RAIZ, timeout: 900000 });
+      const m = /@@(OK|COMPILA|RENDER)@@(\{.*\})/.exec(r.out);
+      const info = m ? JSON.parse(m[2]) : {};
+      if (!m || m[1] !== 'OK') {
+        if (!m) throw new Error(`El render de Remotion se cortó (código ${r.code}). Casi seguro se acabó la memoria del servidor: sube el plan de Railway o usa HyperFrames. ${r.err.slice(-200)}`);
+        if (m[1] === 'COMPILA') throw new Error(`El código no compila. Corrígelo y vuelve a entregar:\n${info.mensaje}${notas.length ? `\nTomas: ${notas.join('; ')}` : ''}`);
+        throw new Error(`El render falló: ${info.mensaje}${info.consola ? `\nConsola: ${info.consola}` : ''}`);
       }
+      const silencio = path.join(dir, 'silencio.mp4');
+      const d = await dur(silencio);
+      const { voces, musica } = await generarAudio({ narraciones, musicaPrompt, duracion: d, campaignId, agente });
+      await mezclar(silencio, final, { voces, musica, duracion: d });
+      fs.unlinkSync(silencio);
+      guardarFinal(k, final);
+      return { clave: k, archivo: 'final.mp4', duracion: d, resumen: `Remotion · ${d.toFixed(1)} s · ${voces.length} voz(es) · música ${musica ? 'IA' : 'no'}` };
     });
   } finally {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}

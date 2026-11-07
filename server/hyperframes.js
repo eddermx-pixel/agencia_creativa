@@ -19,7 +19,9 @@ const GSAP = path.join(RAIZ, 'node_modules', 'gsap', 'dist', 'gsap.min.js');
 export const HF_DIR = path.join(DATA_DIR, 'hf');
 // El trabajo pesado (frames, temporales) va al disco del contenedor, NO al volumen /data (que suele ser chico).
 export const TRABAJO = process.env.TRABAJO_DIR || path.join(os.tmpdir(), 'agencia-trabajo');
-export const HF_WORKERS = String(process.env.HF_WORKERS || 2);
+const limiteMb = (() => { for (const f of ['/sys/fs/cgroup/memory.max', '/sys/fs/cgroup/memory/memory.limit_in_bytes']) { try { const v = Number(fs.readFileSync(f, 'utf8').trim()); if (v > 0 && v < 1e13) return v / 1048576; } catch {} } return null; })();
+const POCA_MEMORIA = limiteMb !== null && limiteMb < 2048;
+export const HF_WORKERS = String(process.env.HF_WORKERS || (POCA_MEMORIA ? 1 : 2));
 export function guardarFinal(k, origen) { const d = path.join(HF_DIR, k); fs.mkdirSync(d, { recursive: true }); fs.copyFileSync(origen, path.join(d, 'final.mp4')); }
 export const hfDisponible = () => fs.existsSync(HF_BIN) && fs.existsSync(GSAP);
 
@@ -166,7 +168,7 @@ export async function producir({ clave, html, bloques = [], narraciones = [], mu
       const c = await correr(process.execPath, [HF_BIN, 'check', '--json'], { cwd: dir, timeout: 240000 });
       const errores = leerCheck(c.out);
       if (errores.length) throw new Error(`La validación encontró ${errores.length} error(es). Corrígelos y vuelve a entregar:\n- ${errores.slice(0, 8).join('\n- ')}${notasTomas.length ? `\nTomas: ${notasTomas.join('; ')}` : ''}`);
-      const r = await correr(process.execPath, [HF_BIN, 'render', '--quality', 'standard', '--fps', '30', '--workers', HF_WORKERS, '-o', 'silencio.mp4'], { cwd: dir, timeout: 900000 });
+      const r = await correr(process.execPath, [HF_BIN, 'render', '--quality', 'standard', '--fps', '30', '--workers', HF_WORKERS, ...(POCA_MEMORIA ? ['--low-memory-mode'] : []), '-o', 'silencio.mp4'], { cwd: dir, timeout: 900000 });
       const silencio = path.join(dir, 'silencio.mp4');
       if (r.code !== 0 || !fs.existsSync(silencio)) throw new Error(`El render falló: ${(r.err + r.out).slice(-400)}`);
       const d = await dur(silencio);
