@@ -14,6 +14,7 @@ import { aprendizajes, parseCurso } from './cursos.js';
 import * as ws from './workspace.js';
 import { makeActions, withAgent } from './actions.js';
 import { hfGuide, estiloPelicula, hfDisponible } from './hyperframes.js';
+import { remotionGuide, remotionDisponible } from './remotion.js';
 
 const client = new Anthropic({ maxRetries: 4, timeout: 6 * 60 * 1000 });
 const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
@@ -31,7 +32,7 @@ const REGLAS = `Trabajas en una agencia de marketing operada por agentes de IA. 
 function systemFor(agent, campaign) {
   const cl = db.clients.find((c) => c.id === campaign.clientId);
   const mem = memoryText(campaign.clientId, campaign.id);
-  const guia = ['video', 'editor2', 'director'].includes(agent.id) ? `\n\n${videoGuide(cl?.estilosVideo || [], cl?.videoPrefs || {})}${agent.id === 'editor2' && hfDisponible() ? `\n\n${hfGuide()}` : ''}` : '';
+  const guia = ['video', 'editor2', 'director'].includes(agent.id) ? `\n\n${videoGuide(cl?.estilosVideo || [], cl?.videoPrefs || {})}${agent.id === 'editor2' && hfDisponible() ? `\n\n${hfGuide()}` : ''}${agent.id === 'editor2' && remotionDisponible() ? `\n\n${remotionGuide()}` : ''}` : '';
   const archivos = resumenParaAgentes(cl?.id);
   const cursos = aprendizajes(agent.id);
   return `${REGLAS}\n\n${agent.prompt}${guia}\n\n${personaText(agent)}\n\nCampaña actual — Cliente: ${campaign.cliente}\n${brandText(cl)}\n\nBrief del jefe:\n${campaign.brief}${campaign.objetivo ? `\n\nObjetivo de esta campaña: ${campaign.objetivo}. Toda pieza debe servir a ese objetivo y a la estrategia de ads de la marca.` : ''}${archivos ? `\n\n${archivos}` : ''}${cursos ? `\n\n${cursos}` : ''}${mem ? `\n\n${mem}` : ''}`;
@@ -86,6 +87,18 @@ const TOOLS = {
       version: { type: 'number' },
     }, ['titulo', 'html']),
   },
+  entregar_remotion: {
+    description: 'Entrega un video hecho con REMOTION (React): tú escribes el componente TSX (1080×1920, 30 fps) y el servidor lo compila, renderiza, le mezcla voz y música y lo manda al jefe para aprobación. Si hay errores te los devuelve para que los corrijas. Puede tardar unos minutos.',
+    input_schema: obj({
+      titulo: { type: 'string' }, descripcion: { type: 'string' },
+      codigo: { type: 'string', description: 'El archivo Comp.tsx completo (export default function Comp)' },
+      duracion: { type: 'number', description: 'Duración total en segundos (3 a 60)' },
+      narraciones: { type: 'array', items: obj({ inicio: { type: 'number' }, texto: { type: 'string' } }, ['inicio', 'texto']) },
+      musicaPrompt: { type: 'string' },
+      tomas: { type: 'array', items: obj({ id: { type: 'string' }, busqueda: { type: 'string' }, duracion: { type: 'number' } }, ['id', 'busqueda']) },
+      version: { type: 'number' },
+    }, ['titulo', 'codigo', 'duracion']),
+  },
   ver_estilo_pelicula: {
     description: 'Lee la guía de dirección de arte de uno de los 66 estilos de película (Lemo Opuscar) para aplicarla en tu composición HyperFrames.',
     input_schema: obj({ slug: { type: 'string', description: 'El identificador del estilo, p. ej. art-deco' } }, ['slug']),
@@ -117,6 +130,7 @@ function toolDefs(agentId) {
   const names = ['estado', 'preguntar_al_jefe', 'pedir_autorizacion', 'guardar_memoria', 'ver_archivos', 'leer_archivo', 'guardar_nota'];
   if (byId[agentId].puedeEntregar) names.push('entregar_pieza');
   if (agentId === 'editor2' && hfDisponible()) names.push('entregar_hyperframes', 'ver_estilo_pelicula');
+  if (agentId === 'editor2' && remotionDisponible()) names.push('entregar_remotion');
   const defs = names.map((name) => ({ name, ...TOOLS[name] }));
   if (agentId === 'director') {
     defs.push({ name: 'hacer_preguntas', ...TOOLS.hacer_preguntas }, { name: 'junta_creativa', ...TOOLS.junta_creativa }, { name: 'presentar_concepto', ...TOOLS.presentar_concepto });
@@ -147,6 +161,9 @@ async function runTool(job, block, campaign) {
     case 'entregar_hyperframes':
       if (!i.html) throw new Error('Falta el html de la composición');
       return a.entregarHF(i);
+    case 'entregar_remotion':
+      if (!i.codigo) throw new Error('Falta el código del componente');
+      return a.entregarRemotion(i);
     case 'ver_estilo_pelicula': return estiloPelicula(i.slug);
     case 'hacer_preguntas': return a.cuestionario(i.intro, i.preguntas);
     case 'presentar_concepto': return a.concepto(i.titulo || 'Concepto', i.detalle || '');

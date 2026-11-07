@@ -169,3 +169,8 @@ docs/
 - Un solo trabajo pesado (Chromium/ffmpeg) a la vez. El Dockerfile descarga el navegador de HyperFrames al construir la imagen.
 - **Remotion** sigue fuera como software: su licencia exige pago para empresas de más de 3 personas; si tu agencia entra en el uso gratuito o compras la licencia, se puede agregar después.
 - Probado localmente: validación con errores, render, voz+música mezcladas, aprobación y copia a Resultado final. No probado: el agente real escribiendo composiciones; la imagen Docker.
+
+## Remotion para Micho
+- `remotion@4.0.541` (+ `@remotion/renderer`, `@remotion/bundler`, React 18) instalado. Micho tiene la herramienta `entregar_remotion`: escribe un componente React (TSX); el servidor valida los imports (lista permitida), lo compila con el bundler, lo renderiza (1080×1920, 30 fps), mezcla voz y música y lo manda a aprobación; al aprobar se guarda el MP4 igual que los videos HyperFrames. Si no compila o falla el render, el error vuelve a Micho para que lo corrija.
+- **Licencia**: el archivo `node_modules/remotion/LICENSE.md` dice que es gratis, incluso para uso comercial, para individuos y organizaciones con hasta 3 empleados, y que una empresa mayor necesita Company License (remotion.pro). Cambiará en la versión 5.0. Revisa tu caso si el equipo crece.
+- Variable `REMOTION_BROWSER` (opcional) fuerza un navegador concreto; por defecto Remotion usa el suyo, que el Dockerfile descarga al construir.

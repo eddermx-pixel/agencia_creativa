@@ -31,7 +31,7 @@ export function estiloPelicula(slug) {
 }
 
 // ---------- Utilidades ----------
-function correr(cmd, args, { cwd, timeout = 600000, env = {} } = {}) {
+export function correr(cmd, args, { cwd, timeout = 600000, env = {} } = {}) {
   return new Promise((ok, fail) => {
     const p = spawn(cmd, args, { cwd, env: { ...process.env, HYPERFRAMES_NO_TELEMETRY: '1', ...env } });
     let out = '', err = '';
@@ -42,7 +42,7 @@ function correr(cmd, args, { cwd, timeout = 600000, env = {} } = {}) {
     p.on('exit', (c) => { clearTimeout(t); ok({ code: c, out, err }); });
   });
 }
-const dur = async (f) => { const r = await correr('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]); return Number(r.out.trim()) || 0; };
+export const dur = async (f) => { const r = await correr('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]); return Number(r.out.trim()) || 0; };
 export const seguro = (k) => String(k).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60);
 
 const PROHIBIDO = [/\bfetch\s*\(/i, /XMLHttpRequest/i, /WebSocket/i, /\bimport\s*\(/i, /<iframe/i, /<object/i, /<embed/i, /<script[^>]+src=["']https?:/i, /<link[^>]+href=["']https?:(?!\/\/fonts\.(googleapis|gstatic)\.com)/i, /@import\s+url\(\s*["']?https?:/i, /document\.cookie/i, /localStorage/i];
@@ -66,10 +66,10 @@ function leerCheck(salida) {
   return todos;
 }
 
-async function descargarTomas(dir, tomas, formato) {
+export async function descargarTomas(dir, tomas, formato, sub = path.join('assets', 'tomas')) {
   const orient = formato === 'horizontal' ? 'landscape' : 'portrait';
   const listas = [];
-  fs.mkdirSync(path.join(dir, 'assets', 'tomas'), { recursive: true });
+  fs.mkdirSync(path.join(dir, sub), { recursive: true });
   for (const t of (tomas || []).slice(0, 6)) {
     const id = seguro(t.id);
     if (!id || !t.busqueda) continue;
@@ -80,13 +80,13 @@ async function descargarTomas(dir, tomas, formato) {
     if (u.protocol !== 'https:') continue;
     const r = await fetch(u); if (!r.ok) { listas.push(`${id}: no se pudo descargar`); continue; }
     const buf = Buffer.from(await r.arrayBuffer()); if (buf.length > 80 * 1024 * 1024) { listas.push(`${id}: archivo demasiado grande`); continue; }
-    fs.writeFileSync(path.join(dir, 'assets', 'tomas', `${id}.mp4`), buf);
-    listas.push(`${id}: listo → assets/tomas/${id}.mp4 (${Math.round(buf.length / 1e6)} MB, crédito: ${v.autor})`);
+    fs.writeFileSync(path.join(dir, sub, `${id}.mp4`), buf);
+    listas.push(`${id}: listo → ${sub.split(path.sep).join('/')}/${id}.mp4 (${Math.round(buf.length / 1e6)} MB, crédito: ${v.autor})`);
   }
   return listas;
 }
 
-async function mezclar(silencioso, salida, { voces, musica, duracion }) {
+export async function mezclar(silencioso, salida, { voces, musica, duracion }) {
   const entradas = ['-i', silencioso]; const filtros = []; const etiquetas = [];
   voces.forEach((v, i) => { entradas.push('-i', v.archivo); const ms = Math.max(0, Math.round(v.inicio * 1000)); filtros.push(`[${i + 1}:a]adelay=${ms}|${ms},volume=1.5[v${i}]`); etiquetas.push(`[v${i}]`); });
   if (musica) { entradas.push('-i', musica); const k = voces.length + 1; filtros.push(`[${k}:a]volume=${voces.length ? 0.2 : 0.5},atrim=0:${duracion.toFixed(2)},afade=t=out:st=${Math.max(0, duracion - 1.2).toFixed(2)}:d=1.2[mus]`); etiquetas.push('[mus]'); }
@@ -94,6 +94,19 @@ async function mezclar(silencioso, salida, { voces, musica, duracion }) {
   filtros.push(`${etiquetas.join('')}amix=inputs=${etiquetas.length}:normalize=0:duration=longest,loudnorm=I=-14:TP=-1.5,atrim=0:${duracion.toFixed(2)}[a]`);
   const r = await correr('ffmpeg', ['-y', ...entradas, '-filter_complex', filtros.join(';'), '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', salida], { timeout: 300000 });
   if (r.code !== 0) throw new Error(`No se pudo mezclar el audio: ${r.err.slice(-200)}`);
+}
+
+// Voz (ElevenLabs) y música (ElevenLabs Music): si fallan, el video sale sin esa pista.
+export async function generarAudio({ narraciones = [], musicaPrompt = '', duracion, campaignId = null, agente = 'editor2' }) {
+  const voces = [];
+  if (narraciones.length) {
+    const pseudo = { escenas: narraciones.slice(0, 12).map((n) => ({ narracion: String(n.texto || '').slice(0, 260), duracion: 2, _ini: Math.max(0, +n.inicio || 0) })) };
+    await agregarVoz(pseudo, { campaignId, agente });
+    for (const e of pseudo.escenas) if (e.voz) { const f = path.join(DATA_DIR, 'voz', path.basename(e.voz)); if (fs.existsSync(f)) voces.push({ archivo: f, inicio: e._ini }); }
+  }
+  let musica = null;
+  if (musicaPrompt) { const ms = { musicaPrompt, escenas: [{ duracion }] }; const m = await agregarMusica(ms, { campaignId, agente }); if (m.ok) { const f = path.join(DATA_DIR, 'musica', path.basename(ms.musicaUrl)); if (fs.existsSync(f)) musica = f; } }
+  return { voces, musica };
 }
 
 // ---------- Entrega ----------
@@ -116,15 +129,7 @@ export async function producir({ clave, html, narraciones = [], musicaPrompt = '
       const silencio = path.join(dir, 'silencio.mp4');
       if (r.code !== 0 || !fs.existsSync(silencio)) throw new Error(`El render falló: ${(r.err + r.out).slice(-400)}`);
       const d = await dur(silencio);
-      // voz y música (si hay llaves); si fallan, el video sale sin esa pista
-      const voces = [];
-      if (narraciones.length) {
-        const pseudo = { escenas: narraciones.slice(0, 12).map((n) => ({ narracion: String(n.texto || '').slice(0, 260), duracion: 2, _ini: Math.max(0, +n.inicio || 0) })) };
-        await agregarVoz(pseudo, { campaignId, agente });
-        for (const e of pseudo.escenas) if (e.voz) { const f = path.join(DATA_DIR, 'voz', path.basename(e.voz)); if (fs.existsSync(f)) voces.push({ archivo: f, inicio: e._ini }); }
-      }
-      let musica = null;
-      if (musicaPrompt) { const ms = { musicaPrompt, escenas: [{ duracion: d }] }; const m = await agregarMusica(ms, { campaignId, agente }); if (m.ok) { const f = path.join(DATA_DIR, 'musica', path.basename(ms.musicaUrl)); if (fs.existsSync(f)) musica = f; } }
+      const { voces, musica } = await generarAudio({ narraciones, musicaPrompt, duracion: d, campaignId, agente });
       await mezclar(silencio, final, { voces, musica, duracion: d });
       fs.unlinkSync(silencio);
       return { clave: k, archivo: 'final.mp4', duracion: d, resumen: `${d.toFixed(1)} s · ${voces.length} voz(es) · música ${musica ? 'IA' : 'no'}` };

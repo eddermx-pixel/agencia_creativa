@@ -14,5 +14,7 @@ RUN npm ci --omit=dev
 COPY . .
 # Navegador de HyperFrames (se descarga una vez al construir la imagen)
 RUN node node_modules/hyperframes/bin/hyperframes.mjs browser ensure || true
+# Navegador de Remotion
+RUN node -e "import('@remotion/renderer').then((m) => m.ensureBrowser()).then(() => console.log('remotion browser ok'))" || true
 
 CMD ["npm", "start"]
