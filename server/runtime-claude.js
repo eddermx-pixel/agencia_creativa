@@ -6,7 +6,7 @@
 // las preguntas que ya te hicieron siguen esperando tu respuesta y no se repiten.
 import Anthropic from '@anthropic-ai/sdk';
 import { ROSTER, byId, personaText } from './roster.js';
-import { setAgent, log, addUsage, brandText, memoryText, setPhase, agentState, startMeeting, addAporte, endMeeting, meetingTranscript } from './hub.js';
+import { bus, setAgent, log, addUsage, brandText, memoryText, setPhase, agentState, startMeeting, addAporte, endMeeting, meetingTranscript } from './hub.js';
 import { db, save, newId } from './store.js';
 import { videoGuide } from './video.js';
 import { resumenParaAgentes, imagenesReferencia } from './files.js';
@@ -157,10 +157,28 @@ async function delegate(parent, toolUseId, agentId, task, campaign) {
   return runJob(child);
 }
 
+// Cuántas campañas pueden trabajar a la vez (cada una gasta API en paralelo). MAX_CAMPANAS, por defecto 3.
+const MAX_CAMPANAS = Math.max(1, Number(process.env.MAX_CAMPANAS || 3));
+let campanasActivas = 0; const esperandoTurno = [];
+async function tomarTurno(job) {
+  const camp = db.campaigns.find((c) => c.id === job.campaignId);
+  if (campanasActivas >= MAX_CAMPANAS) {
+    if (camp) { camp.enCola = true; save(); bus.emit('campaign', camp); }
+    await new Promise((ok) => esperandoTurno.push(ok));
+    if (camp) { camp.enCola = false; save(); bus.emit('campaign', camp); }
+  }
+  campanasActivas++;
+}
+function soltarTurno() { campanasActivas = Math.max(0, campanasActivas - 1); esperandoTurno.shift()?.(); }
+
 export function runJob(job) {
   if (job.estado === 'terminado') return Promise.resolve(job.resultado);
   if (running.has(job.id)) return running.get(job.id);
-  const p = withAgent(job.agentId, () => loop(job)).finally(() => running.delete(job.id));
+  const raiz = job.agentId === 'director' && !job.parentJobId; // la tarea principal de una campaña
+  const p = (async () => {
+    if (raiz) await tomarTurno(job);
+    try { return await withAgent(job.agentId, () => loop(job), job.campaignId); } finally { if (raiz) soltarTurno(); }
+  })().finally(() => running.delete(job.id));
   running.set(job.id, p);
   return p;
 }
@@ -253,7 +271,10 @@ async function loop(job) {
     log(job.agentId, `Error: ${err.message}`, campaign.id);
     throw err;
   } finally {
-    setAgent(job.agentId, { estado: 'libre', burbuja: '', campaignId: null });
+    // Si el agente sigue trabajando en OTRA campaña, no lo marques como libre
+    const otro = [...running.keys()].map((id) => db.jobs.find((j) => j.id === id)).find((j) => j && j.id !== job.id && j.agentId === job.agentId);
+    if (otro) setAgent(job.agentId, { estado: 'trabajando', campaignId: otro.campaignId });
+    else setAgent(job.agentId, { estado: 'libre', burbuja: '', campaignId: null });
   }
 }
 

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Progreso</title>
+  <link rel="stylesheet" href="styles.css">
+  <style id="est"></style>
+  <style>.wrap { max-width: 860px; margin: 0 auto; padding: 16px; }</style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a>
+    <span class="sp"></span>
+    <a id="usageChip" class="chip" href="uso.html"></a>
+  </header>
+  <main class="wrap"><h1 style="margin:0 0 12px">📺 Progreso de campañas</h1><div id="box"></div></main>
+  <script type="module">
+    import { connect } from './common.js';
+    import { renderProgreso, ESTILO } from './progreso.js';
+    document.getElementById('est').textContent = ESTILO;
+    connect(() => renderProgreso(document.getElementById('box')));
+  </script>
+</body>
+</html>

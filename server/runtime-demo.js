@@ -84,7 +84,7 @@ async function demoAgent(agentId, campaign, fn) {
     } finally {
       setAgent(agentId, { estado: 'libre', burbuja: '', campaignId: null });
     }
-  });
+  }, campaign.id);
 }
 
 // Entrega en bucle: si el jefe rechaza, el agente rehace con otra versión.

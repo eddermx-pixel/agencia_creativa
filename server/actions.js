@@ -86,13 +86,14 @@ export function makeActions(agentId, campaign, key = null) {
   };
 }
 
-// Evita que un mismo agente haga dos tareas a la vez: hace fila.
+// Un agente hace una tarea a la vez POR CAMPAÑA (en campañas distintas trabajan en paralelo).
 const queues = new Map();
-export async function withAgent(agentId, fn) {
-  const prev = queues.get(agentId) || Promise.resolve();
+export async function withAgent(agentId, fn, campaignId = '') {
+  const k = `${agentId}:${campaignId}`;
+  const prev = queues.get(k) || Promise.resolve();
   let release;
   const mine = new Promise((r) => (release = r));
-  queues.set(agentId, prev.then(() => mine));
+  queues.set(k, prev.then(() => mine));
   await prev;
   try {
     return await fn();

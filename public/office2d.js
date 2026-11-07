@@ -43,7 +43,7 @@ const pendingReqs = (id) => store.requests.filter((r) => r.agente === id && r.es
 const pendingPieces = (id) => store.pieces.filter((p) => p.agente === id && p.estado === 'pendiente');
 const rr = (ctx, x, y, w, h, r, fill) => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = fill; ctx.fill(); };
 
-export function createOffice(container, { onAgent, onBoss, onFeed, onPC }) {
+export function createOffice(container, { onAgent, onBoss, onFeed, onPC, onTV }) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   container.append(canvas);
@@ -353,7 +353,7 @@ export function createOffice(container, { onAgent, onBoss, onFeed, onPC }) {
     const enCurso = store.campaigns.filter((c) => c.estado === 'en_curso').length;
     const pend = store.pieces.filter((p) => p.estado === 'pendiente').length;
     ctx.fillStyle = '#c9c7da'; ctx.font = '500 11px system-ui, sans-serif';
-    ctx.fillText(`${enCurso} campaña${enCurso === 1 ? '' : 's'} en curso`, TV.x + 84, TV.y + 46);
+    ctx.fillText(`${enCurso} campaña${enCurso === 1 ? '' : 's'} en curso · toca para ver`, TV.x + 84, TV.y + 46);
     ctx.fillText(`${pend} pieza${pend === 1 ? '' : 's'} por revisar`, TV.x + 84, TV.y + 62);
     const ticker = '  ★ La tripulación Pixel trabaja para ti  ★  Aprueba en el feed  ★  ';
     ctx.fillStyle = '#ffb547'; ctx.fillRect(TV.x, TV.y + TV.h - 18, TV.w, 18);
@@ -573,6 +573,7 @@ export function createOffice(container, { onAgent, onBoss, onFeed, onPC }) {
     for (const ch of Object.values(chars)) { const dist = Math.hypot(ch.x - p.x, ch.y - 80 - p.y); if (dist < bd) { bd = dist; best = ch; } }
     if (best) return onAgent(best.id);
     if (onPC) for (const ch of Object.values(chars)) { const d = ch.desk; if (Math.abs(p.x - d.x) < 95 && p.y > d.y - 40 && p.y < d.y + 40) return onPC(ch.id); }
+    if (onTV && p.x > TV.x - 14 && p.x < TV.x + TV.w + 14 && p.y > TV.y - 14 && p.y < TV.y + TV.h + 14) return onTV();
     if (p.x > FEED.x - 10 && p.x < FEED.x + FEED.w + 10 && p.y < FEED.y + FEED.h + 10) return onFeed();
     if (Math.abs(p.x - BOSS.x) < 120 && Math.abs(p.y - BOSS.y + 40) < 100) return onBoss();
   });

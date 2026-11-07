@@ -2,6 +2,7 @@
 import { api, store, byId, connect, avatar, esc, hace, usd } from './common.js';
 import { createOffice } from './office2d.js';
 import { openPC } from './pc.js';
+import { openProgreso } from './progreso.js';
 import { reqElement, TIPOS } from './decisions.js';
 
 const pendingReqs = (id) => store.requests.filter((r) => r.agente === id && r.estado === 'pendiente');
@@ -210,6 +211,7 @@ connect((type, data) => {
       office = createOffice($('office'), {
         onAgent: openAgent,
         onPC: (id) => openPC(id),
+        onTV: openProgreso,
         onBoss: () => $('reqCard').scrollIntoView({ behavior: 'smooth' }),
         onFeed: () => (location.href = 'feed.html'),
       });
