@@ -143,3 +143,7 @@ docs/
 - Probado solo con servidores simulados; formatos reales de ElevenLabs/Pixabay por confirmar.
 - Coverr: variable `COVERR_API_KEY`; comprueba tu llave abriendo `/api/broll/estado`.
 - Video de prueba (chatbots): abre `/player.html?prueba=1`; muestra cuántas tomas reales y escenas con voz se generaron (`&nuevo=1` regenera).
+
+## Render en el servidor (Dockerfile + Chromium + ffmpeg)
+- `Dockerfile` (Node 22, Chromium, ffmpeg) y `railway.json` con builder Dockerfile. Al aprobar un video v2 se renderiza solo a MP4 1080×1920 (H.264 + AAC, con voz, música y efectos) en `Resultado final/<campaña>/`; botón manual `POST /api/pieces/:id/render`; `RENDER_AUTO=0` lo apaga. `/api/render/estado` dice si el servidor puede renderizar.
+- El MP4 queda disponible para GoHighLevel. Probado localmente (Chromium + ffmpeg); la imagen Docker no se pudo construir en la sesión de desarrollo.
