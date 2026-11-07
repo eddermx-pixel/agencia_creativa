@@ -11,6 +11,7 @@ import { conTurno } from './pesado.js';
 import { agregarVoz } from './voz.js';
 import { agregarMusica } from './musica.js';
 import { buscarTomas } from './video.js';
+import { rutaArchivo } from './workspace.js';
 
 const aquí = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(aquí, '..');
@@ -104,6 +105,20 @@ export async function mezclar(silencioso, salida, { voces, musica, duracion }) {
 }
 
 // Voz (ElevenLabs) y música (ElevenLabs Music): si fallan, el video sale sin esa pista.
+// Archivos que el jefe subió a la computadora del agente → carpeta del proyecto
+export function copiarArchivos(dir, agente, archivos, sub) {
+  const out = [];
+  for (const a of (archivos || []).slice(0, 10)) {
+    const nombre = String(a.nombre || '').replace(/[^\w.\-]/g, '_').slice(0, 60);
+    if (!nombre) continue;
+    const origen = rutaArchivo(agente, a.ruta);
+    fs.mkdirSync(path.join(dir, sub), { recursive: true });
+    fs.copyFileSync(origen, path.join(dir, sub, nombre));
+    out.push(`${sub}/${nombre}`);
+  }
+  return out;
+}
+
 export async function generarAudio({ narraciones = [], musicaPrompt = '', duracion, campaignId = null, agente = 'editor2' }) {
   const voces = [];
   if (narraciones.length) {
@@ -153,7 +168,7 @@ async function instalarBloques(dir, bloques) {
 
 // ---------- Entrega ----------
 // Devuelve { clave, archivo, duracion, resumen } o lanza Error con instrucciones para que el agente corrija.
-export async function producir({ clave, html, bloques = [], narraciones = [], musicaPrompt = '', tomas = [], campaignId = null, agente = 'editor2', formato = 'vertical' }) {
+export async function producir({ clave, html, archivos = [], bloques = [], narraciones = [], musicaPrompt = '', tomas = [], campaignId = null, agente = 'editor2', formato = 'vertical' }) {
   if (!hfDisponible()) throw new Error('HyperFrames no está instalado en este servidor.');
   const k = seguro(clave); const dir = path.join(TRABAJO, k); const final = path.join(dir, 'final.mp4'); const persistente = path.join(HF_DIR, k, 'final.mp4');
   if (fs.existsSync(persistente)) return { clave: k, archivo: 'final.mp4', duracion: await dur(persistente), resumen: 'ya estaba renderizado' };
@@ -163,6 +178,7 @@ export async function producir({ clave, html, bloques = [], narraciones = [], mu
     fs.copyFileSync(GSAP, path.join(dir, 'assets', 'gsap.min.js'));
     const notasTomas = await descargarTomas(dir, tomas, formato);
     await instalarBloques(dir, bloques);
+    copiarArchivos(dir, agente, archivos, 'assets');
     fs.writeFileSync(path.join(dir, 'index.html'), limpio);
     return await conTurno(async () => {
       const c = await correr(process.execPath, [HF_BIN, 'check', '--json'], { cwd: dir, timeout: 240000 });
@@ -199,6 +215,7 @@ REGLAS (el validador las exige):
 6. Fuentes por nombre (ya incluidas): Inter, Montserrat, Outfit, Poppins, Oswald, Archivo Black, League Gothic, Playfair Display, EB Garamond, Space Mono, Roboto, Open Sans, Lato, Nunito. Otra fuente no sirve.
 7. Contenido dentro del 90% del cuadro (márgenes de ~100 px); dos textos NO pueden encimarse: cada bloque su zona (el validador lo detecta).
 8. El sonido NO va en el HTML: pásalo en "narraciones" (el servidor genera la voz con ElevenLabs y la coloca en el segundo "inicio") y "musicaPrompt" (música instrumental generada con IA, en inglés, sin nombres de artistas ni canciones).
+8b. ARCHIVOS DEL JEFE (logo, fotos, audio): están en tu carpeta subidos/ (míralos con ver_archivos y ver_imagen). Para usarlos pasa "archivos" [{ruta:"subidos/logo.png", nombre:"logo.png"}] y refiérelos como src="assets/logo.png". Si necesitas el logo y no lo tienes, pídeselo al jefe con preguntar_al_jefe.
 9. Tomas reales: pasa "tomas" [{id:"t1", busqueda:"concrete english query", duracion:3}] y úsalas así (silenciosas, a cuadro completo): <video id="clip-t1" class="clip" src="assets/tomas/t1.mp4" muted playsinline data-start="0" data-duration="3" style="position:absolute;left:0;top:0;width:1080px;height:1920px;object-fit:cover"></video>. Si alguna no se encuentra, el error te lo dirá.
 10. Mueve cosas con intención: entradas con ease power4.out / back.out, salidas rápidas, escalonar (stagger), contadores, barras que crecen, textos que se dibujan, cámara (escala lenta del fondo). Nada de objetos quietos 4 segundos. Máx. 45 s.
 

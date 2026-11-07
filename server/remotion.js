@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HF_DIR, TRABAJO, POCA_MEMORIA, seguro, descargarTomas, generarAudio, mezclar, dur, guardarFinal, correr } from './hyperframes.js';
+import { copiarArchivos, HF_DIR, TRABAJO, POCA_MEMORIA, seguro, descargarTomas, generarAudio, mezclar, dur, guardarFinal, correr } from './hyperframes.js';
 import { conTurno } from './pesado.js';
 
 const aquí = path.dirname(fileURLToPath(import.meta.url));
@@ -38,7 +38,7 @@ import { RemotionRoot } from './Root';
 registerRoot(RemotionRoot);
 `;
 
-export async function producirRemotion({ clave, codigo, duracion = 10, narraciones = [], musicaPrompt = '', tomas = [], campaignId = null, agente = 'editor2' }) {
+export async function producirRemotion({ clave, codigo, archivos = [], duracion = 10, narraciones = [], musicaPrompt = '', tomas = [], campaignId = null, agente = 'editor2' }) {
   if (!remotionDisponible()) throw new Error(remotionInstalado() ? 'Remotion está apagado en este servidor porque tiene poca memoria (se reiniciaría). Usa HyperFrames, o sube el plan de Railway.' : 'Remotion no está instalado en este servidor.');
   const k = seguro(clave); const dir = path.join(TRABAJO, k); const final = path.join(dir, 'final.mp4'); const persistente = path.join(HF_DIR, k, 'final.mp4');
   if (fs.existsSync(persistente)) return { clave: k, archivo: 'final.mp4', duracion: await dur(persistente), resumen: 'ya estaba renderizado' };
@@ -47,6 +47,7 @@ export async function producirRemotion({ clave, codigo, duracion = 10, narracion
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
   try {
     const notas = await descargarTomas(dir, tomas, 'vertical', 'public/tomas');
+    copiarArchivos(dir, agente, archivos, 'public');
     fs.writeFileSync(path.join(dir, 'src', 'index.ts'), INDEX);
     fs.writeFileSync(path.join(dir, 'src', 'Root.tsx'), ROOT(seg, 1080, 1920));
     fs.writeFileSync(path.join(dir, 'src', 'Comp.tsx'), codigo);
@@ -81,6 +82,7 @@ REGLAS:
 3. Todo se anima con el fotograma: const frame = useCurrentFrame(); const { fps, durationInFrames } = useVideoConfig(); y interpolate() / spring(). PROHIBIDO usar transiciones o animaciones CSS, setTimeout/setInterval o Math.random() sin semilla (usa random("semilla") de remotion).
 4. Estructura con <AbsoluteFill> y <Sequence from={fotograma} durationInFrames={n}> (las escenas). Texto grande y legible, márgenes de ~100 px, nunca dos textos encimados.
 5. Tomas reales: pasa "tomas" [{id:"t1", busqueda:"concrete english query", duracion:3}] y úsalas con <OffthreadVideo src={staticFile("tomas/t1.mp4")} muted style={{width:1080,height:1920,objectFit:"cover"}} />.
+5b. ARCHIVOS DEL JEFE (logo, fotos): míralos en tu carpeta subidos/ con ver_archivos y ver_imagen; pasa "archivos" [{ruta:"subidos/logo.png", nombre:"logo.png"}] y úsalos con <Img src={staticFile("logo.png")} /> (Img de remotion).
 6. Un elemento con position:'absolute' necesita left:0, right:0 y textAlign:'center' (o un ancho) si lo quieres centrado.
 7. El sonido NO va en el componente: usa "narraciones" [{inicio, texto}] y "musicaPrompt" (el servidor genera y mezcla voz y música).
 EJEMPLO:

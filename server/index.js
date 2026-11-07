@@ -506,6 +506,14 @@ app.get('/api/agents/:id/pc', (req, res) => {
     compartido: ws.listar(ws.COMPARTIDO),
   });
 });
+app.put('/api/espacios/:id/subir', async (req, res) => {
+  try {
+    const r = await ws.subir(req, req.params.id, String(req.query.nombre || 'archivo'));
+    const a = byId[ws.espacioId(req.params.id)];
+    log('jefe', `📎 Subió "${r.nombre}" a la computadora de ${a?.nombre || req.params.id} (${r.ruta})`);
+    res.json(r);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
 app.get('/api/espacios/:id/archivo', (req, res) => { try { ws.enviar(res, req.params.id, String(req.query.path || '')); } catch (e) { res.status(400).json({ error: e.message }); } });
 
 // ---- Video v2: estilos virales, guion del video y tomas reales ----

@@ -26,7 +26,7 @@ const REGLAS = `Trabajas en una agencia de marketing operada por agentes de IA. 
 - Si te falta información importante para hacer bien tu trabajo, pregunta antes de producir (preguntar_al_jefe); es mejor una pregunta que una pieza que no se va a usar. Ofrece opciones concretas cuando sea posible.
 - Pide autorización (pedir_autorizacion) antes de cualquier acción que gaste dinero, publique, o contacte al cliente.
 - Lee la MEMORIA y las campañas anteriores (abajo): son preferencias reales del jefe y del cliente; respétalas. Cuando aprendas algo que servirá en futuras campañas (algo que al jefe o al cliente le gusta o no), guárdalo con guardar_memoria en una frase clara.
-- Tienes una computadora con carpetas (ver_archivos, leer_archivo, guardar_nota). Tus compañeros y el jefe pueden leer lo que guardes, y tú puedes leer lo suyo y la carpeta "compartido" de la campaña. Apóyate en el trabajo ya hecho antes de rehacerlo.
+- Tienes una computadora con carpetas (ver_archivos, leer_archivo, ver_imagen, guardar_nota). El jefe puede subirte archivos (logo, fotos, audio, PDF) a tu carpeta "subidos": si necesitas un logo u otro material, pídeselo con preguntar_al_jefe y después revisa ver_archivos y mira las imágenes con ver_imagen. Tus compañeros y el jefe pueden leer lo que guardes, y tú puedes leer lo suyo y la carpeta "compartido" de la campaña. Apóyate en el trabajo ya hecho antes de rehacerlo.
 - Escribe siempre en español.`;
 
 function systemFor(agent, campaign) {
@@ -53,6 +53,10 @@ const TOOLS = {
   ver_archivos: {
     description: 'Lista los archivos de una computadora: la tuya (por defecto), la de otro agente (escribe su nombre: Dani, Iris, Teo, Luna, Max, Micho o Rita) o la carpeta "compartido" (brief, respuestas, concepto aprobado y piezas aprobadas de cada campaña). Todos pueden leer todo.',
     input_schema: obj({ espacio: { type: 'string', description: 'id del agente o "compartido"' } }, []),
+  },
+  ver_imagen: {
+    description: 'Mira una imagen (PNG, JPG, WEBP o GIF) de una computadora, por ejemplo el logo o las fotos que el jefe te subió a tu carpeta "subidos".',
+    input_schema: obj({ espacio: { type: 'string', description: 'Tu nombre o el de otro agente; por defecto la tuya' }, ruta: { type: 'string', description: 'p. ej. subidos/logo.png' } }, ['ruta']),
   },
   leer_archivo: {
     description: 'Lee un archivo de texto de una computadora (la tuya, la de otro agente o "compartido"). Úsalo para apoyarte en el trabajo de tus compañeros (por ejemplo, el copy aprobado o la investigación).',
@@ -81,6 +85,7 @@ const TOOLS = {
     input_schema: obj({
       titulo: { type: 'string' }, descripcion: { type: 'string', description: 'Qué muestra el video y qué estilo usaste' },
       html: { type: 'string', description: 'El archivo index.html completo de la composición' },
+      archivos: { type: 'array', description: 'Archivos de tu computadora (p. ej. el logo en subidos/) que tu video usa; se copian al proyecto como assets/<nombre>', items: obj({ ruta: { type: 'string' }, nombre: { type: 'string' } }, ['ruta', 'nombre']) },
       bloques: { type: 'array', description: 'Nombres de bloques del registro que tu HTML usa (el servidor los instala)', items: { type: 'string' } },
       narraciones: { type: 'array', description: 'Voz en off: texto hablado y segundo de inicio', items: obj({ inicio: { type: 'number' }, texto: { type: 'string' } }, ['inicio', 'texto']) },
       musicaPrompt: { type: 'string', description: 'Estilo de la música instrumental (inglés, sin artistas)' },
@@ -93,6 +98,7 @@ const TOOLS = {
     input_schema: obj({
       titulo: { type: 'string' }, descripcion: { type: 'string' },
       codigo: { type: 'string', description: 'El archivo Comp.tsx completo (export default function Comp)' },
+      archivos: { type: 'array', description: 'Archivos de tu computadora que usa el video; se copian a public/<nombre> (usa staticFile)', items: obj({ ruta: { type: 'string' }, nombre: { type: 'string' } }, ['ruta', 'nombre']) },
       duracion: { type: 'number', description: 'Duración total en segundos (3 a 60)' },
       narraciones: { type: 'array', items: obj({ inicio: { type: 'number' }, texto: { type: 'string' } }, ['inicio', 'texto']) },
       musicaPrompt: { type: 'string' },
@@ -136,7 +142,7 @@ const TOOLS = {
 };
 
 function toolDefs(agentId) {
-  const names = ['estado', 'preguntar_al_jefe', 'pedir_autorizacion', 'guardar_memoria', 'ver_archivos', 'leer_archivo', 'guardar_nota'];
+  const names = ['estado', 'preguntar_al_jefe', 'pedir_autorizacion', 'guardar_memoria', 'ver_archivos', 'leer_archivo', 'ver_imagen', 'guardar_nota'];
   if (byId[agentId].puedeEntregar) names.push('entregar_pieza');
   if (agentId === 'editor2' && hfDisponible()) names.push('entregar_hyperframes', 'ver_estilo_pelicula', 'buscar_bloques', 'ver_bloque');
   if (agentId === 'editor2' && remotionDisponible()) names.push('entregar_remotion');
@@ -162,6 +168,7 @@ async function runTool(job, block, campaign) {
     case 'pedir_autorizacion': return a.autorizar(i.accion || '', i.detalle || '');
     case 'guardar_memoria': return a.memoria(i.texto || '', i.alcance);
     case 'ver_archivos': return ws.resumenListado(i.espacio ? i.espacio : job.agentId);
+    case 'ver_imagen': { const im = ws.imagenParaVer(i.espacio || job.agentId, i.ruta || ''); return [{ type: 'image', source: { type: 'base64', media_type: im.media_type, data: im.data } }, { type: 'text', text: `Imagen ${i.ruta}` }]; }
     case 'leer_archivo': return ws.leer(i.espacio || job.agentId, i.ruta || '');
     case 'guardar_nota': { const n = String(i.nombre || 'nota.md'); return `Guardado en ${ws.escribir(job.agentId, `notas/${/\.[a-z]+$/i.test(n) ? n : `${n}.md`}`, i.contenido || '')}`; }
     case 'entregar_pieza':
@@ -274,7 +281,7 @@ async function loop(job) {
         const results = await Promise.all(uses.map(async (b) => {
           if (job.cortado) return { type: 'tool_result', tool_use_id: b.id, content: 'Tu respuesta se cortó por ser demasiado larga; vuelve a intentarlo con un contenido más compacto.', is_error: true };
           try {
-            return { type: 'tool_result', tool_use_id: b.id, content: String(await runTool(job, b, campaign)) || 'ok' };
+            return { type: 'tool_result', tool_use_id: b.id, content: await (async () => { const o = await runTool(job, b, campaign); return Array.isArray(o) ? o : (String(o) || 'ok'); })() };
           } catch (e) {
             return { type: 'tool_result', tool_use_id: b.id, content: `Error: ${e.message}`, is_error: true };
           }

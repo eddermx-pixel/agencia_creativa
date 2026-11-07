@@ -185,3 +185,8 @@ docs/
 - Con poca memoria (límite < 2 GB, como el plan de prueba de Railway: ~954 MB) HyperFrames usa 1 trabajador en modo de poca memoria, y Remotion corre en un **proceso aparte** (`server/remotion-worker.mjs`) con tope de memoria de Node: si se acaba la memoria, cae solo ese proceso, la app sigue viva y el agente recibe un mensaje claro.
 - Remotion se apaga solo cuando el servidor tiene < 2 GB de memoria (probado en Railway con ~954 MB: el proceso se corta); `REMOTION_FORZAR=1` lo reactiva. Micho usa HyperFrames, que sí funciona con esa memoria (~7 s para 2 s de video).
 - Videos del motor antiguo (HTML en iframe aislado) no se veían en Railway con clave de acceso (el iframe aislado no envía la cookie → "Acceso restringido"). Ahora cada pieza lleva un token propio (`rt`) en el enlace de su iframe. Además, Max y Micho ya no pueden entregar videos en HTML antiguo: solo el guion v2 (con voz, música y gráficos) o HyperFrames.
+
+## Subir archivos a la computadora de cada agente
+- En la ventana "Computadora de [agente]" (clic en su escritorio o botón "🖥️ Su computadora") hay un botón y zona de arrastre para **subir archivos** (logo, fotos, audio, video, PDF, fuentes; máx. 100 MB). Quedan en `espacios/<agente>/subidos/` y se ven con miniatura. Endpoint: `PUT /api/espacios/:id/subir?nombre=`.
+- Los agentes pueden **ver imágenes** (`ver_imagen`) y listar/leer sus archivos; si les falta algo (p. ej. un logo) se lo piden al jefe con `preguntar_al_jefe`. Micho puede usar esos archivos en sus videos HyperFrames/Remotion con el parámetro `archivos` (se copian al proyecto como `assets/<nombre>` o `public/<nombre>`).
+- El logo OFICIAL de un cliente sigue guardándose en Clientes → kit de marca: ahí lo usan automáticamente todos los agentes.

@@ -14,6 +14,9 @@ export const COMPARTIDO = 'compartido';
 // Acepta el id interno (video) o el nombre del personaje (Max)
 export const espacioId = (x) => { const v = String(x || '').trim().toLowerCase(); return ROSTER.find((r) => r.id === v || r.nombre.toLowerCase() === v)?.id || v; };
 export const ES_ESPACIO = (id) => id === COMPARTIDO || ROSTER.some((a) => a.id === espacioId(id));
+const SUBIR_OK = /\.(png|jpe?g|webp|gif|svg|pdf|mp4|mov|webm|mp3|wav|m4a|txt|md|csv|json|ttf|otf|woff2?)$/i;
+const MAX_SUBIDA = 100 * 1024 * 1024;
+const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', pdf: 'application/pdf', mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4', ttf: 'font/ttf', otf: 'font/otf', woff: 'font/woff', woff2: 'font/woff2' };
 const TEXTO = /\.(md|txt|json|csv|html|svg)$/i;
 const limpio = (s) => String(s || '').normalize('NFC').replace(/[\\/:*?"<>|\x00-\x1f]/g, '').replace(/\.\.+/g, '.').replace(/^\.+/, '').trim().slice(0, 80);
 export const slug = (s) => limpio(s).replace(/\s+/g, ' ');
@@ -53,20 +56,55 @@ export function leer(espacio, rel, max = 120_000) {
   return t.length > max ? `${t.slice(0, max)}\n… (recortado)` : t;
 }
 
+// El jefe sube archivos a la computadora de un agente (carpeta "subidos")
+export function subir(req, espacio, nombre) {
+  return new Promise((resolve, reject) => {
+    const id = espacioId(espacio);
+    if (!ES_ESPACIO(id) || id === COMPARTIDO) return reject(new Error('Agente inexistente'));
+    const n = limpio(nombre) || 'archivo';
+    if (!SUBIR_OK.test(n)) return reject(new Error('Tipo de archivo no permitido (imágenes, SVG, PDF, video, audio, texto o fuentes).'));
+    const dir = path.join(ROOT, id, 'subidos');
+    fs.mkdirSync(dir, { recursive: true });
+    let final = n; for (let k = 2; fs.existsSync(path.join(dir, final)); k++) final = n.replace(/(\.[^.]+)$/, `-${k}$1`);
+    const tmp = path.join(dir, `.subiendo-${Date.now()}`); const out = fs.createWriteStream(tmp);
+    let bytes = 0, cancel = false;
+    req.on('data', (c) => { bytes += c.length; if (bytes > MAX_SUBIDA && !cancel) { cancel = true; req.unpipe(out); out.destroy(); fs.rm(tmp, () => {}); reject(new Error('El archivo pesa más de 100 MB.')); } });
+    req.pipe(out);
+    out.on('finish', () => { if (cancel) return; fs.renameSync(tmp, path.join(dir, final)); resolve({ nombre: final, ruta: `subidos/${final}`, tam: bytes }); });
+    out.on('error', (e) => { fs.rm(tmp, () => {}); reject(e); });
+    req.on('aborted', () => { cancel = true; out.destroy(); fs.rm(tmp, () => {}); reject(new Error('Subida cancelada')); });
+  });
+}
+// Ruta absoluta de un archivo cualquiera del espacio (para copiarlo a un proyecto de video)
+export function rutaArchivo(espacio, rel) {
+  const { full } = resolver(espacio, rel);
+  if (!fs.existsSync(full) || !fs.statSync(full).isFile()) throw new Error(`No existe el archivo ${rel}`);
+  return full;
+}
+// Imagen lista para que el agente la "vea"
+export function imagenParaVer(espacio, rel) {
+  const full = rutaArchivo(espacio, rel);
+  const ext = path.extname(full).slice(1).toLowerCase();
+  if (!['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) throw new Error('Solo se pueden ver imágenes PNG, JPG, WEBP o GIF (un SVG se lee con leer_archivo).');
+  const st = fs.statSync(full);
+  if (st.size > 4_500_000) throw new Error('La imagen pesa demasiado para verla (máx. 4.5 MB).');
+  return { media_type: MIME[ext], data: fs.readFileSync(full).toString('base64') };
+}
+
 export function enviar(res, espacio, rel) {
   const { full, partes } = resolver(espacio, rel);
   if (!fs.existsSync(full) || !fs.statSync(full).isFile()) return res.status(404).end();
   res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'");
   res.setHeader('X-Content-Type-Options', 'nosniff');
   const ext = path.extname(partes.at(-1)).slice(1).toLowerCase();
-  res.type({ svg: 'image/svg+xml', html: 'text/plain; charset=utf-8', json: 'application/json', md: 'text/plain; charset=utf-8', txt: 'text/plain; charset=utf-8', csv: 'text/csv; charset=utf-8' }[ext] || 'text/plain');
+  res.type(MIME[ext] || { svg: 'image/svg+xml', html: 'text/plain; charset=utf-8', json: 'application/json', md: 'text/plain; charset=utf-8', txt: 'text/plain; charset=utf-8', csv: 'text/csv; charset=utf-8' }[ext] || 'text/plain');
   if (res.req?.query?.descargar) res.setHeader('Content-Disposition', `attachment; filename="${partes.at(-1)}"`);
   res.sendFile(full);
 }
 
 const arch = (dir, pre) => fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isFile() && !d.name.startsWith('.')).map((d) => {
   const st = fs.statSync(path.join(dir, d.name));
-  return { nombre: d.name, ruta: `${pre}/${d.name}`, tam: st.size, mod: st.mtimeMs, texto: TEXTO.test(d.name) };
+  return { nombre: d.name, ruta: `${pre}/${d.name}`, tam: st.size, mod: st.mtimeMs, texto: TEXTO.test(d.name), imagen: /\.(png|jpe?g|webp|gif|svg)$/i.test(d.name) };
 }).sort((a, b) => b.mod - a.mod);
 
 // Árbol: carpetas (1 nivel) → archivos y subcarpetas (1 nivel más)
