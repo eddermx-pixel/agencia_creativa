@@ -178,3 +178,7 @@ docs/
 ## Motores: diagnóstico y bloques de HyperFrames
 - `/motores.html` (y `/api/motores/estado`) muestra si ffmpeg, el render en el servidor, HyperFrames, Remotion, los estilos de película, la voz y la música están disponibles, y tiene botones para una **prueba real** de 2 segundos con cada motor (`?probar=hf|remotion|todo`).
 - Micho ahora puede usar el **registro de ~450 bloques listos de HyperFrames** (partículas, zoom, cámara, 75 transiciones, glitch, títulos): `buscar_bloques`, `ver_bloque` y el campo `bloques` al entregar. Los bloques usan GSAP local para no depender de internet al renderizar.
+
+## Render sin llenar el volumen
+- Falla vista en Railway: "Low disk space 0.4 GB free at /data" (el volumen del plan de prueba es de 500 MB). Ahora los renders trabajan en el disco temporal del contenedor (`TRABAJO_DIR`, por defecto `/tmp/agencia-trabajo`) y al terminar solo se guarda el MP4 final en `/data/hf/`. Los trabajadores de render se limitan a 2 (`HF_WORKERS`, `RM_CONCURRENCY`) porque el servidor reporta 48 núcleos y cada trabajador de Chrome usa ~256 MB.
+- `/motores.html`: las pruebas corren en segundo plano con progreso; muestra memoria y disco libres.

@@ -20,10 +20,23 @@
     const fila = (n, ok, d = '') => `<div class="row"><span>${esc(n)}</span><span class="${ok ? 'ok' : 'no'}">${ok ? '✅' : '❌'} ${esc(d)}</span></div>`;
     async function estado() {
       const d = await (await fetch('/api/motores/estado')).json();
-      $('lista').innerHTML = [fila('ffmpeg', !!d.ffmpeg, d.ffmpeg || 'no encontrado'), fila('Render en el servidor (Chromium)', d.render_servidor === 'listo', d.render_servidor), fila('HyperFrames', d.hyperframes.instalado, d.hyperframes.version ? `v${d.hyperframes.version}` : 'no instalado'), fila('Remotion', d.remotion.instalado, d.remotion.version ? `v${d.remotion.version}` : 'no instalado'), fila('Estilos de película (Lemo Opuscar)', d.estilos_de_pelicula > 0, `${d.estilos_de_pelicula} estilos`), fila('Voz en off (ElevenLabs)', d.voz_elevenlabs), fila('Música con IA (ElevenLabs)', d.musica_ia), fila('Tomas de stock (Coverr/otras)', d.tomas_stock)].join('');
+      $('lista').innerHTML = [fila('ffmpeg', !!d.ffmpeg, d.ffmpeg || 'no encontrado'), fila('Render en el servidor (Chromium)', d.render_servidor === 'listo', d.render_servidor), fila('HyperFrames', d.hyperframes.instalado, d.hyperframes.version ? `v${d.hyperframes.version}` : 'no instalado'), fila('Remotion', d.remotion.instalado, d.remotion.version ? `v${d.remotion.version}` : 'no instalado'), fila('Estilos de película (Lemo Opuscar)', d.estilos_de_pelicula > 0, `${d.estilos_de_pelicula} estilos`), fila('Disco para renderizar (libre)', (d.disco?.trabajo_libre_mb ?? 0) > 1500, d.disco?.trabajo_libre_mb != null ? `${Math.round(d.disco.trabajo_libre_mb)} MB (volumen /data: ${Math.round(d.disco.volumen_data_libre_mb ?? 0)} MB)` : '?'), fila('Memoria del servidor', true, d.memoria?.limite_mb ? `límite ${d.memoria.limite_mb} MB · en uso ${d.memoria.usado_mb} MB` : `en uso ${d.memoria?.usado_mb ?? '?'} MB (sin límite visible)`), fila('Voz en off (ElevenLabs)', d.voz_elevenlabs), fila('Música con IA (ElevenLabs)', d.musica_ia), fila('Tomas de stock (Coverr/otras)', d.tomas_stock)].join('');
     }
-    async function probar(que, b) { b.disabled = true; $('res').textContent = 'Renderizando… no cierres esta página.'; try { const d = await (await fetch(`/api/motores/estado?probar=${que}`)).json(); const r = d.pruebas?.[que === 'hf' ? 'hyperframes' : 'remotion']; $('res').innerHTML = r?.ok ? `<span class="ok">✅ Funciona (${r.segundos} s)</span>` : `<span class="no">❌ Falló: ${esc(r?.error || 'sin respuesta')}</span>`; } catch (e) { $('res').textContent = e.message; } b.disabled = false; }
-    $('bhf').onclick = (e) => probar('hf', e.target); $('brm').onclick = (e) => probar('remotion', e.target);
+    async function probar(motor, b) {
+      b.disabled = true; $('res').textContent = 'Iniciando la prueba…';
+      try {
+        const r = await fetch(`/api/motores/probar?motor=${motor}`, { method: 'POST' }); const j = await r.json();
+        if (!r.ok) throw new Error(j.error || r.status);
+        for (;;) {
+          await new Promise((ok) => setTimeout(ok, 3000));
+          let p; try { const q = await fetch(`/api/motores/prueba?id=${j.id}`); if (q.status === 404) { $('res').innerHTML = '<span class="no">❌ El servidor se reinició mientras renderizaba: casi seguro le falta memoria a tu plan de Railway. Mira la fila de memoria arriba.</span>'; break; } p = await q.json(); } catch { $('res').textContent = 'Reconectando con el servidor…'; continue; }
+          if (p.estado === 'corriendo') { $('res').textContent = `Renderizando… ${p.transcurrido} s (puede tardar unos minutos la primera vez)`; continue; }
+          $('res').innerHTML = p.estado === 'listo' ? `<span class="ok">✅ Funciona (${p.segundos} s)</span>` : `<span class="no">❌ Falló: ${esc(p.error || 'sin detalle')}</span>`; break;
+        }
+      } catch (e) { $('res').innerHTML = `<span class="no">${esc(e.message)}</span>`; }
+      b.disabled = false; estado();
+    }
+    $('bhf').onclick = (e) => probar('hyperframes', e.target); $('brm').onclick = (e) => probar('remotion', e.target);
     estado();
   </script>
 </body>

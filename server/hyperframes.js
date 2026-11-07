@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { DATA_DIR } from './store.js';
 import { conTurno } from './pesado.js';
@@ -16,6 +17,10 @@ const RAIZ = path.resolve(aquí, '..');
 const HF_BIN = path.join(RAIZ, 'node_modules', 'hyperframes', 'bin', 'hyperframes.mjs');
 const GSAP = path.join(RAIZ, 'node_modules', 'gsap', 'dist', 'gsap.min.js');
 export const HF_DIR = path.join(DATA_DIR, 'hf');
+// El trabajo pesado (frames, temporales) va al disco del contenedor, NO al volumen /data (que suele ser chico).
+export const TRABAJO = process.env.TRABAJO_DIR || path.join(os.tmpdir(), 'agencia-trabajo');
+export const HF_WORKERS = String(process.env.HF_WORKERS || 2);
+export function guardarFinal(k, origen) { const d = path.join(HF_DIR, k); fs.mkdirSync(d, { recursive: true }); fs.copyFileSync(origen, path.join(d, 'final.mp4')); }
 export const hfDisponible = () => fs.existsSync(HF_BIN) && fs.existsSync(GSAP);
 
 // ---------- Estilos de película (Lemo Opuscar, MIT) ----------
@@ -148,8 +153,8 @@ async function instalarBloques(dir, bloques) {
 // Devuelve { clave, archivo, duracion, resumen } o lanza Error con instrucciones para que el agente corrija.
 export async function producir({ clave, html, bloques = [], narraciones = [], musicaPrompt = '', tomas = [], campaignId = null, agente = 'editor2', formato = 'vertical' }) {
   if (!hfDisponible()) throw new Error('HyperFrames no está instalado en este servidor.');
-  const k = seguro(clave); const dir = path.join(HF_DIR, k); const final = path.join(dir, 'final.mp4');
-  if (fs.existsSync(final)) return { clave: k, archivo: 'final.mp4', duracion: await dur(final), resumen: 'ya estaba renderizado' };
+  const k = seguro(clave); const dir = path.join(TRABAJO, k); const final = path.join(dir, 'final.mp4'); const persistente = path.join(HF_DIR, k, 'final.mp4');
+  if (fs.existsSync(persistente)) return { clave: k, archivo: 'final.mp4', duracion: await dur(persistente), resumen: 'ya estaba renderizado' };
   const limpio = prepararHtml(html);
   fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
   try {
@@ -161,18 +166,18 @@ export async function producir({ clave, html, bloques = [], narraciones = [], mu
       const c = await correr(process.execPath, [HF_BIN, 'check', '--json'], { cwd: dir, timeout: 240000 });
       const errores = leerCheck(c.out);
       if (errores.length) throw new Error(`La validación encontró ${errores.length} error(es). Corrígelos y vuelve a entregar:\n- ${errores.slice(0, 8).join('\n- ')}${notasTomas.length ? `\nTomas: ${notasTomas.join('; ')}` : ''}`);
-      const r = await correr(process.execPath, [HF_BIN, 'render', '--quality', 'standard', '--fps', '30', '-o', 'silencio.mp4'], { cwd: dir, timeout: 900000 });
+      const r = await correr(process.execPath, [HF_BIN, 'render', '--quality', 'standard', '--fps', '30', '--workers', HF_WORKERS, '-o', 'silencio.mp4'], { cwd: dir, timeout: 900000 });
       const silencio = path.join(dir, 'silencio.mp4');
       if (r.code !== 0 || !fs.existsSync(silencio)) throw new Error(`El render falló: ${(r.err + r.out).slice(-400)}`);
       const d = await dur(silencio);
       const { voces, musica } = await generarAudio({ narraciones, musicaPrompt, duracion: d, campaignId, agente });
       await mezclar(silencio, final, { voces, musica, duracion: d });
       fs.unlinkSync(silencio);
+      guardarFinal(k, final);
       return { clave: k, archivo: 'final.mp4', duracion: d, resumen: `${d.toFixed(1)} s · ${voces.length} voz(es) · música ${musica ? 'IA' : 'no'}` };
     });
-  } catch (e) {
+  } finally {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-    throw e;
   }
 }
 

@@ -3,7 +3,7 @@
 // de hasta 3 empleados (ver node_modules/remotion/LICENSE.md); una empresa mayor necesita Company License.
 import fs from 'node:fs';
 import path from 'node:path';
-import { HF_DIR, seguro, descargarTomas, generarAudio, mezclar, dur } from './hyperframes.js';
+import { HF_DIR, TRABAJO, seguro, descargarTomas, generarAudio, mezclar, dur, guardarFinal } from './hyperframes.js';
 import { conTurno } from './pesado.js';
 
 export const remotionDisponible = () => fs.existsSync(path.resolve('node_modules', '@remotion', 'renderer')) && fs.existsSync(path.resolve('node_modules', '@remotion', 'bundler'));
@@ -34,8 +34,8 @@ registerRoot(RemotionRoot);
 
 export async function producirRemotion({ clave, codigo, duracion = 10, narraciones = [], musicaPrompt = '', tomas = [], campaignId = null, agente = 'editor2' }) {
   if (!remotionDisponible()) throw new Error('Remotion no está instalado en este servidor.');
-  const k = seguro(clave); const dir = path.join(HF_DIR, k); const final = path.join(dir, 'final.mp4');
-  if (fs.existsSync(final)) return { clave: k, archivo: 'final.mp4', duracion: await dur(final), resumen: 'ya estaba renderizado' };
+  const k = seguro(clave); const dir = path.join(TRABAJO, k); const final = path.join(dir, 'final.mp4'); const persistente = path.join(HF_DIR, k, 'final.mp4');
+  if (fs.existsSync(persistente)) return { clave: k, archivo: 'final.mp4', duracion: await dur(persistente), resumen: 'ya estaba renderizado' };
   validar(codigo);
   const seg = Math.min(60, Math.max(3, +duracion || 10));
   fs.mkdirSync(path.join(dir, 'src'), { recursive: true });
@@ -55,19 +55,19 @@ export async function producirRemotion({ clave, codigo, duracion = 10, narracion
       try {
         const comp = await selectComposition({ serveUrl, id: 'Main', browserExecutable, onBrowserLog: (l) => consola.push(l.text) });
         const silencio = path.join(dir, 'silencio.mp4');
-        await renderMedia({ composition: comp, serveUrl, codec: 'h264', outputLocation: silencio, browserExecutable, muted: true, onBrowserLog: (l) => l.type === 'error' && consola.push(l.text), timeoutInMilliseconds: 120000 });
+        await renderMedia({ composition: comp, serveUrl, codec: 'h264', outputLocation: silencio, browserExecutable, muted: true, concurrency: Number(process.env.RM_CONCURRENCY || 2), onBrowserLog: (l) => l.type === 'error' && consola.push(l.text), timeoutInMilliseconds: 120000 });
         const d = await dur(silencio);
         const { voces, musica } = await generarAudio({ narraciones, musicaPrompt, duracion: d, campaignId, agente });
         await mezclar(silencio, final, { voces, musica, duracion: d });
         fs.unlinkSync(silencio);
+        guardarFinal(k, final);
         return { clave: k, archivo: 'final.mp4', duracion: d, resumen: `Remotion · ${d.toFixed(1)} s · ${voces.length} voz(es) · música ${musica ? 'IA' : 'no'}` };
       } catch (e) {
         throw new Error(`El render falló: ${String(e.message).replace(/\x1b\[[0-9;]*m/g, '').slice(0, 700)}${consola.length ? `\nConsola: ${consola.slice(0, 4).join(' | ').slice(0, 400)}` : ''}`);
       }
     });
-  } catch (e) {
+  } finally {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
-    throw e;
   }
 }
 
