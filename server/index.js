@@ -570,8 +570,8 @@ function capacidades() {
   return [
     `Videos animados del motor v2 (guion JSON → reproductor → MP4): transiciones, looks, textos animados, subtítulos y GRÁFICOS ANIMADOS (chat tipo WhatsApp, checklist, contador, barras).`,
     brollDisponible() ? 'Tomas reales de stock: SÍ.' : 'Tomas reales de stock: NO por ahora (sin llave); usa fondos de color o el material del cliente.',
-    voz.vozDisponible() ? 'Voz en off con ElevenLabs: SÍ (campo "narracion" por escena).' : 'Voz en off con ElevenLabs: NO por ahora (sin llave).',
-    musica.musicaDisponible() ? 'Música generada con IA (ElevenLabs Music): SÍ (campo "musicaPrompt").' : 'Música con IA: NO por ahora; hay música sintética.',
+    voz.vozDisponible() ? 'Voz en off con ElevenLabs: SÍ. Tú NO grabas la voz: escribes el texto hablado en el campo "narracion" de cada escena y el sistema lo convierte en audio. Así que SÍ puedes hacer videos con voz en off.' : 'Voz en off con ElevenLabs: NO por ahora (sin llave).',
+    musica.musicaDisponible() ? 'Música generada con IA (ElevenLabs Music): SÍ. Tú describes el estilo en "musicaPrompt" y el sistema la genera.' : 'Música con IA: NO por ahora; hay música sintética.',
     'Render a MP4 en el servidor: se hace solo al aprobar un video.',
     'NO se pueden generar clips de video con IA generativa (Veo, Kling…) todavía.',
   ].join('\n');
