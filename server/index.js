@@ -125,7 +125,7 @@ app.get('/api/team', (req, res) => {
 
 // ---- Clientes (kit de marca) ----
 const clientSummary = ({ logo, ...c }) => ({ ...c, tieneLogo: !!logo });
-const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas', 'objetivo', 'competencia', 'metas', 'ads', 'ghlLocationId', 'ghlUserId', 'cobroMensual', 'vozId'];
+const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas', 'objetivo', 'competencia', 'metas', 'ads', 'ghlLocationId', 'ghlUserId', 'cobroMensual'];
 
 function cleanClient(body, prev = {}) {
   const c = { ...prev };

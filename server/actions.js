@@ -60,8 +60,7 @@ export function makeActions(agentId, campaign, key = null) {
         const spec = normalizeSpec(contenido); // lanza error si el JSON no sirve: el agente lo corrige
         setAgent(agentId, { burbuja: brollDisponible() ? '🎥 Buscando tomas reales…' : 'Armando el video…' });
         await resolveBroll(spec);
-        const cl = db.clients.find((c) => c.id === campaign.clientId);
-        await agregarVoz(spec, { campaignId: cid, agente: agentId, voiceId: cl?.vozId });
+        await agregarVoz(spec, { campaignId: cid, agente: agentId });
         contenido = JSON.stringify(spec);
         motor = 'v2';
       }
