@@ -242,7 +242,7 @@ async function coverrSearch(query, orientation, diag) {
   cache.set(ck, vids);
   return vids;
 }
-async function buscarTomas(query, orientation) {
+export async function buscarTomas(query, orientation) {
   const listas = await Promise.all([pexelsSearch(query, orientation).catch(() => []), pixabaySearch(query, orientation).catch(() => []), coverrSearch(query, orientation).catch(() => [])]);
   const out = []; // intercala fuentes para dar variedad
   for (let i = 0; i < Math.max(...listas.map((l) => l.length)); i++) for (const l of listas) if (l[i]) out.push(l[i]);

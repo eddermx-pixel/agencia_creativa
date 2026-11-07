@@ -33,7 +33,7 @@ function mediaHTML(p, arriba) {
   if (!arriba) return `<div class="ph">${ICONO[p.tipo] || '📦'}</div>`;
   const src = `/api/pieces/${p.id}/render`;
   if (p.tipo === 'arte') return `<img src="${src}" alt="${esc(p.titulo)}" decoding="async" draggable="false">`;
-  if (p.tipo === 'video') return p.motor === 'v2'
+  if (p.tipo === 'video') return ['v2', 'hf'].includes(p.motor)
     ? `<iframe class="v2" src="/player.html?id=${p.id}&embed=1&lite=1" title="${esc(p.titulo)}" tabindex="-1"></iframe>`
     : `<iframe class="v1" sandbox="allow-scripts" src="${src}" title="${esc(p.titulo)}" tabindex="-1"></iframe>`;
   return '<pre>Cargando…</pre>';
@@ -149,7 +149,7 @@ function openViewer(p, { acciones } = {}) {
   const body = $('vBody'); body.innerHTML = '';
   $('vTitle').textContent = p.titulo;
   const src = `/api/pieces/${p.id}/render`;
-  if (p.tipo === 'video' && p.motor === 'v2') body.innerHTML = `<iframe class="v2" src="/player.html?id=${p.id}&embed=1&full=1" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`;
+  if (p.tipo === 'video' && ['v2', 'hf'].includes(p.motor)) body.innerHTML = `<iframe class="v2" src="/player.html?id=${p.id}&embed=1&full=1" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`;
   else if (p.tipo === 'video') { body.innerHTML = `<iframe class="v1" sandbox="allow-scripts" src="${src}"></iframe><div class="nosound">Este video no tiene sonido (versión anterior)</div>`; fitViewer(); }
   else if (p.tipo === 'arte') body.innerHTML = `<img src="${src}" alt="${esc(p.titulo)}">`;
   else { body.innerHTML = '<pre>Cargando…</pre>'; fetch(src).then((r) => r.text()).then((t) => { const pre = body.querySelector('pre'); if (pre) pre.textContent = t; }); }
@@ -203,7 +203,7 @@ function renderGrid() {
     const t = document.createElement('div');
     t.className = 'tile';
     const inner = p.tipo === 'arte' ? `<img src="/api/pieces/${p.id}/render" alt="" loading="lazy">`
-      : p.tipo === 'video' && p.motor !== 'v2' ? `<iframe class="v1" sandbox="allow-scripts" src="/api/pieces/${p.id}/render" loading="lazy" tabindex="-1"></iframe>`
+      : p.tipo === 'video' && !['v2', 'hf'].includes(p.motor) ? `<iframe class="v1" sandbox="allow-scripts" src="/api/pieces/${p.id}/render" loading="lazy" tabindex="-1"></iframe>`
       : `<div class="ph" style="font-size:40px">${ICONO[p.tipo] || '📦'}</div>`;
     t.innerHTML = `<div class="th">${inner}</div><div class="t">${esc(p.titulo)}<span>${esc(byId(p.agente)?.nombre || '')} · ${hace(p.creada)}</span></div>`;
     t.onclick = () => openViewer(p, { acciones: false });

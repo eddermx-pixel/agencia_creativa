@@ -22,7 +22,7 @@ function fitIframes(root) {
 function thumb(p) {
   const src = `/api/pieces/${p.id}/render`;
   if (p.tipo === 'arte') return `<img src="${src}" alt="" loading="lazy">`;
-  if (p.tipo === 'video') return `<iframe ${p.motor === 'v2' ? '' : 'sandbox="allow-scripts"'} src="${p.motor === 'v2' ? `/player.html?id=${p.id}&embed=1` : src}" loading="lazy" tabindex="-1"></iframe>`;
+  if (p.tipo === 'video') return `<iframe ${['v2', 'hf'].includes(p.motor) ? '' : 'sandbox="allow-scripts"'} src="${['v2', 'hf'].includes(p.motor) ? `/player.html?id=${p.id}&embed=1` : src}" loading="lazy" tabindex="-1"></iframe>`;
   return `<pre data-src="${src}">…</pre>`;
 }
 
@@ -91,7 +91,7 @@ function showBrief(c) {
 function showPiece(p, c) {
   const src = `/api/pieces/${p.id}/render`;
   const versiones = data.pieces.filter((x) => x.campaignId === p.campaignId && x.agente === p.agente && x.tipo === p.tipo).sort((a, b) => a.creada - b.creada);
-  const media = p.tipo === 'arte' ? `<img src="${src}" alt="">` : p.tipo === 'video' ? `<iframe ${p.motor === 'v2' ? '' : 'sandbox="allow-scripts"'} src="${p.motor === 'v2' ? `/player.html?id=${p.id}&embed=1` : src}"></iframe>` : `<pre data-src="${src}">…</pre>`;
+  const media = p.tipo === 'arte' ? `<img src="${src}" alt="">` : p.tipo === 'video' ? `<iframe ${['v2', 'hf'].includes(p.motor) ? '' : 'sandbox="allow-scripts"'} src="${['v2', 'hf'].includes(p.motor) ? `/player.html?id=${p.id}&embed=1` : src}"></iframe>` : `<pre data-src="${src}">…</pre>`;
   $('dlgBody').innerHTML = `
     <div class="head"><h3>${esc(p.titulo)}</h3><span style="flex:1"></span><button id="x">✕</button></div>
     <div class="det">
@@ -103,7 +103,7 @@ function showPiece(p, c) {
         ${p.descripcion ? `<div><b>DESCRIPCIÓN</b>${esc(p.descripcion)}</div>` : ''}
         <div><b>DESCARGAR</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
           ${p.tipo === 'arte' ? '<button class="primary" id="png">PNG</button>' : ''}
-          ${p.motor === 'v2' ? `<a href="/player.html?id=${p.id}" target="_blank"><button class="primary">🎬 Exportar video (MP4/WebM)</button></a><a href="/api/pieces/${p.id}/download" download><button>Guion (JSON)</button></a>` : `<a href="/api/pieces/${p.id}/download" download><button>${{ arte: 'SVG (editable)', video: 'HTML (ábrelo en el navegador)', texto: 'TXT' }[p.tipo]}</button></a>`}
+          ${p.motor === 'hf' ? `<a href="/api/pieces/${p.id}/media" download><button class="primary">⬇️ Descargar MP4</button></a>` : ['v2', 'hf'].includes(p.motor) ? `<a href="/player.html?id=${p.id}" target="_blank"><button class="primary">🎬 Exportar video (MP4/WebM)</button></a><a href="/api/pieces/${p.id}/download" download><button>Guion (JSON)</button></a>` : `<a href="/api/pieces/${p.id}/download" download><button>${{ arte: 'SVG (editable)', video: 'HTML (ábrelo en el navegador)', texto: 'TXT' }[p.tipo]}</button></a>`}
           <a href="${src}" target="_blank" rel="noopener"><button>Abrir</button></a>
         </div></div>
         ${versiones.length > 1 ? `<div><b>VERSIONES</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${versiones.map((v) => `<button data-v="${v.id}" ${v.id === p.id ? 'class="primary"' : ''}>v${v.version || 1} · ${ESTADO[v.estado] || v.estado}</button>`).join('')}</div></div>` : ''}

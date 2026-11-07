@@ -19,6 +19,7 @@ import * as planeacion from './planeacion.js';
 import * as costos from './costos.js';
 import * as voz from './voz.js';
 import * as render from './render.js';
+import { rutaFinal as rutaFinalHF } from './hyperframes.js';
 import * as musica from './musica.js';
 import crypto from 'node:crypto';
 import { ESTILOS, estiloById, demoSpec, resolveBroll, proxyBroll, brollDisponible, sugerirEstilos, diagnosticoBroll, pruebaChatbot } from './video.js';
@@ -534,8 +535,14 @@ app.get('/api/prueba/chatbot', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/broll/proxy', (req, res) => proxyBroll(req, res).catch(() => res.status(502).end()));
+app.get('/api/pieces/:id/media', (req, res) => {
+  const p = db.pieces.find((x) => x.id === req.params.id);
+  if (!p || p.motor !== 'hf') return res.status(404).end();
+  try { const f = rutaFinalHF(JSON.parse(p.contenido).clave); if (!fs.existsSync(f)) return res.status(404).end(); res.type('video/mp4').sendFile(f); } catch { res.status(404).end(); }
+});
 app.get('/api/pieces/:id/spec', (req, res) => {
   const p = db.pieces.find((x) => x.id === req.params.id);
+  if (p?.motor === 'hf') return res.json({ hf: true, url: `/api/pieces/${p.id}/media`, titulo: p.titulo, estilo: '🎞️ Video premium (HyperFrames)', spec: { formato: '9:16', escenas: [] } });
   if (!p || p.motor !== 'v2') return res.status(404).json({ error: 'Video no encontrado' });
   const camp = db.campaigns.find((x) => x.id === p.campaignId);
   const cl = db.clients.find((x) => x.id === camp?.clientId);
@@ -573,6 +580,7 @@ function capacidades() {
     voz.vozDisponible() ? 'Voz en off con ElevenLabs: SÍ. Tú NO grabas la voz: escribes el texto hablado en el campo "narracion" de cada escena y el sistema lo convierte en audio. Así que SÍ puedes hacer videos con voz en off.' : 'Voz en off con ElevenLabs: NO por ahora (sin llave).',
     musica.musicaDisponible() ? 'Música generada con IA (ElevenLabs Music): SÍ. Tú describes el estilo en "musicaPrompt" y el sistema la genera.' : 'Música con IA: NO por ahora; hay música sintética.',
     'Render a MP4 en el servidor: se hace solo al aprobar un video.',
+    'Videos premium con HyperFrames (composición HTML a medida + 66 estilos de película Lemo Opuscar): Micho puede entregarlos.',
     'NO se pueden generar clips de video con IA generativa (Veo, Kling…) todavía.',
   ].join('\n');
 }

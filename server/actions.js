@@ -7,6 +7,7 @@ import * as entregables from './entregables.js';
 import { db } from './store.js';
 import { agregarVoz } from './voz.js';
 import { agregarMusica } from './musica.js';
+import { producir } from './hyperframes.js';
 
 // `key` = id de la llamada del agente; permite retomar sin duplicar tras un reinicio.
 export function makeActions(agentId, campaign, key = null) {
@@ -53,6 +54,18 @@ export function makeActions(agentId, campaign, key = null) {
       return r.aprobado
         ? `CONCEPTO APROBADO${r.respuesta ? `. Comentario del jefe: ${r.respuesta}` : ''}. Ya puedes pasar a producción.`
         : `CONCEPTO NO APROBADO. Cambios pedidos: ${r.respuesta || '(sin comentario: propón otra dirección)'}. Ajusta el concepto y vuelve a presentarlo antes de producir.`;
+    },
+
+    async entregarHF({ titulo, descripcion = '', html, narraciones = [], musicaPrompt = '', tomas = [], version = 1 }) {
+      setAgent(agentId, { estado: 'trabajando', burbuja: '🎞️ Validando y renderizando el video…' });
+      const r = await producir({ clave: key || `${cid}-${Date.now()}`, html, narraciones, musicaPrompt, tomas, campaignId: cid, agente: agentId });
+      const contenido = JSON.stringify({ hf: 1, clave: r.clave, archivo: r.archivo, duracion: r.duracion });
+      setAgent(agentId, { estado: 'entregando', burbuja: `Esperando tu swipe: ${titulo}`.slice(0, 140) });
+      const p = await submitPiece({ agente: agentId, campaignId: cid, tipo: 'video', titulo, descripcion: `${descripcion} (${r.resumen})`.trim(), contenido, version, key, motor: 'hf' });
+      setAgent(agentId, { estado: 'trabajando', burbuja: p.estado === 'aprobada' ? `¡Aprobaron "${titulo}"!` : `Rehaciendo "${titulo}"…` });
+      return p.estado === 'aprobada'
+        ? `APROBADA por el jefe${p.comentario ? `. Comentario: ${p.comentario}` : ''}.`
+        : `RECHAZADA por el jefe${p.comentario ? `. Comentario: ${p.comentario}` : ' (sin comentario: propón una dirección claramente distinta)'}. Haz una nueva versión y vuelve a entregarla.`;
     },
 
     async entregar({ tipo, titulo, descripcion = '', contenido, version = 1 }) {

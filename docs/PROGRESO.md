@@ -162,3 +162,10 @@ docs/
 - Gráficos nuevos: `antes_despues`, `comparativa`, `cuenta` (cuenta regresiva).
 - Selección de tomas: ya no al azar; se elige la más relevante que dure lo suficiente, sin repetir, con búsquedas `alternativas` y una versión simplificada si no hay resultados.
 - Pendiente (lo agregará el dueño): generación de clips con la API de video de Google.
+
+## HyperFrames y estilos de película para Micho
+- **HyperFrames** (Apache-2.0, `node_modules/hyperframes`) renderiza en el servidor composiciones HTML+GSAP a MP4 1080×1920/30 fps. Micho tiene la herramienta `entregar_hyperframes`: escribe la composición; el servidor la valida con `hyperframes check` (si hay errores se los devuelve con el arreglo), la renderiza, descarga tomas de stock, genera voz/música con ElevenLabs, mezcla con ffmpeg (−14 LUFS) y la manda a aprobación. Al aprobar se copia el MP4 a `Resultado final`. Las piezas `motor: 'hf'` se ven en feed, archivo y `/video-hf.html`.
+- **Lemo Opuscar** (MIT, `server/lemo/`, ver `LICENSE`): los 66 estilos de película como guías de dirección de arte (`ver_estilo_pelicula`). No se usa su pipeline de Python/Three.js (muy pesado para Railway), solo sus guías `STYLE.md`.
+- Un solo trabajo pesado (Chromium/ffmpeg) a la vez. El Dockerfile descarga el navegador de HyperFrames al construir la imagen.
+- **Remotion** sigue fuera como software: su licencia exige pago para empresas de más de 3 personas; si tu agencia entra en el uso gratuito o compras la licencia, se puede agregar después.
+- Probado localmente: validación con errores, render, voz+música mezcladas, aprobación y copia a Resultado final. No probado: el agente real escribiendo composiciones; la imagen Docker.

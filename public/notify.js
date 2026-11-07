@@ -68,7 +68,7 @@ export function notifyTick(store, type, data, byId) {
   campana(p.total);
   document.title = `${p.total ? `(${p.total}) ` : ''}${tituloBase}`;
   if (p.total !== ultimoN) { favicon(p.total); ultimoN = p.total; }
-  const items = [...p.reqs.map((r) => ({ id: r.id, t: `${byId(r.agente)?.nombre || r.agente} necesita tu decisión`, b: r.texto, u: 'decisiones.html' })), ...p.piezas.map((x) => ({ id: x.id, t: `${byId(x.agente)?.nombre || x.agente} entregó algo para aprobar`, b: x.titulo, u: x.tipo === 'video' && x.motor === 'v2' ? `player.html?id=${x.id}` : `feed.html#${x.id}` })), ...p.fallas.map((c) => ({ id: `${c.id}:${c.resumen}`, t: 'Una campaña se detuvo', b: c.cliente, u: 'decisiones.html' }))];
+  const items = [...p.reqs.map((r) => ({ id: r.id, t: `${byId(r.agente)?.nombre || r.agente} necesita tu decisión`, b: r.texto, u: 'decisiones.html' })), ...p.piezas.map((x) => ({ id: x.id, t: `${byId(x.agente)?.nombre || x.agente} entregó algo para aprobar`, b: x.titulo, u: x.tipo === 'video' && ['v2', 'hf'].includes(x.motor) ? `player.html?id=${x.id}` : `feed.html#${x.id}` })), ...p.fallas.map((c) => ({ id: `${c.id}:${c.resumen}`, t: 'Una campaña se detuvo', b: c.cliente, u: 'decisiones.html' }))];
   if (inicial) { items.forEach((i) => vistos.add(i.id)); if (store.roster.length) inicial = false; return; }
   for (const i of items) if (!vistos.has(i.id)) { vistos.add(i.id); avisar(i.t, i.b, i.u); break; }
   for (const i of items) vistos.add(i.id);

@@ -12,5 +12,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY . .
+# Navegador de HyperFrames (se descarga una vez al construir la imagen)
+RUN node node_modules/hyperframes/bin/hyperframes.mjs browser ensure || true
 
 CMD ["npm", "start"]

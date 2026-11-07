@@ -82,7 +82,7 @@ function onRequest(r) {
 
 function onPiece(p) {
   if (p.estado !== 'pendiente') return markDone(p.id, p.estado === 'aprobada' ? '✅ Aprobada' : `❌ Rechazada${p.comentario ? `: ${p.comentario}` : ''}`);
-  const feed = link(p.motor === 'v2' ? `/player.html?id=${p.id}` : `/feed.html#${p.id}`);
+  const feed = link(['v2', 'hf'].includes(p.motor) ? `/player.html?id=${p.id}` : `/feed.html#${p.id}`);
   const icon = { arte: '🎨', video: '🎬', texto: '✍️' }[p.tipo] || '📦';
   const preview = p.tipo === 'texto' ? `\n\n${h(p.contenido.slice(0, 700))}` : '';
   return send('p', p.id,

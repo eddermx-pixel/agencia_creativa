@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Video premium</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body.embed { background: #000; overflow: hidden; }
+    .wrap { max-width: 520px; margin: 0 auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+    body.embed .wrap { max-width: none; padding: 0; height: 100%; }
+    video { width: 100%; max-height: 80vh; background: #000; border-radius: 16px; display: block; }
+    body.embed video { max-height: none; height: 100%; border-radius: 0; object-fit: contain; }
+    .decide { display: none; gap: 10px; } .decide.on { display: flex; }
+    .decide button { flex: 1; font-size: 17px; padding: 14px; }
+  </style>
+</head>
+<body>
+  <header class="top" id="hd">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <a id="brand" class="brand" href="./"></a><span class="sp"></span>
+  </header>
+  <main class="wrap">
+    <h2 id="titulo" style="margin:0"></h2>
+    <video id="v" playsinline loop></video>
+    <div class="empty" id="info" style="font-size:13px"></div>
+    <div class="decide" id="decide"><button class="no" id="dNo">❌ Rechazar</button><button class="ok" id="dOk">✅ Aprobar</button></div>
+    <div><a id="dl" download><button>⬇️ Descargar MP4</button></a></div>
+  </main>
+  <script type="module">
+    import { api, connect, esc } from './common.js';
+    const q = new URLSearchParams(location.search), $ = (id) => document.getElementById(id);
+    const embed = !!q.get('embed'), full = !!q.get('full'), id = q.get('id');
+    if (embed) { document.body.classList.add('embed'); $('hd').style.display = 'none'; $('titulo').style.display = 'none'; $('info').style.display = 'none'; $('dl').parentElement.style.display = 'none'; } else connect(() => {});
+    const d = await (await fetch(`/api/pieces/${id}/spec`)).json();
+    $('titulo').textContent = d.titulo || 'Video';
+    const v = $('v'); v.src = d.url;
+    if (embed && !full) { v.muted = true; v.autoplay = true; v.controls = false; } else { v.controls = true; v.autoplay = true; }
+    v.play().catch(() => { v.controls = true; });
+    $('dl').href = d.url; $('info').textContent = `${d.estilo || ''} · se grabó en el servidor con voz y música.`;
+    if (id && !embed) {
+      const p = (await api('/api/archive')).pieces.find((x) => x.id === id);
+      if (p?.estado === 'pendiente') {
+        $('decide').classList.add('on');
+        const decidir = async (aprobado) => { const comentario = aprobado ? '' : (prompt('¿Qué le cambiarías? (opcional)') || ''); $('decide').innerHTML = '<span class="empty">Enviando…</span>'; try { await api(`/api/pieces/${p.id}`, { aprobado, comentario }); $('decide').innerHTML = `<b>${aprobado ? '✅ Aprobado' : '❌ Rechazado'}</b>`; } catch (e) { $('decide').innerHTML = esc(e.message); } };
+        $('dOk').onclick = () => decidir(true); $('dNo').onclick = () => decidir(false);
+      } else if (p) { $('decide').classList.add('on'); $('decide').innerHTML = `<span class="empty">Estado: <b>${esc(p.estado)}</b></span>`; }
+    }
+    // El visor del feed pide sonido
+    addEventListener('message', (ev) => { if (ev.origin === location.origin && ev.data === 'activar-sonido') { v.muted = false; v.play().catch(() => {}); } });
+  </script>
+</body>
+</html>

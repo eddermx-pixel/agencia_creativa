@@ -8,6 +8,7 @@ import { bus, log } from './hub.js';
 import * as files from './files.js';
 import * as entregables from './entregables.js';
 import { slug } from './workspace.js';
+import { conTurno } from './pesado.js';
 
 const CANDIDATOS = [process.env.CHROMIUM_PATH, '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome', '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', '/opt/pw-browsers/chromium-1243/chrome-linux/chrome'].filter(Boolean);
 const chromePath = () => CANDIDATOS.find((p) => fs.existsSync(p));
@@ -62,7 +63,7 @@ async function siguiente() {
   try {
     p.render = { ...p.render, estado: 'grabando' }; save(); bus.emit('piece', p);
     fs.mkdirSync(TMP, { recursive: true });
-    await renderizar(p, PUERTO);
+    await conTurno(() => renderizar(p, PUERTO));
     const crudo = fs.readdirSync(TMP).find((f) => f.startsWith(`${p.id}.`));
     if (!crudo) throw new Error('El navegador no entregó el video.');
     const donde = entregables.carpetaPieza(p);

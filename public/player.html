@@ -80,6 +80,7 @@
 
     const url = q.get('prueba') ? '/api/prueba/chatbot' + (q.get('nuevo') ? '?nuevo=1' : '') : q.get('id') ? `/api/pieces/${q.get('id')}/spec` : `/api/estilos/${q.get('estilo')}/preview?cliente=${encodeURIComponent(q.get('cliente') || '')}`;
     const data = await (await fetch(url)).json();
+    if (data.hf) { location.replace(`/video-hf.html${location.search}`); await new Promise(() => {}); }
     if (data.error) { document.body.insertAdjacentHTML('beforeend', `<p class="msg" style="padding:20px">${esc(data.error)}</p>`); throw new Error(data.error); }
     const base = data.spec;
     $('titulo').textContent = data.titulo || 'Video';
