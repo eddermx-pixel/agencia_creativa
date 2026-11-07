@@ -382,17 +382,28 @@ export function retryCampaign(campaign) {
 }
 
 // Chat directo con un agente (clic en el personaje → "Hablar").
-export async function chatWithAgent(agentId, mensaje, contexto) {
+export async function chatWithAgent(agentId, mensaje, contexto, extra = {}) {
   const agent = byId[agentId];
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: 2000,
-    output_config: { effort: 'low' },
-    system: `${REGLAS}\n\n${agent.prompt}\n\nEl jefe te habla directamente por el chat de la oficina. Responde breve, en personaje.\nLo último que hiciste:\n${contexto}`,
-    messages: [{ role: 'user', content: mensaje }],
-  });
-  addUsage(null, MODEL, res.usage, agentId);
-  return textOf(res.content);
+  const system = `${REGLAS}\n\n${agent.prompt}\n\nEl jefe te habla directamente por el chat de la oficina. Responde breve, en personaje.\nLo que el sistema puede hacer HOY (sé preciso: no digas que no puedes algo que sí está disponible):\n${extra.capacidades || ''}\n\nSi el jefe te pide producir algo (un video, un arte, un copy) usa la herramienta crear_campana: el equipo hará sus preguntas, la junta creativa y el concepto antes de producir. No prometas entregar la pieza en este chat. Clientes existentes: ${(extra.clientes || []).join(', ') || '(ninguno)'}.\nLo último que hiciste:\n${contexto}`;
+  const tools = extra.crearCampana ? [{ name: 'crear_campana', description: 'Crea una campaña nueva para que el equipo la produzca (cuestionario, junta, concepto y piezas).', input_schema: obj({ cliente: { type: 'string', description: 'Nombre del cliente (existente o nuevo)' }, brief: { type: 'string', description: 'Qué pidió el jefe, con todos los detalles útiles' }, objetivo: { type: 'string', enum: ['reconocimiento', 'trafico', 'leads', 'ventas', 'fidelizacion', 'lanzamiento', 'comunidad'] } }, ['cliente', 'brief']) }] : undefined;
+  const messages = [{ role: 'user', content: mensaje }];
+  let texto = '';
+  for (let k = 0; k < 3; k++) {
+    const res = await client.messages.create({ model: MODEL, max_tokens: 2000, output_config: { effort: 'low' }, system, tools, messages });
+    addUsage(null, MODEL, res.usage, agentId);
+    texto = textOf(res.content) || texto;
+    const usos = res.content.filter((b) => b.type === 'tool_use');
+    if (!usos.length) break;
+    messages.push({ role: 'assistant', content: res.content });
+    const salida = [];
+    for (const u of usos) {
+      let r;
+      try { const c = extra.crearCampana(u.input); r = `Campaña creada (${c.cliente}). El equipo ya empezó: pronto te harán preguntas.`; } catch (e) { r = `No se pudo crear la campaña: ${e.message}`; }
+      salida.push({ type: 'tool_result', tool_use_id: u.id, content: r });
+    }
+    messages.push({ role: 'user', content: salida });
+  }
+  return texto;
 }
 
 // ---------- Cursos: el agente investiga en internet y regresa con apuntes ----------

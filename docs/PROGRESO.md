@@ -151,3 +151,4 @@ docs/
 ## Motion graphics y música con IA
 - Nuevos **gráficos animados** por escena (`grafico`): conversación de chat (con "escribiendo…"), checklist que se marca, contador numérico y barras. Max los pide en su guion; el prompt le prohíbe inventar cifras.
 - **Música con ElevenLabs Music** (`server/musica.js`): Max escribe `musicaPrompt`; se genera una pista instrumental del largo del video (modelo `ELEVENLABS_MUSIC_MODEL`, por defecto `music_v2`, por confirmar; costo `ELEVENLABS_MUSIC_USD_POR_MIN`; `MUSICA_IA=0` la apaga). Si falla, queda la música sintética. Comprobar: `/api/musica/estado?probar=1`.
+- Chat con agentes: ahora conocen las capacidades reales del sistema (según llaves) y pueden crear una campaña desde el chat (`crear_campana`); antes respondían "no puedo" porque en el chat no tenían herramientas ni contexto.

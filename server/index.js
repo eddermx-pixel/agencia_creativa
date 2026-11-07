@@ -303,12 +303,11 @@ app.get('/api/clients/:id/logo', (req, res) => {
   res.type(m[1]).send(Buffer.from(m[2], 'base64'));
 });
 
-app.post('/api/campaigns', (req, res) => {
-  const { clientId, brief } = req.body || {};
+function crearCampana({ clientId, cliente: nombreIn, brief, objetivo, mes }) {
   let cl = db.clients.find((x) => x.id === clientId);
   // Cliente escrito a mano: se busca por nombre o se le crea su ficha, para que
   // su memoria y su historial queden separados de los demás clientes.
-  const nombre = String(req.body?.cliente || '').trim();
+  const nombre = String(nombreIn || '').trim();
   if (!cl && nombre) {
     cl = db.clients.find((x) => x.nombre.toLowerCase() === nombre.toLowerCase());
     if (!cl) {
@@ -317,16 +316,19 @@ app.post('/api/campaigns', (req, res) => {
       bus.emit('client', clientSummary(cl));
     }
   }
-  const cliente = cl?.nombre || req.body?.cliente;
-  if (!cliente?.trim() || !brief?.trim()) return res.status(400).json({ error: 'Falta cliente o brief' });
-  const c = { id: newId('c'), clientId: cl?.id || null, cliente: cliente.trim(), brief: brief.trim(), estado: 'en_curso', creada: Date.now(), costo: 0, objetivo: req.body?.objetivo || null, mes: /^\d{4}-\d{2}$/.test(req.body?.mes || '') ? req.body.mes : new Date().toISOString().slice(0, 7), etiquetas: [] };
+  const cliente = cl?.nombre || nombreIn;
+  if (!cliente?.trim() || !brief?.trim()) throw new Error('Falta cliente o brief');
+  const c = { id: newId('c'), clientId: cl?.id || null, cliente: cliente.trim(), brief: brief.trim(), estado: 'en_curso', creada: Date.now(), costo: 0, objetivo: planeacion.OBJETIVOS[objetivo] ? objetivo : null, mes: /^\d{4}-\d{2}$/.test(mes || '') ? mes : new Date().toISOString().slice(0, 7), etiquetas: [] };
   db.campaigns.push(c);
   save();
   log('jefe', `Nueva campaña: ${c.cliente}`, c.id);
   bus.emit('campaign', c);
   try { ws.brief(c); } catch (e) { console.warn('[ws]', e.message); }
   track(c, runtime.runCampaign(c));
-  res.json(c);
+  return c;
+}
+app.post('/api/campaigns', (req, res) => {
+  try { res.json(crearCampana(req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // Si respondes algo de una campaña que se quedó sin agentes trabajando (por un
@@ -563,6 +565,17 @@ app.post('/api/pieces/:id', (req, res) => {
   p ? res.json(pieceSummary(p)) : res.status(409).json({ error: 'Ya estaba juzgada' });
 });
 
+// Lo que el sistema puede hacer HOY (según las llaves configuradas): se le dice a los agentes en el chat
+function capacidades() {
+  return [
+    `Videos animados del motor v2 (guion JSON → reproductor → MP4): transiciones, looks, textos animados, subtítulos y GRÁFICOS ANIMADOS (chat tipo WhatsApp, checklist, contador, barras).`,
+    brollDisponible() ? 'Tomas reales de stock: SÍ.' : 'Tomas reales de stock: NO por ahora (sin llave); usa fondos de color o el material del cliente.',
+    voz.vozDisponible() ? 'Voz en off con ElevenLabs: SÍ (campo "narracion" por escena).' : 'Voz en off con ElevenLabs: NO por ahora (sin llave).',
+    musica.musicaDisponible() ? 'Música generada con IA (ElevenLabs Music): SÍ (campo "musicaPrompt").' : 'Música con IA: NO por ahora; hay música sintética.',
+    'Render a MP4 en el servidor: se hace solo al aprobar un video.',
+    'NO se pueden generar clips de video con IA generativa (Veo, Kling…) todavía.',
+  ].join('\n');
+}
 app.post('/api/agents/:id/chat', async (req, res) => {
   const id = req.params.id;
   if (!byId[id]) return res.status(404).end();
@@ -570,7 +583,7 @@ app.post('/api/agents/:id/chat', async (req, res) => {
   log('jefe', `A ${byId[id].nombre}: ${mensaje}`);
   try {
     const contexto = db.log.filter((l) => l.agente === id).slice(-15).map((l) => `- ${l.texto}`).join('\n') || '(nada todavía)';
-    const respuesta = await runtime.chatWithAgent(id, mensaje, contexto);
+    const respuesta = await runtime.chatWithAgent(id, mensaje, contexto, { crearCampana, clientes: db.clients.map((c) => c.nombre), capacidades: capacidades() });
     log(id, respuesta);
     res.json({ respuesta });
   } catch (e) {
