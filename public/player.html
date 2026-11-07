@@ -146,6 +146,20 @@
       $('exp').disabled = false;
     };
 
+    // ----- Modo render (lo usa el servidor con un navegador sin pantalla) -----
+    if (q.get('render') && q.get('id')) {
+      (async () => {
+        try {
+          await player.activarSonido?.();
+          const { blob, ext } = await player.exportar(() => {});
+          const r = await fetch(`/api/pieces/${q.get('id')}/render-upload?ext=${ext}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: blob });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(j.error || r.status);
+          window.__renderDone = { ok: true };
+        } catch (e) { window.__renderDone = { ok: false, error: e.message }; }
+      })();
+    }
+
     // ----- Aprobar o rechazar aquí mismo (enlaces de Telegram y del archivo) -----
     if (q.get('id') && !embed) {
       const p = (await api('/api/archive')).pieces.find((x) => x.id === q.get('id'));

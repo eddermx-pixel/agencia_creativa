@@ -4,5 +4,9 @@
     "startCommand": "npm start",
     "healthcheckPath": "/healthz",
     "restartPolicyType": "ON_FAILURE"
+  },
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
   }
 }

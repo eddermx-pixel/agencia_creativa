@@ -18,6 +18,7 @@ import QRCode from 'qrcode';
 import * as planeacion from './planeacion.js';
 import * as costos from './costos.js';
 import * as voz from './voz.js';
+import * as render from './render.js';
 import crypto from 'node:crypto';
 import { ESTILOS, estiloById, demoSpec, resolveBroll, proxyBroll, brollDisponible, sugerirEstilos, diagnosticoBroll, pruebaChatbot } from './video.js';
 
@@ -346,6 +347,7 @@ function track(c, promise) {
 
 costos.registrar(app);
 voz.registrar(app);
+render.registrar(app);
 planeacion.registrar(app, { baseUrl, runCampaign: (c) => runtime.runCampaign(c), track, clientSummary, ws });
 
 app.post('/api/campaigns/:id/retry', (req, res) => {
@@ -602,6 +604,7 @@ startTelegram();
 for (const { campaign, promise } of runtime.boot()) track(campaign, promise);
 initCursos(runtime);
 server.listen(PORT, () => {
+  render.iniciarRender(PORT);
   console.log(`\n🏢 Agencia IA en http://localhost:${PORT}${KEY ? `/?key=${KEY}` : ''}`);
   console.log(DEMO ? '🎭 MODO DEMO (sin API key de Claude: los agentes siguen un guion)' : `🤖 Agentes reales con ${process.env.CLAUDE_MODEL || 'claude-opus-5-5'}`);
 });
