@@ -15,6 +15,13 @@ Agencia de marketing operada por agentes de Claude (personajes en una estación 
 - Quiere entregables **finales** (PNG/JPG/MP4/GIF), no HTML/SVG/JSON.
 - Quiere videos con motion graphics 3D de buena calidad, pero barato; poder cambiar de modelo para los videos.
 
+## Cuenta de la API — reglas (sin cifras: el repo es PÚBLICO, no escribir saldos, montos ni nombres de claves)
+- La **recarga automática de créditos está APAGADA** a propósito. Antes recargó decenas de veces sin aviso. No pedirle al dueño que la active.
+- Los límites de gasto de `/ajustes-ia.html` y el límite mensual de la Consola son un freno deliberado: no quitarlos ni subirlos sin avisar.
+- El tope real de gasto es el saldo de créditos. Al probar, usa pocas campañas cortas y revisa el costo en `/uso.html` y en la Consola (API usage / Caching analytics).
+- Causa confirmada del gasto de noviembre: casi todo fue esta app corriendo en Opus sin caché. Los arreglos están en "Estado actual". Verificar tras cada cambio que la caché leída sea mayor a 0.
+- Los créditos también los consume Claude Code; separa por clave de API en la Consola.
+
 ## Estado actual
 - **Control de gasto** (`server/presupuesto.js`, página `/ajustes-ia.html`): límites por día (US$10), mes (US$100) y campaña (US$8), editables; se revisan ANTES de cada llamada a la API y detienen el trabajo con error + "Reintentar". Modelo general y modelo de videos (Max/Micho) configurables en caliente; por defecto Sonnet 5.5 (antes Opus 5.5 para todo). Tabla de precios en `MODELOS` (ahí y en `server/hub.js` `PRECIOS`: mantener iguales).
 - **Caché de prompts** en el bucle de agentes (`conCache` en `server/runtime-claude.js`): antes cada vuelta reenviaba TODO el historial (HTML, SVG, imágenes base64) a precio completo, hasta 60 vueltas.
@@ -33,5 +40,6 @@ Agencia de marketing operada por agentes de Claude (personajes en una estación 
 6. Subir el volumen de Railway (500 MB) si se guardan videos.
 
 ## Bitácora (más reciente arriba; formato: fecha · máquina · quién · qué)
+- 2026-11-11 · Linux (Omarchy) · Claude Code · Revisadas capturas de la Consola con el dueño: confirmada la causa del gasto y apagada la recarga automática. Reglas anotadas arriba, sin cifras.
 - 2026-11-11 · Linux (Omarchy) · Claude Code · Auditoría de costos: causas = bucle sin caché con historial completo, auto-reanudación en cada deploy, Opus para todo, `MAX_CAMPANAS=3`, sin topes de gasto, plan del mes sin contabilizar. Aplicados los arreglos de "Estado actual". Archivo de videos y PNG de arte corregidos. Creado este archivo.
 - 2026-11-07 · otra computadora · Claude Code · Subida de archivos a la compu de cada agente; Remotion/HyperFrames con poca memoria (ver `git log`).
