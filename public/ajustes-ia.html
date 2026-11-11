@@ -33,6 +33,11 @@
       <p id="precios"></p>
     </section>
     <section class="card">
+      <h2>Videos de Micho</h2>
+      <label style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="exigir3d" style="width:auto"> Exigir personajes 3D (librería Three.js) en los videos de HyperFrames</label>
+      <p>Si está activo, el servidor rechaza los videos y propuestas que no usen la librería y le devuelve a Micho una plantilla para corregirlos.</p>
+    </section>
+    <section class="card">
       <h2>Frenos de gasto (US$)</h2>
       <p>Antes de cada llamada se revisa el gasto. Si pasa un límite, el trabajo se detiene con un aviso y puedes seguir con <b>Reintentar</b> después de subirlo. 0 = sin límite.</p>
       <div class="row">
@@ -60,12 +65,13 @@
       $('modelo').innerHTML = opts; $('modeloVideo').innerHTML = opts;
       $('modelo').value = a.modelo; $('modeloVideo').value = a.modeloVideo;
       $('precios').innerHTML = Object.values(a.modelos).map((m) => `${m.nombre.split(' (')[0]}: ${m.precio[0]} / ${m.precio[1]} US$ por millón`).join(' · ');
+      $('exigir3d').checked = !!a.exigir3d;
       $('lDia').value = a.limites.dia; $('lMes').value = a.limites.mes; $('lCampana').value = a.limites.campana;
       $('hoy').textContent = `Gastado hoy: ${usd(a.gasto.dia)} · este mes: ${usd(a.gasto.mes)} (estimado)`;
     }
     $('guardar').onclick = async () => {
       try {
-        await api('/api/ia/ajustes', { modelo: $('modelo').value, modeloVideo: $('modeloVideo').value, limites: { dia: $('lDia').value, mes: $('lMes').value, campana: $('lCampana').value } }, 'PUT');
+        await api('/api/ia/ajustes', { modelo: $('modelo').value, modeloVideo: $('modeloVideo').value, exigir3d: $('exigir3d').checked, limites: { dia: $('lDia').value, mes: $('lMes').value, campana: $('lCampana').value } }, 'PUT');
         $('ok').textContent = 'Guardado ✓'; cargar();
       } catch (e) { $('ok').textContent = e.message; }
     };

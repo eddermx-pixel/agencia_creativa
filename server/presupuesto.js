@@ -26,6 +26,12 @@ export function modeloPara(agentId) {
   return general;
 }
 
+// ¿Los videos de Micho con HyperFrames DEBEN usar la librería de personajes 3D? (por defecto sí; EXIGIR_3D=0 o el ajuste lo apagan)
+export function exigir3d() {
+  const c = cfg();
+  return c.exigir3d !== undefined ? !!c.exigir3d : process.env.EXIGIR_3D !== '0';
+}
+
 export function limites() {
   const c = cfg();
   return {
@@ -58,7 +64,7 @@ export function registrar(app) {
     res.json({
       modelos: MODELOS,
       modelo: modeloPara('director'), modeloVideo: modeloPara('video'),
-      limites: limites(), gasto: gasto(),
+      limites: limites(), gasto: gasto(), exigir3d: exigir3d(),
       autoReanudar: process.env.AUTO_RESUME === '1',
       maxCampanas: Number(process.env.MAX_CAMPANAS || 1),
       personalizado: { modelo: !!c.modelo, modeloVideo: !!c.modeloVideo },
@@ -71,6 +77,7 @@ export function registrar(app) {
     for (const [k, campo] of [['dia', 'limiteDia'], ['mes', 'limiteMes'], ['campana', 'limiteCampana']]) {
       if (b.limites?.[k] !== undefined) c[campo] = Math.min(10000, num(b.limites[k], 0));
     }
+    if (typeof b.exigir3d === 'boolean') c.exigir3d = b.exigir3d;
     save(); res.json({ ok: true, modelo: modeloPara('director'), modeloVideo: modeloPara('video'), limites: limites() });
   });
 }

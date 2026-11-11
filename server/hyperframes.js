@@ -11,6 +11,7 @@ import { conTurno } from './pesado.js';
 import { agregarVoz } from './voz.js';
 import { agregarMusica } from './musica.js';
 import { prepararEfectos, TIPOS as TIPOS_SFX } from './efectos.js';
+import { exigir3d } from './presupuesto.js';
 import { buscarTomas } from './video.js';
 import { rutaArchivo } from './workspace.js';
 
@@ -57,6 +58,41 @@ export const dur = async (f) => { const r = await correr('ffprobe', ['-v', 'erro
 export const seguro = (k) => String(k).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60);
 
 const PROHIBIDO = [/\bfetch\s*\(/i, /XMLHttpRequest/i, /WebSocket/i, /\bimport\s*\(/i, /<iframe/i, /<object/i, /<embed/i, /<script[^>]+src=["']https?:/i, /<link[^>]+href=["']https?:(?!\/\/fonts\.(googleapis|gstatic)\.com)/i, /@import\s+url\(\s*["']?https?:/i, /document\.cookie/i, /localStorage/i];
+
+// Plantilla 3D que ya funciona (escena vertical con un personaje de la librería). Micho la copia y la adapta.
+export const PLANTILLA_3D = `<!doctype html><html lang="es"><head><meta charset="utf-8"><script src="assets/gsap.min.js"></script>
+<style>html,body{margin:0;background:#0B1B3F}
+#root{position:relative;width:1080px;height:1920px;overflow:hidden;background:linear-gradient(160deg,#0B1B3F,#13306b);font-family:"Inter",sans-serif;color:#fff}
+#c3{position:absolute;left:0;top:420px;width:1080px;height:1200px}
+#t1{position:absolute;left:90px;right:90px;top:130px;text-align:center;font-weight:900;font-size:84px;line-height:1.05}
+#logo{position:absolute;left:300px;top:1700px;width:480px;opacity:0}</style></head><body>
+<div id="root" data-composition-id="main" data-start="0" data-duration="8" data-width="1080" data-height="1920">
+<canvas id="c3" class="clip" data-start="0" data-duration="8" width="1080" height="1200"></canvas>
+<div id="t1" class="clip" data-start="0.2" data-duration="7.6">Texto del gancho</div>
+<img id="logo" class="clip" src="assets/logo.png" data-start="6" data-duration="2">
+</div>
+<script>window.__timelines=window.__timelines||{};const tl=gsap.timeline({paused:true});
+tl.fromTo("#t1",{opacity:0,y:-40},{opacity:1,y:0,duration:.5,ease:"power4.out"},.2).fromTo("#logo",{opacity:0},{opacity:1,duration:.5},6);
+window.__timelines["main"]=tl;</script>
+<script type="module">
+import { crearEscena, crearPersonaje, animarPersonaje, sombra, mostrador } from "./assets/three/personajes.js";
+const E = crearEscena(document.getElementById("c3"), 1080, 1200, { fov: 32, camara: [0, 3.4, 10], mira: [0, 2.2, 0] });
+const p = crearPersonaje({ id: "dueno", piel: 0xf2c9a0, pelo: { estilo: "largo", color: 0x4a2a1a }, ropa: { tipo: "delantal", color: 0x1f8f5a, acento: 0xf4f1e6 }, accesorios: ["lentes"] });
+p.grupo.scale.setScalar(1.25); p.grupo.position.set(0, 0.2, 0); E.scene.add(p.grupo);
+const m = mostrador({ ancho: 7 }); m.position.set(0, -1.2, 1.4); E.scene.add(m);
+const DUR = 8, state = { p: 0 };
+function render() { const t = state.p * DUR;
+  animarPersonaje(p, t, { emociones: [[0, "panico"], [4, "alegria"]], gestos: { izq: [[0, "panico"], [4, "reposo"]], der: [[0, "telefono"], [4, "saludo"]] }, habla: [[1, 3]] });
+  E.render(); }
+render();
+window.__timelines["main"].to(state, { p: 1, duration: DUR, ease: "none", onUpdate: render }, 0);
+</script></body></html>`;
+
+// Si el ajuste está activo, el HTML debe usar la librería de personajes 3D (assets/three/personajes.js).
+function exigirLibreria(h) {
+  if (!exigir3d() || /assets\/three\/personajes\.js/.test(h)) return;
+  throw new Error('RECHAZADO POR EL SERVIDOR: este video debe usar la librería de personajes 3D (Three.js), pero tu HTML no importa ./assets/three/personajes.js. No uses CSS 3D ni dibujes personajes a mano. Copia esta PLANTILLA que ya funciona y adáptala (personajes, colores del cliente, emociones, gestos, textos, duración y el cierre con el logo sobre fondo OSCURO):\n' + PLANTILLA_3D + '\nAdemás: los textos y burbujas de chat son HTML encima del canvas; para personajes extra usa crearPersonaje con otra piel/pelo/ropa; para objetos usa telefono(), mostrador(), plancha(), sillon(), burbuja(). Vuelve a llamar a la herramienta con el HTML corregido.');
+}
 
 function prepararHtml(html) {
   let h = String(html || '').trim();
@@ -202,7 +238,7 @@ export async function producir({ clave, html, archivos = [], bloques = [], narra
   if (!hfDisponible()) throw new Error('HyperFrames no está instalado en este servidor.');
   const k = seguro(clave); const dir = path.join(TRABAJO, k); const final = path.join(dir, 'final.mp4'); const persistente = path.join(HF_DIR, k, 'final.mp4');
   if (fs.existsSync(persistente)) return { clave: k, archivo: 'final.mp4', duracion: await dur(persistente), resumen: 'ya estaba renderizado' };
-  const limpio = prepararHtml(html);
+  const limpio = prepararHtml(html); exigirLibreria(limpio);
   fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
   try {
     const notasTomas = await montar(dir, limpio, { archivos, bloques, logo, tomas, formato, agente });
@@ -265,7 +301,7 @@ import { crearEscena, crearPersonaje, animarPersonaje, sombra, telefono, mostrad
 - En tu función render() (t = state.p * DURACION): animarPersonaje(p, t, { emociones: [[0,"panico"],[6,"alegria"]], gestos: { izq: [[0,"telefono"],[6,"reposo"]], der: [[0,"reposo"]] }, habla: [[1.2,3.4]], mirada: [x,y], giro: rad, energia: 1 }). Emociones: neutral, alegria, tranquilo, panico, preocupado, sorpresa, enojo, cansado, hablando. Gestos: reposo, telefono, saludo, panico, trabajando, senalar, celebrar, cadera, pensar. izq/der son los lados DE LA PANTALLA. Cambia emoción y gesto en los momentos de la historia (p. ej. pánico cuando suena el teléfono → alegría cuando entra el chatbot): la cara es lo que cuenta la emoción. Con cubrebocas la boca no se ve: usa cejas y ojos (preocupado, sorpresa, alegria).
 - Objetos listos: telefono({color,pantalla,insignia}), mostrador({ancho,color}), plancha({tacos}), sillon({color}), burbuja({ancho,color,cola}), pared(), suelo(), sombra(radio). Ponles los colores del cliente.
 - El texto y las burbujas de chat van como HTML encima del canvas. Para cambiar de escena entre tomas usa varios canvas (uno por toma) o muestra/oculta grupos según state.p.
-10. Mueve cosas con intención: entradas con ease power4.out / back.out, salidas rápidas, escalonar (stagger), contadores, barras que crecen, textos que se dibujan, cámara (escala lenta del fondo). Nada de objetos quietos 4 segundos. Máx. 45 s.
+9e. PLANTILLA 3D OBLIGATORIA: el servidor RECHAZA los videos y propuestas que no importen assets/three/personajes.js (se puede apagar en Ajustes de IA). Empieza SIEMPRE copiando esta plantilla y adaptándola:\n${PLANTILLA_3D}\n10. Mueve cosas con intención: entradas con ease power4.out / back.out, salidas rápidas, escalonar (stagger), contadores, barras que crecen, textos que se dibujan, cámara (escala lenta del fondo). Nada de objetos quietos 4 segundos. Máx. 45 s.
 
 PLANTILLA MÍNIMA (cópiala y amplíala):
 <!doctype html><html lang="es"><head><meta charset="utf-8"><script src="assets/gsap.min.js"></script>
@@ -293,7 +329,7 @@ export async function proponer({ clave, html, archivos = [], bloques = [], logo 
   const ms = (momentos || []).map((m) => ({ segundo: Math.max(0, +m.segundo || 0), etiqueta: String(m.etiqueta || '').slice(0, 60) })).slice(0, 6);
   if (ms.length < 2) throw new Error('Indica entre 2 y 6 momentos clave: [{segundo, etiqueta}] (p. ej. el personaje, la escena principal, el cierre).');
   const k = `${seguro(clave)}-prop`; const dir = path.join(TRABAJO, k);
-  const limpio = prepararHtml(html);
+  const limpio = prepararHtml(html); exigirLibreria(limpio);
   try {
     await montar(dir, limpio, { archivos, bloques, logo, agente });
     fs.writeFileSync(path.join(dir, 'index.html'), limpio);
