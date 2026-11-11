@@ -3,11 +3,11 @@
 import fs from 'node:fs';
 import { db } from './store.js';
 import * as files from './files.js';
-import { slug } from './workspace.js';
+import { baseNombre } from './nombres.js';
 import { rutaFinal as rutaFinalHF } from './hyperframes.js';
 import { svgAPng, svgAJpg } from './png.js';
 
-export const baseNombre = (p) => { const b = slug(p.titulo) || 'pieza'; return /-v\d+$/i.test(b) ? b : `${b}-v${p.version || 1}`; };
+export { baseNombre };
 
 // Ruta absoluta del MP4 de un video (hf o v2 ya renderizado), o null.
 export function rutaVideo(p) {

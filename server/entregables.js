@@ -7,11 +7,12 @@ import { db, save, DATA_DIR } from './store.js';
 import * as files from './files.js';
 import * as ws from './workspace.js';
 import { svgAPng, svgAJpg, pngDisponible } from './png.js';
+import { baseNombre } from './nombres.js';
 
 const slug = ws.slug;
 const EXT = { arte: 'svg', video: 'html', texto: 'txt' };
 export const extDe = (p) => (p.motor === 'hf' ? 'mp4' : p.motor === 'v2' ? 'json' : EXT[p.tipo] || 'txt');
-export const nombreArchivo = (p) => { const b = slug(p.titulo) || 'pieza'; return `${/[\s-]v\d+$/i.test(b) ? b : `${b}-v${p.version || 1}`}.${extDe(p)}`; };
+export const nombreArchivo = (p) => `${baseNombre(p)}.${extDe(p)}`;
 export function cuerpo(p) {
   if (p.tipo === 'texto') return p.contenido;
   const camp = db.campaigns.find((x) => x.id === p.campaignId);
@@ -52,7 +53,7 @@ export function guardar(p) {
         }).catch((e) => console.warn('[final jpg/png]', e.message));
       }
     } else if (p.motor === 'v2') {
-      relFinal = `${path.dirname(rel)}/${slug(p.titulo) || 'video'}.mp4`;
+      relFinal = `${path.dirname(rel)}/${baseNombre(p)}.mp4`;
       // El guion JSON es solo la fuente; el MP4 lo crea el render del servidor (render.js) en esta misma carpeta.
       const fuente = files.safePath(camp.clientId, `${files.CRUDO}/${ws.carpetaCampana(camp)}/${path.basename(rel)}`).full;
       fs.mkdirSync(path.dirname(fuente), { recursive: true });

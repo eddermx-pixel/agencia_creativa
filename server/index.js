@@ -20,6 +20,7 @@ import * as costos from './costos.js';
 import * as presupuesto from './presupuesto.js';
 import { svgAPng, svgAJpg } from './png.js';
 import * as finales from './finales.js';
+import { baseNombre, carpetaZip, fechaLocal } from './nombres.js';
 import * as voz from './voz.js';
 import * as render from './render.js';
 import * as motores from './motores.js';
@@ -397,7 +398,7 @@ function pieceBody(p) {
   const logo = db.clients.find((x) => x.id === camp?.clientId)?.logo || '';
   return p.contenido.replaceAll('{{LOGO}}', logo);
 }
-const fileName = (p) => { const b = slug(p.titulo); return `${/-v\d+$/.test(b) ? b : `${b}-v${p.version || 1}`}.${extOf(p)}`; };
+const fileName = (p) => `${baseNombre(p)}.${extOf(p)}`;
 
 app.get('/api/archive', (req, res) => {
   res.json({
@@ -414,6 +415,32 @@ app.get('/api/pieces/:id/download', (req, res) => {
 });
 
 // Campaña completa en .zip: piezas aprobadas (o todas con ?todas=1) + resumen.
+
+// Todo lo aprobado de un mes (o de todo el historial con mes=todo), ya listo para usar: Cliente/Campaña/archivos finales.
+// ?mes=AAAA-MM (por defecto el actual) &cliente=<id del cliente o n:Nombre> (opcional)
+app.get('/api/aprobadas/zip', async (req, res) => {
+  const mes = /^\d{4}-\d{2}$/.test(req.query.mes || '') ? req.query.mes : (req.query.mes === 'todo' ? '' : fechaLocal(Date.now()).slice(0, 7));
+  const cli = String(req.query.cliente || '');
+  const sel = db.pieces.filter((p) => {
+    if (p.estado !== 'aprobada' || p.propuesta) return false;
+    const c = db.campaigns.find((x) => x.id === p.campaignId); if (!c) return false;
+    if (cli && (c.clientId || `n:${c.cliente}`) !== cli) return false;
+    return !mes || fechaLocal(p.juzgada || p.creada).startsWith(mes);
+  });
+  if (!sel.length) return res.status(404).json({ error: `No hay piezas aprobadas${mes ? ` en ${mes}` : ''}${cli ? ' de ese cliente' : ''}.` });
+  const pesoVideos = sel.reduce((n, p) => { const f = p.tipo === 'video' && finales.rutaVideo(p); try { return n + (f ? fs.statSync(f).size : 0); } catch { return n; } }, 0);
+  if (pesoVideos > 500e6) return res.status(413).json({ error: `Son ${Math.round(pesoVideos / 1e6)} MB de video: elige un cliente o un mes más corto.` });
+  const archivos = []; const faltan = []; const lista = [];
+  for (const p of sel.sort((a, b) => (a.juzgada || a.creada) - (b.juzgada || b.creada))) {
+    const c = db.campaigns.find((x) => x.id === p.campaignId);
+    const r = await finales.paraZip(p, p.tipo === 'arte' ? pieceBody(p) : '');
+    for (const f of r.out) { archivos.push({ name: `${carpetaZip(c)}/${f.name}`, data: f.data }); if (!f.name.startsWith('fuentes/')) lista.push(`${carpetaZip(c)}/${f.name}`); }
+    faltan.push(...r.faltan);
+  }
+  const leeme = [`APROBADAS ${mes || 'DE TODO EL HISTORIAL'}${cli ? ' · un cliente' : ''}`, `${sel.length} pieza(s)`, '', ...lista, ...(faltan.length ? ['', 'AVISOS:', ...faltan.map((x) => `- ${x}`)] : [])].join('\n');
+  res.setHeader('Content-Disposition', `attachment; filename="aprobadas-${mes || 'todo'}.zip"`);
+  res.type('application/zip').send(makeZip([{ name: 'LEEME.txt', data: leeme }, ...archivos]));
+});
 app.get('/api/campaigns/:id/zip', async (req, res) => {
   const c = db.campaigns.find((x) => x.id === req.params.id);
   if (!c) return res.status(404).end();
@@ -467,7 +494,7 @@ app.put('/api/pieces/:id/video', async (req, res) => {
   const ext = ['mp4', 'webm'].includes(req.query.ext) ? req.query.ext : 'mp4';
   try {
     files.ensureFolders(donde.clientId);
-    const nombre = `${(ws.slug(p.titulo) || 'video')}.${ext}`;
+    const nombre = `${baseNombre(p)}.${ext}`;
     const r = await files.recibir(req, donde.clientId, files.FINAL, donde.sub, nombre);
     p.mediaRuta = r.ruta; save();
     log('jefe', `💾 Guardó el video "${p.titulo}" en ${r.ruta}`, p.campaignId); bus.emit('files', { clientId: donde.clientId });

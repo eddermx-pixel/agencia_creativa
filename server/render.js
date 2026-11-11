@@ -7,7 +7,7 @@ import { db, save, DATA_DIR } from './store.js';
 import { bus, log } from './hub.js';
 import * as files from './files.js';
 import * as entregables from './entregables.js';
-import { slug } from './workspace.js';
+import { baseNombre } from './nombres.js';
 import { conTurno } from './pesado.js';
 
 const CANDIDATOS = [process.env.CHROMIUM_PATH, '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome', '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', '/opt/pw-browsers/chromium-1243/chrome-linux/chrome'].filter(Boolean);
@@ -69,7 +69,7 @@ async function siguiente() {
     const donde = entregables.carpetaPieza(p);
     if (!donde) throw new Error('La pieza no tiene cliente asignado.');
     files.ensureFolders(donde.clientId);
-    const rel = `${files.FINAL}/${donde.sub}/${slug(p.titulo) || 'video'}.mp4`;
+    const rel = `${files.FINAL}/${donde.sub}/${baseNombre(p)}.mp4`;
     const { full } = files.safePath(donde.clientId, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });
     await aMp4(path.join(TMP, crudo), full);

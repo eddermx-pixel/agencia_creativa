@@ -158,6 +158,12 @@ async function toPng(p) {
   }
 }
 
+// Descargar todo lo aprobado del mes (y del cliente elegido) en un ZIP con los archivos finales
+$('fMes').value = new Date().toLocaleDateString('sv-SE').slice(0, 7);
+$('zipMes').onclick = () => {
+  const mes = $('fMes').value || 'todo'; const cl = $('fCliente').value;
+  location.href = `/api/aprobadas/zip?mes=${encodeURIComponent(mes)}${cl ? `&cliente=${encodeURIComponent(cl)}` : ''}`;
+};
 for (const id of ['fCliente', 'fEstado', 'fTipo']) $(id).addEventListener('change', render);
 $('fBuscar').addEventListener('input', render);
 window.addEventListener('hashchange', render);
