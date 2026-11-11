@@ -91,6 +91,21 @@ function showBrief(c) {
   $('dlg').showModal();
 }
 
+// Botones de descarga: lo principal es SIEMPRE el archivo final listo (MP4 o JPG); las fuentes editables quedan aparte.
+function descargas(p) {
+  const dl = (href, txt, primary) => `<a href="${href}" download><button${primary ? ' class="primary"' : ''}>${txt}</button></a>`;
+  if (p.tipo === 'arte') return dl(`/api/pieces/${p.id}/jpg`, '⬇️ JPG (listo para subir)', true) + dl(`/api/pieces/${p.id}/png`, 'PNG') + dl(`/api/pieces/${p.id}/download`, 'SVG (fuente editable)');
+  if (p.tipo === 'texto') return dl(`/api/pieces/${p.id}/final`, '⬇️ TXT', true);
+  if (p.motor === 'hf') return dl(`/api/pieces/${p.id}/media?dl=1`, '⬇️ Descargar MP4', true);
+  if (p.motor === 'v2') {
+    const listo = p.mediaRuta || p.render?.estado === 'listo';
+    const enCurso = ['en_cola', 'grabando'].includes(p.render?.estado);
+    return (listo ? dl(`/api/pieces/${p.id}/media?dl=1`, '⬇️ Descargar MP4', true) : enCurso ? '<button disabled>⏳ Creando el MP4…</button>' : '<button class="primary" id="mkmp4">🎞️ Crear MP4</button>')
+      + `<a href="/player.html?id=${p.id}" target="_blank"><button>Exportar desde el navegador</button></a>` + dl(`/api/pieces/${p.id}/download`, 'Guion (fuente)');
+  }
+  return dl(`/api/pieces/${p.id}/download`, 'HTML (versión antigua)');
+}
+
 function showPiece(p, c) {
   const src = `/api/pieces/${p.id}/render?t=${p.rt}`;
   const versiones = data.pieces.filter((x) => x.campaignId === p.campaignId && x.agente === p.agente && x.tipo === p.tipo).sort((a, b) => a.creada - b.creada);
@@ -105,8 +120,7 @@ function showPiece(p, c) {
         <div><b>HECHO POR</b>${esc(byId(p.agente)?.nombre || p.agente)} · versión ${p.version || 1} · ${new Date(p.creada).toLocaleString('es-MX')}</div>
         ${p.descripcion ? `<div><b>DESCRIPCIÓN</b>${esc(p.descripcion)}</div>` : ''}
         <div><b>DESCARGAR</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
-          ${p.tipo === 'arte' ? '<button class="primary" id="png">PNG</button>' : ''}
-          ${p.motor === 'hf' ? `<a href="/api/pieces/${p.id}/media" download><button class="primary">⬇️ Descargar MP4</button></a>` : ['v2', 'hf'].includes(p.motor) ? `<a href="/player.html?id=${p.id}" target="_blank"><button class="primary">🎬 Exportar video (MP4/WebM)</button></a><a href="/api/pieces/${p.id}/download" download><button>Guion (JSON)</button></a>` : `<a href="/api/pieces/${p.id}/download" download><button>${{ arte: 'SVG (editable)', video: 'HTML (ábrelo en el navegador)', texto: 'TXT' }[p.tipo]}</button></a>`}
+          ${descargas(p)}
           <a href="${src}" target="_blank" rel="noopener"><button>Abrir</button></a>
         </div></div>
         ${versiones.length > 1 ? `<div><b>VERSIONES</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${versiones.map((v) => `<button data-v="${v.id}" ${v.id === p.id ? 'class="primary"' : ''}>v${v.version || 1} · ${ESTADO[v.estado] || v.estado}</button>`).join('')}</div></div>` : ''}
@@ -115,6 +129,8 @@ function showPiece(p, c) {
   const body = $('dlgBody');
   body.querySelector('#x').onclick = () => $('dlg').close();
   body.querySelectorAll('[data-v]').forEach((b) => (b.onclick = () => showPiece(data.pieces.find((x) => x.id === b.dataset.v), c)));
+  const mk = body.querySelector('#mkmp4');
+  if (mk) mk.onclick = async () => { mk.disabled = true; mk.textContent = '⏳ Creando el MP4…'; try { await api(`/api/pieces/${p.id}/render`, {}); } catch (e) { mk.textContent = e.message.slice(0, 60); } };
   const png = body.querySelector('#png');
   if (png) png.onclick = async () => { try { const r = await fetch(`/api/pieces/${p.id}/png`); if (!r.ok) throw 0; const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await r.blob()), download: `${(p.titulo.replace(/[^\w\- ]+/g, '').trim() || 'arte')}-v${p.version || 1}.png` }); a.click(); } catch { toPng(p); } };
   const pre = body.querySelector('pre[data-src]');

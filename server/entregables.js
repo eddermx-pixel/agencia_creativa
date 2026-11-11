@@ -6,7 +6,7 @@ import path from 'node:path';
 import { db, save, DATA_DIR } from './store.js';
 import * as files from './files.js';
 import * as ws from './workspace.js';
-import { svgAPng, pngDisponible } from './png.js';
+import { svgAPng, svgAJpg, pngDisponible } from './png.js';
 
 const slug = ws.slug;
 const EXT = { arte: 'svg', video: 'html', texto: 'txt' };
@@ -31,21 +31,37 @@ export function guardar(p) {
     const rel = `${carpetaEntregables(camp)}/${nombreArchivo(p)}`;
     const { full } = files.safePath(camp.clientId, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });
+    let relFinal = rel; // lo que se anota como el archivo final de la pieza
     if (p.motor === 'hf') {
       const { clave } = JSON.parse(p.contenido);
       const src = path.join(DATA_DIR, 'hf', String(clave).replace(/[^a-zA-Z0-9_-]/g, ''), 'final.mp4');
       fs.copyFileSync(src, full);
       p.mediaRuta = rel;
+    } else if (p.tipo === 'arte') {
+      // Lo final es JPG y PNG listos para subir; el SVG queda como fuente editable en "Material en crudo".
+      const base = rel.replace(/\.svg$/i, ''); relFinal = `${base}.jpg`;
+      const fuente = files.safePath(camp.clientId, `${files.CRUDO}/${ws.carpetaCampana(camp)}/${path.basename(base)}.svg`).full;
+      fs.mkdirSync(path.dirname(fuente), { recursive: true });
+      fs.writeFileSync(fuente, cuerpo(p));
+      if (pngDisponible()) {
+        const svg = cuerpo(p);
+        Promise.all([svgAPng(svg), svgAJpg(svg)]).then(([png, jpg]) => {
+          fs.writeFileSync(files.safePath(camp.clientId, `${base}.png`).full, png);
+          fs.writeFileSync(files.safePath(camp.clientId, `${base}.jpg`).full, jpg);
+          p.jpgRuta = `${base}.jpg`; p.pngRuta = `${base}.png`; save();
+        }).catch((e) => console.warn('[final jpg/png]', e.message));
+      }
+    } else if (p.motor === 'v2') {
+      relFinal = `${path.dirname(rel)}/${slug(p.titulo) || 'video'}.mp4`;
+      // El guion JSON es solo la fuente; el MP4 lo crea el render del servidor (render.js) en esta misma carpeta.
+      const fuente = files.safePath(camp.clientId, `${files.CRUDO}/${ws.carpetaCampana(camp)}/${path.basename(rel)}`).full;
+      fs.mkdirSync(path.dirname(fuente), { recursive: true });
+      fs.writeFileSync(fuente, cuerpo(p));
     } else fs.writeFileSync(full, cuerpo(p));
-    // El arte también se entrega como PNG listo para subir (el SVG queda como fuente editable).
-    if (p.tipo === 'arte' && pngDisponible()) {
-      const png = full.replace(/\.svg$/i, '.png');
-      svgAPng(cuerpo(p)).then((b) => { fs.writeFileSync(png, b); p.pngRuta = rel.replace(/\.svg$/i, '.png'); save(); }).catch((e) => console.warn('[png]', e.message));
-    }
-    ws.piezaAprobada(camp, p, rel);
+    ws.piezaAprobada(camp, p, relFinal);
     ws.concepto(camp);
     save();
-    return rel;
+    return relFinal;
   } catch (e) { console.warn('[entregables]', e.message); return null; }
 }
 

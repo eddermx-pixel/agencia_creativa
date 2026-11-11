@@ -18,7 +18,8 @@ import QRCode from 'qrcode';
 import * as planeacion from './planeacion.js';
 import * as costos from './costos.js';
 import * as presupuesto from './presupuesto.js';
-import { svgAPng } from './png.js';
+import { svgAPng, svgAJpg } from './png.js';
+import * as finales from './finales.js';
 import * as voz from './voz.js';
 import * as render from './render.js';
 import * as motores from './motores.js';
@@ -413,7 +414,7 @@ app.get('/api/pieces/:id/download', (req, res) => {
 });
 
 // Campaña completa en .zip: piezas aprobadas (o todas con ?todas=1) + resumen.
-app.get('/api/campaigns/:id/zip', (req, res) => {
+app.get('/api/campaigns/:id/zip', async (req, res) => {
   const c = db.campaigns.find((x) => x.id === req.params.id);
   if (!c) return res.status(404).end();
   const all = db.pieces.filter((p) => p.campaignId === c.id);
@@ -425,7 +426,15 @@ app.get('/api/campaigns/:id/zip', (req, res) => {
     c.concepto ? `CONCEPTO APROBADO: ${c.concepto.titulo}\n${c.concepto.detalle}\n` : '',
     'PIEZAS:', ...all.map((p) => `- [${p.estado}] ${p.tipo} "${p.titulo}" v${p.version || 1}${p.comentario ? ` — comentario: ${p.comentario}` : ''}`),
   ].join('\n');
-  const files = [{ name: 'resumen.txt', data: resumen }, ...sel.map((p) => ({ name: `${p.estado === 'aprobada' ? 'aprobadas' : p.estado}/${fileName(p)}`, data: pieceBody(p) }))];
+  // Lo que se baja es lo FINAL listo para usar: MP4, JPG/PNG o TXT. Las fuentes editables (SVG/JSON) van en fuentes/.
+  const archivos = []; const faltan = [];
+  for (const p of sel) {
+    const carpeta = p.estado === 'aprobada' ? 'aprobadas' : p.estado;
+    const r = await finales.paraZip(p, p.tipo === 'arte' ? pieceBody(p) : '');
+    for (const f of r.out) archivos.push({ name: `${carpeta}/${f.name}`, data: f.data });
+    faltan.push(...r.faltan);
+  }
+  const files = [{ name: 'resumen.txt', data: resumen + (faltan.length ? `\n\nAVISOS:\n${faltan.map((x) => `- ${x}`).join('\n')}` : '') }, ...archivos];
   res.setHeader('Content-Disposition', `attachment; filename="${slug(c.cliente)}-${fecha}.zip"`);
   res.type('application/zip').send(makeZip(files));
 });
@@ -557,14 +566,33 @@ app.get('/api/pieces/:id/png', async (req, res) => {
   if (!p || p.tipo !== 'arte') return res.status(404).end();
   try {
     const b = await svgAPng(pieceBody(p));
-    res.type('image/png').set('Content-Disposition', `attachment; filename="${fileName(p).replace(/\.[^.]+$/, '')}.png"`).send(b);
+    res.type('image/png').set('Content-Disposition', `attachment; filename="${finales.baseNombre(p)}.png"`).send(b);
   } catch (e) { res.status(501).json({ error: e.message }); }
 });
 app.get('/api/pieces/:id/media', (req, res) => {
   const p = db.pieces.find((x) => x.id === req.params.id);
-  if (!p || p.motor !== 'hf') return res.status(404).end();
-  try { const f = rutaFinalHF(JSON.parse(p.contenido).clave); if (!fs.existsSync(f)) return res.status(404).end(); res.type('video/mp4').sendFile(f); } catch { res.status(404).end(); }
+  if (!p || p.tipo !== 'video') return res.status(404).end();
+  const f = finales.rutaVideo(p);
+  if (!f) return res.status(404).json({ error: p.motor === 'v2' ? 'El MP4 de este video aún no está listo (se crea al aprobarlo).' : 'No se encontró el MP4.' });
+  if (req.query.dl) res.set('Content-Disposition', `attachment; filename="${finales.baseNombre(p)}.mp4"`);
+  res.type('video/mp4').sendFile(f);
 });
+// JPG listo para subir (mismo arte, fondo blanco)
+app.get('/api/pieces/:id/jpg', async (req, res) => {
+  const p = db.pieces.find((x) => x.id === req.params.id);
+  if (!p || p.tipo !== 'arte') return res.status(404).end();
+  try { res.type('image/jpeg').set('Content-Disposition', `attachment; filename="${finales.baseNombre(p)}.jpg"`).send(await svgAJpg(pieceBody(p))); }
+  catch (e) { res.status(501).json({ error: e.message }); }
+});
+// Archivo final listo, el que corresponde al tipo de pieza: MP4 (video), JPG (arte; ?formato=png) o TXT (texto)
+app.get('/api/pieces/:id/final', async (req, res) => {
+  const p = db.pieces.find((x) => x.id === req.params.id);
+  if (!p) return res.status(404).end();
+  if (p.tipo === 'video') return res.redirect(302, `/api/pieces/${p.id}/media?dl=1`);
+  if (p.tipo === 'arte') return res.redirect(302, `/api/pieces/${p.id}/${req.query.formato === 'png' ? 'png' : 'jpg'}`);
+  res.set('Content-Disposition', `attachment; filename="${finales.baseNombre(p)}.txt"`).type('text/plain; charset=utf-8').send(p.contenido);
+});
+
 app.get('/api/pieces/:id/spec', (req, res) => {
   const p = db.pieces.find((x) => x.id === req.params.id);
   if (p?.motor === 'hf') return res.json({ hf: true, url: `/api/pieces/${p.id}/media`, titulo: p.titulo, estilo: '🎞️ Video premium (HyperFrames)', spec: { formato: '9:16', escenas: [] } });
