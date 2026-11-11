@@ -7,7 +7,7 @@ import * as entregables from './entregables.js';
 import { db } from './store.js';
 import { agregarVoz } from './voz.js';
 import { agregarMusica } from './musica.js';
-import { producir } from './hyperframes.js';
+import { producir, proponer } from './hyperframes.js';
 import { producirRemotion } from './remotion.js';
 
 // `key` = id de la llamada del agente; permite retomar sin duplicar tras un reinicio.
@@ -55,6 +55,21 @@ export function makeActions(agentId, campaign, key = null) {
       return r.aprobado
         ? `CONCEPTO APROBADO${r.respuesta ? `. Comentario del jefe: ${r.respuesta}` : ''}. Ya puedes pasar a producción.`
         : `CONCEPTO NO APROBADO. Cambios pedidos: ${r.respuesta || '(sin comentario: propón otra dirección)'}. Ajusta el concepto y vuelve a presentarlo antes de producir.`;
+    },
+
+    // Propuesta visual: imágenes fijas de la composición real; el jefe aprueba personajes, escena y estilo ANTES de producir el video.
+    async proponerVisual({ titulo, descripcion = '', html, archivos = [], bloques = [], momentos = [], version = 1 }) {
+      setAgent(agentId, { estado: 'trabajando', burbuja: '🖼️ Preparando la propuesta visual…' });
+      const clave = key || `${cid}-${Date.now()}`;
+      const logo = db.clients.find((x) => x.id === db.campaigns.find((c) => c.id === cid)?.clientId)?.logo || '';
+      const r = await proponer({ clave, html, archivos, bloques, logo, momentos, agente: agentId });
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${r.ancho} ${r.alto}" width="${r.ancho}" height="${r.alto}"><image width="${r.ancho}" height="${r.alto}" xlink:href="data:image/jpeg;base64,${r.jpg.toString('base64')}"/></svg>`;
+      setAgent(agentId, { estado: 'entregando', burbuja: `Esperando tu aprobación visual: ${titulo}`.slice(0, 140) });
+      const p = await submitPiece({ agente: agentId, campaignId: cid, tipo: 'arte', titulo: `Propuesta visual · ${titulo}`, descripcion: `${descripcion}\nMomentos: ${r.etiquetas.join(' · ')}`.trim(), contenido: svg, version, key, propuesta: true });
+      setAgent(agentId, { estado: 'trabajando', burbuja: p.estado === 'aprobada' ? 'Propuesta aprobada: ¡a producir!' : 'Ajustando la propuesta…' });
+      return p.estado === 'aprobada'
+        ? `PROPUESTA VISUAL APROBADA${p.comentario ? `. Comentario del jefe: ${p.comentario}` : ''}. Ahora construye el video FINAL sobre ESTE MISMO HTML (mismos personajes, escenas, colores y estilo; no los rediseñes): añade la animación completa, narraciones, música, efectos y entrega con entregar_hyperframes.`
+        : `PROPUESTA VISUAL RECHAZADA${p.comentario ? `. Cambios pedidos: ${p.comentario}` : ' (sin comentario: propón un estilo o personajes claramente distintos)'}. Ajusta y vuelve a presentarla con proponer_visual; no produzcas el video todavía.`;
     },
 
     async entregarHF({ titulo, descripcion = '', html, archivos = [], bloques = [], codigo, duracion, narraciones = [], musicaPrompt = '', efectos = [], tomas = [], version = 1 }, via = 'hf') {

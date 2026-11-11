@@ -94,6 +94,16 @@ const TOOLS = {
       version: { type: 'integer' },
     }, ['tipo', 'titulo', 'contenido']),
   },
+  proponer_visual: {
+    description: 'PRIMER PASO OBLIGATORIO de todo video HyperFrames: presentas al jefe IMÁGENES FIJAS de tu propuesta visual (personajes, escena y estilo) para que las apruebe. El servidor monta tu composición, saca una imagen en cada "momento" que indiques y las envía a aprobación. No renderiza video ni gasta voz ni música. Si el jefe aprueba, construyes el video final SOBRE ESE MISMO HTML; si rechaza, ajustas y la vuelves a presentar.',
+    input_schema: obj({
+      titulo: { type: 'string' }, descripcion: { type: 'string', description: 'Qué personajes, escena y estilo propones y por qué (2-4 frases)' },
+      html: { type: 'string', description: 'La composición HTML (misma estructura que entregar_hyperframes) con los personajes y escenas a su aspecto final. Puede ser una versión corta (hasta ~10 s) con los momentos clave bien armados; no hace falta voz ni la animación completa.' },
+      momentos: { type: 'array', description: 'De 2 a 6 instantes (segundos de tu línea de tiempo) que se convierten en las imágenes de la propuesta: p. ej. el personaje principal, la escena del problema, la del producto, el cierre con logo', items: obj({ segundo: { type: 'number' }, etiqueta: { type: 'string' } }, ['segundo', 'etiqueta']) },
+      archivos: { type: 'array', description: 'Archivos de tu computadora que usa tu composición (se copian a assets/<nombre>)', items: obj({ ruta: { type: 'string' }, nombre: { type: 'string' } }, ['ruta', 'nombre']) },
+      bloques: { type: 'array', items: { type: 'string' } },
+    }, ['titulo', 'html', 'momentos']),
+  },
   entregar_hyperframes: {
     description: 'Entrega un video PREMIUM hecho con HyperFrames: tú escribes el HTML de la composición (1080×1920) y el servidor lo valida, renderiza, le mezcla voz y música y lo manda al jefe para aprobación. Si hay errores te los devuelve para que los corrijas. Puede tardar unos minutos.',
     input_schema: obj({
@@ -159,7 +169,7 @@ const TOOLS = {
 function toolDefs(agentId) {
   const names = ['estado', 'preguntar_al_jefe', 'pedir_autorizacion', 'guardar_memoria', 'ver_archivos', 'leer_archivo', 'ver_imagen', 'guardar_nota'];
   if (byId[agentId].puedeEntregar) names.push('entregar_pieza');
-  if (agentId === 'editor2' && hfDisponible()) names.push('entregar_hyperframes', 'ver_estilo_pelicula', 'buscar_bloques', 'ver_bloque');
+  if (agentId === 'editor2' && hfDisponible()) names.push('proponer_visual', 'entregar_hyperframes', 'ver_estilo_pelicula', 'buscar_bloques', 'ver_bloque');
   if (agentId === 'editor2' && remotionDisponible()) names.push('entregar_remotion');
   const defs = names.map((name) => ({ name, ...TOOLS[name] }));
   if (agentId === 'director') {
@@ -189,6 +199,9 @@ async function runTool(job, block, campaign) {
     case 'entregar_pieza':
       if (!i.contenido || !i.tipo) throw new Error('Faltan tipo o contenido de la pieza');
       return a.entregar(i);
+    case 'proponer_visual':
+      if (!i.html) throw new Error('Falta el html de la composición');
+      return a.proponerVisual(i);
     case 'entregar_hyperframes':
       if (!i.html) throw new Error('Falta el html de la composición');
       return a.entregarHF(i);

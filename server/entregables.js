@@ -23,6 +23,7 @@ export function carpetaEntregables(camp) { return `${files.FINAL}/${ws.carpetaCa
 
 // Guarda la pieza aprobada. Devuelve la ruta dentro del cliente.
 export function guardar(p) {
+  if (p.propuesta) return null; // las propuestas visuales no van a "Resultado final"
   const camp = db.campaigns.find((x) => x.id === p.campaignId);
   if (!camp?.clientId) return null;
   try {

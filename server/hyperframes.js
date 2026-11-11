@@ -97,9 +97,17 @@ export async function descargarTomas(dir, tomas, formato, sub = path.join('asset
 }
 
 export async function mezclar(silencioso, salida, { voces, musica, duracion, efectos = [] }) {
-  const entradas = ['-i', silencioso]; const filtros = []; const etiquetas = [];
-  voces.forEach((v, i) => { entradas.push('-i', v.archivo); const ms = Math.max(0, Math.round(v.inicio * 1000)); filtros.push(`[${i + 1}:a]adelay=${ms}|${ms},volume=1.5[v${i}]`); etiquetas.push(`[v${i}]`); });
-  if (musica) { entradas.push('-i', musica); const k = voces.length + 1; filtros.push(`[${k}:a]volume=${voces.length ? 0.2 : 0.5},atrim=0:${duracion.toFixed(2)},afade=t=out:st=${Math.max(0, duracion - 1.2).toFixed(2)}:d=1.2[mus]`); etiquetas.push('[mus]'); }
+  const entradas = ['-i', silencioso]; const filtros = []; const etiquetas = []; const vocesEt = [];
+  voces.forEach((v, i) => { entradas.push('-i', v.archivo); const ms = Math.max(0, Math.round(v.inicio * 1000)); filtros.push(`[${i + 1}:a]adelay=${ms}|${ms},volume=1.5[v${i}]`); vocesEt.push(`[v${i}]`); });
+  // Todas las voces en una sola pista; una copia va a la mezcla y otra "ordena" a la música que baje mientras se habla (ducking).
+  if (vocesEt.length) { filtros.push(`${vocesEt.join('')}amix=inputs=${vocesEt.length}:normalize=0:duration=longest,asplit=2[vz1][vz2]`); etiquetas.push('[vz2]'); }
+  if (musica) {
+    entradas.push('-i', musica); const k = voces.length + 1;
+    const vol = Number(process.env.MUSICA_VOL || (voces.length ? 1.1 : 0.6)); // antes 0.2: quedaba ~16 dB bajo la voz; con ducking queda ~9 dB bajo la voz al hablar
+    filtros.push(`[${k}:a]volume=${vol},atrim=0:${duracion.toFixed(2)},afade=t=out:st=${Math.max(0, duracion - 1.2).toFixed(2)}:d=1.2[mus0]`);
+    filtros.push(voces.length ? '[mus0][vz1]sidechaincompress=threshold=0.09:ratio=2.5:attack=20:release=450:makeup=1[mus]' : '[mus0]anull[mus]');
+    etiquetas.push('[mus]');
+  } else if (vocesEt.length) filtros.push('[vz1]anullsink');
   efectos.forEach((x, i) => { const k = entradas.filter((e) => e === '-i').length; entradas.push('-i', x.archivo); const ms = Math.round(x.inicio * 1000); filtros.push(`[${k}:a]adelay=${ms}|${ms},volume=${x.vol}[e${i}]`); etiquetas.push(`[e${i}]`); });
   if (!etiquetas.length) { fs.copyFileSync(silencioso, salida); return; }
   filtros.push(`${etiquetas.join('')}amix=inputs=${etiquetas.length}:normalize=0:duration=longest,loudnorm=I=-14:TP=-1.5,atrim=0:${duracion.toFixed(2)}[a]`);
@@ -170,6 +178,23 @@ async function instalarBloques(dir, bloques) {
 }
 
 // ---------- Entrega ----------
+// Prepara la carpeta del proyecto: GSAP, Three.js (si el HTML lo usa), tomas, bloques, archivos del jefe y logo del cliente.
+async function montar(dir, limpio, { archivos = [], bloques = [], logo = '', tomas = [], formato = 'vertical', agente = 'editor2' }) {
+  fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
+  fs.copyFileSync(GSAP, path.join(dir, 'assets', 'gsap.min.js'));
+  if (/assets\/three\//.test(limpio)) {
+    fs.mkdirSync(path.join(dir, 'assets', 'three'), { recursive: true });
+    for (const f of ['three.module.js', 'three.core.js']) fs.copyFileSync(path.join(THREE_DIR, f), path.join(dir, 'assets', 'three', f));
+  }
+  const notasTomas = await descargarTomas(dir, tomas, formato);
+  await instalarBloques(dir, bloques);
+  copiarArchivos(dir, agente, archivos, 'assets');
+  // Logo oficial del cliente (kit de marca) disponible siempre como assets/logo.png (o .svg)
+  const ml = /^data:image\/(png|jpeg|webp|svg\+xml);base64,(.*)$/.exec(logo || '');
+  if (ml) fs.writeFileSync(path.join(dir, 'assets', `logo.${{ png: 'png', jpeg: 'jpg', webp: 'webp', 'svg+xml': 'svg' }[ml[1]]}`), Buffer.from(ml[2], 'base64'));
+  return notasTomas;
+}
+
 // Devuelve { clave, archivo, duracion, resumen } o lanza Error con instrucciones para que el agente corrija.
 export async function producir({ clave, html, archivos = [], bloques = [], narraciones = [], musicaPrompt = '', efectos = [], logo = '', tomas = [], campaignId = null, agente = 'editor2', formato = 'vertical' }) {
   if (!hfDisponible()) throw new Error('HyperFrames no está instalado en este servidor.');
@@ -178,17 +203,7 @@ export async function producir({ clave, html, archivos = [], bloques = [], narra
   const limpio = prepararHtml(html);
   fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
   try {
-    fs.copyFileSync(GSAP, path.join(dir, 'assets', 'gsap.min.js'));
-    if (/assets\/three\//.test(limpio)) {
-      fs.mkdirSync(path.join(dir, 'assets', 'three'), { recursive: true });
-      for (const f of ['three.module.js', 'three.core.js']) fs.copyFileSync(path.join(THREE_DIR, f), path.join(dir, 'assets', 'three', f));
-    }
-    const notasTomas = await descargarTomas(dir, tomas, formato);
-    await instalarBloques(dir, bloques);
-    copiarArchivos(dir, agente, archivos, 'assets');
-    // Logo oficial del cliente (kit de marca) disponible siempre como assets/logo.png (o .svg)
-    const ml = /^data:image\/(png|jpeg|webp|svg\+xml);base64,(.*)$/.exec(logo || '');
-    if (ml) fs.writeFileSync(path.join(dir, 'assets', `logo.${{ png: 'png', jpeg: 'jpg', webp: 'webp', 'svg+xml': 'svg' }[ml[1]]}`), Buffer.from(ml[2], 'base64'));
+    const notasTomas = await montar(dir, limpio, { archivos, bloques, logo, tomas, formato, agente });
     fs.writeFileSync(path.join(dir, 'index.html'), limpio);
     return await conTurno(async () => {
       const c = await correr(process.execPath, [HF_BIN, 'check', '--json'], { cwd: dir, timeout: 240000 });
@@ -214,7 +229,14 @@ export const rutaFinal = (clave) => path.join(HF_DIR, seguro(clave), 'final.mp4'
 
 // ---------- Guía que recibe Micho ----------
 export function hfGuide() {
-  return `VIDEOS PREMIUM CON HYPERFRAMES (herramienta entregar_hyperframes)
+  return `VIDEOS PREMIUM CON HYPERFRAMES (herramientas proponer_visual y entregar_hyperframes)
+FLUJO OBLIGATORIO EN 3 PASOS (el jefe aprueba lo visual ANTES de que gastes en producir):
+ 1) PROPUESTA VISUAL: escribe tu composición con los personajes, la escena y el estilo ya a su aspecto final y llama a proponer_visual con 3-6 "momentos" (segundos) que muestren: el/los personajes, la escena del problema, la de la solución y el cierre con el logo. Es una versión corta y ligera (≤10 s): sin voz, sin música, sin animación completa; lo que importa es que se VEA bien. Se envía al jefe como imágenes.
+ 2) Si la RECHAZA, ajusta según su comentario y vuelve a proponer. NO produzcas el video hasta que la apruebe.
+ 3) Si la APRUEBA, construye el video final SOBRE ESE MISMO HTML (mismos personajes, formas, colores y estilo; solo agrega la animación completa, narraciones, música y efectos) y entrega con entregar_hyperframes. No rediseñes lo aprobado.
+CALIDAD DE PERSONAJES: usa proporciones expresivas (cabeza grande, ojos que parpadean, boca que cambia, brazos que se mueven), ropa y accesorios que cuenten quién es (delantal, gorra), movimiento de reposo (respiración, balanceo) y colores del cliente; que cada personaje sea reconocible aunque sea simple.
+GANCHO Y NARRATIVA: en el PRIMER segundo debe pasar algo que detenga el scroll (un problema visual fuerte + una frase en pantalla); estructura problema → lo que se pierde → solución → resultado concreto → llamada a la acción; ideal 25-35 s.
+RITMO: pide la música con un tempo exacto en el musicaPrompt (p. ej. "110 BPM") y haz los cortes y los golpes visuales en múltiplos de ese pulso (a 110 BPM cada 2.18 s son 4 tiempos); nada se queda quieto más de 2 s; los textos entran y salen rápido.
 Úsalo para piezas cinematográficas o de más nivel (lanzamientos, institucionales, explicativos con motion graphics a medida). Para videos rápidos y baratos sigue usando entregar_pieza con el guion JSON. Tú escribes UN archivo HTML (la composición); el servidor lo valida, lo renderiza a MP4 1080×1920 a 30 fps, le mezcla la voz y la música, y te lo devuelve para aprobación. Si la validación falla, recibirás los errores con su arreglo: corrígelos y vuelve a entregar.
 
 REGLAS (el validador las exige):
@@ -252,4 +274,38 @@ BLOQUES LISTOS (≈450): partículas (confetti, starfield, snow…), zoom y cám
 
 ESTILOS DE PELÍCULA (Lemo Opuscar, MIT): 66 direcciones de arte. Si el concepto pide un look distinto del genérico, elige UNO de la lista, lee su guía con ver_estilo_pelicula y aplica su paleta, materiales, tipografía y gramática de movimiento en tu HTML+GSAP (sin copiar obras ni personajes). Catálogo:
 ${catalogoEstilos()}`;
+}
+
+// ---------- Propuesta visual ----------
+// Imágenes fijas de la composición REAL en los segundos elegidos (personajes, escena, estilo). No renderiza video ni gasta voz/música:
+// el jefe aprueba esto y luego el video se construye sobre el mismo HTML. Devuelve { jpg: Buffer, ancho, alto, etiquetas }.
+export async function proponer({ clave, html, archivos = [], bloques = [], logo = '', momentos = [], agente = 'editor2' }) {
+  if (!hfDisponible()) throw new Error('HyperFrames no está instalado en este servidor.');
+  const ms = (momentos || []).map((m) => ({ segundo: Math.max(0, +m.segundo || 0), etiqueta: String(m.etiqueta || '').slice(0, 60) })).slice(0, 6);
+  if (ms.length < 2) throw new Error('Indica entre 2 y 6 momentos clave: [{segundo, etiqueta}] (p. ej. el personaje, la escena principal, el cierre).');
+  const k = `${seguro(clave)}-prop`; const dir = path.join(TRABAJO, k);
+  const limpio = prepararHtml(html);
+  try {
+    await montar(dir, limpio, { archivos, bloques, logo, agente });
+    fs.writeFileSync(path.join(dir, 'index.html'), limpio);
+    return await conTurno(async () => {
+      const c = await correr(process.execPath, [HF_BIN, 'check', '--json'], { cwd: dir, timeout: 240000 });
+      const errores = leerCheck(c.out);
+      if (errores.length) throw new Error(`La validación encontró ${errores.length} error(es). Corrígelos y vuelve a proponer:\n- ${errores.slice(0, 8).join('\n- ')}`);
+      const out = path.join(dir, 'snap');
+      const r = await correr(process.execPath, [HF_BIN, 'snapshot', '--at', ms.map((m) => m.segundo).join(','), '--no-end', '--json', '-o', out], { cwd: dir, timeout: 300000 });
+      let d; try { d = JSON.parse(r.out.slice(r.out.indexOf('{'))); } catch { d = null; }
+      const frames = (d?.frames || []).map((f) => f.path).filter((f) => fs.existsSync(f));
+      if (!frames.length) throw new Error(`No se pudieron sacar las imágenes: ${(r.err + r.out).slice(-300)}`);
+      // Tablero: hasta 3 columnas, cada cuadro a 540×960 (9:16)
+      frames.forEach((f, i) => fs.copyFileSync(f, path.join(out, `t${i + 1}.png`)));
+      const cols = Math.min(frames.length, 3); const filas = Math.ceil(frames.length / 3);
+      const tab = path.join(out, 'tablero.jpg');
+      const t = await correr('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', '1', '-i', path.join(out, 't%d.png'), '-vf', `scale=540:960:force_original_aspect_ratio=decrease,pad=540:960:(ow-iw)/2:(oh-ih)/2:color=0x0B1B3F,tile=${cols}x${filas}:padding=10:margin=10:color=0x0b1220`, '-frames:v', '1', '-q:v', '3', tab], { timeout: 120000 });
+      if (t.code !== 0 || !fs.existsSync(tab)) throw new Error(`No se pudo armar el tablero: ${t.err.slice(-200)}`);
+      return { jpg: fs.readFileSync(tab), ancho: cols * 540 + (cols + 1) * 10 + (cols - 1) * 0, alto: filas * 960 + (filas + 1) * 10, etiquetas: ms.map((m, i) => `${i + 1}. ${m.etiqueta || `segundo ${m.segundo}`}`) };
+    });
+  } finally {
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
+  }
 }

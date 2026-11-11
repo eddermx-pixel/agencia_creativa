@@ -80,7 +80,7 @@ export function answerRequest(id, { respuesta = '', aprobado = null, respuestas 
 // ---- Piezas creativas (feed tipo Tinder) ----
 const pieceWaiters = new Map();
 
-export function submitPiece({ agente, campaignId, tipo, titulo, descripcion, contenido, version = 1, key = null, motor = null }) {
+export function submitPiece({ agente, campaignId, tipo, titulo, descripcion, contenido, version = 1, key = null, motor = null, propuesta = false }) {
   const prev = key && db.pieces.find((x) => x.key === key && x.estado !== 'expirada');
   if (prev) {
     if (prev.estado !== 'pendiente') return Promise.resolve(prev);
@@ -90,6 +90,7 @@ export function submitPiece({ agente, campaignId, tipo, titulo, descripcion, con
     id: newId('p'), key, agente, campaignId, tipo, titulo, descripcion, contenido, version, motor,
     estado: 'pendiente', creada: Date.now(),
   };
+  if (propuesta) p.propuesta = true; // propuesta visual: se aprueba, pero no es un entregable final
   db.pieces.push(p);
   save();
   log(agente, `Entregó ${tipo}: "${titulo}" — esperando tu swipe`, campaignId);
