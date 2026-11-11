@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agencia IA — Voces</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 760px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .card h2 { margin: 0; font-size: 17px; }
+    .card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    textarea, select { font: inherit; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); color: inherit; }
+    textarea { min-height: 64px; resize: vertical; }
+    .v { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+    .v:first-of-type { border-top: 0; }
+    .v b { flex: 1; min-width: 160px; font-weight: 600; }
+    .v small { color: var(--muted); }
+    #msg { min-height: 18px; font-size: 13px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <span class="sp"></span>
+  </header>
+  <main class="wrap">
+    <section class="card">
+      <h2>Elegir voz oyendo una muestra</h2>
+      <p>Escribe una frase (máx. 200 caracteres), pulsa ▶ en cada voz y asigna la que te guste a un cliente. Cada muestra nueva gasta unos 100 caracteres de ElevenLabs; si repites la misma frase con la misma voz, no gasta.</p>
+      <textarea id="txt">Hola, soy tu asistente. Cuéntame de tu negocio y te ayudo a atender a tus clientes todo el día.</textarea>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)">Cliente: <select id="cliente"></select></label>
+      <div id="msg"></div>
+    </section>
+    <section class="card"><h2>Rotan solas entre videos</h2><div id="rotan"></div></section>
+    <section class="card"><h2>Solo si las eliges para un cliente</h2><p>Aquí están tus voces clonadas y las que marcaste. Usa una voz clonada solo si esa persona lo autorizó.</p><div id="extra"></div></section>
+  </main>
+  <audio id="aud"></audio>
+  <script type="module">
+    import { api } from './common.js';
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    let clientes = [];
+    async function cargar() {
+      const l = await (await fetch('/api/voz/lista')).json();
+      const st = await (await fetch('/api/state')).json();
+      clientes = st.clients || [];
+      $('cliente').innerHTML = clientes.length ? clientes.map((c) => `<option value="${esc(c.id)}">${esc(c.nombre)}${c.voz ? ` — voz: ${esc(c.voz)}` : ''}</option>`).join('') : '<option value="">(no hay clientes)</option>';
+      const fila = (n) => `<div class="v"><b>${esc(n)}</b><button data-p="${esc(n)}">▶ Oír</button><button data-u="${esc(n)}">Usar en el cliente</button></div>`;
+      $('rotan').innerHTML = l.rotan.map(fila).join('') || '<p>Ninguna</p>';
+      $('extra').innerHTML = l.porCliente.map(fila).join('') || '<p>Ninguna</p>';
+    }
+    document.addEventListener('click', async (e) => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.p) {
+        $('msg').textContent = `Generando muestra de ${b.dataset.p}…`;
+        try {
+          const r = await (await fetch(`/api/voz/muestra?nombre=${encodeURIComponent(b.dataset.p)}&texto=${encodeURIComponent($('txt').value)}`)).json();
+          if (r.error) throw new Error(r.error);
+          $('aud').src = r.url; await $('aud').play(); $('msg').textContent = `Reproduciendo: ${b.dataset.p}`;
+        } catch (err) { $('msg').textContent = err.message; }
+      }
+      if (b.dataset.u) {
+        const id = $('cliente').value; if (!id) { $('msg').textContent = 'Primero crea o elige un cliente.'; return; }
+        try { await api(`/api/clients/${id}`, { voz: b.dataset.u }); $('msg').textContent = `Listo: ${b.dataset.u} es la voz de ese cliente.`; cargar(); } catch (err) { $('msg').textContent = err.message; }
+      }
+    });
+    cargar();
+  </script>
+</body>
+</html>

@@ -154,6 +154,7 @@ function cleanClient(body, prev = {}) {
     c.videoPrefs = o;
   }
   for (const k of ['redes', 'contacto']) if (body[k] && typeof body[k] === 'object') c[k] = Object.fromEntries(Object.entries(body[k]).slice(0, 8).map(([a, v]) => [String(a).slice(0, 20), String(v || '').trim().slice(0, 200)]));
+  if ('voz' in body) c.voz = String(body.voz || '').trim().slice(0, 60); // nombre de una voz de ElevenLabs (ver /api/voz/estado)
   if (Array.isArray(body.estilosVideo)) c.estilosVideo = body.estilosVideo.filter((x) => estiloById[x]).slice(0, 6);
   if (body.logo === null) delete c.logo;
   else if (typeof body.logo === 'string' && /^data:image\/(png|jpeg|webp|svg\+xml);base64,/.test(body.logo) && body.logo.length < 700_000) c.logo = body.logo;

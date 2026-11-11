@@ -15,6 +15,12 @@ Agencia de marketing operada por agentes de Claude (personajes en una estación 
 - Quiere entregables **finales** (PNG/JPG/MP4/GIF), no HTML/SVG/JSON.
 - Quiere videos con motion graphics 3D de buena calidad, pero barato; poder cambiar de modelo para los videos.
 
+## Datos del dueño — NO perder
+- Los **clientes, kits de marca, campañas, memoria y archivos aprobados NO están en git**: viven en el volumen de Railway (`DATA_FILE=/data/db.json` y `/data/clientes/…`). `.gitignore` excluye `data/`, `db*.json` y `.env`: no cambiar eso ni hacer commit de datos.
+- Un push a `main` redespliega el contenedor pero el volumen se conserva. Aun así: nunca borrar/recrear el volumen, no cambiar `DATA_FILE`, y todo cambio al esquema de la base debe ser **aditivo** (campos nuevos opcionales, nunca renombrar ni quitar).
+- Como no hay respaldo en git, se recomienda respaldo periódico (ZIP por cliente desde Clientes → Archivos, y copias del volumen desde Railway). Pendiente: respaldo automático (ver Pendientes).
+- Las pruebas locales (`data/` en la compu) son otra base: sus clientes y campañas de prueba no existen en Railway.
+
 ## Cuenta de la API — reglas (sin cifras: el repo es PÚBLICO, no escribir saldos, montos ni nombres de claves)
 - La **recarga automática de créditos está APAGADA** a propósito. Antes recargó decenas de veces sin aviso. No pedirle al dueño que la active.
 - Los límites de gasto de `/ajustes-ia.html` y el límite mensual de la Consola son un freno deliberado: no quitarlos ni subirlos sin avisar.
@@ -29,18 +35,25 @@ Agencia de marketing operada por agentes de Claude (personajes en una estación 
 - `MAX_CAMPANAS` por defecto 1 (era 3), `MAX_TURNS` 40 (era 60), `max_tokens` 32000 (era 48000).
 - `server/planeacion.js` (plan del mes) NO registraba su gasto: ya lo registra.
 - **Archivo**: las miniaturas de video ya no se reproducen (antes todas sonaban a la vez); solo se reproduce al abrir una pieza y se corta al cerrar. Arte: PNG 1080×1350 hecho en el servidor (`server/png.js`, `/api/pieces/:id/png`, y se guarda junto al SVG en "Resultado final").
+- **Voces (ElevenLabs)** (`server/voz.js`, página `/voces.html`): `ELEVENLABS_VOICE_ID` = voces que rotan solas entre videos; `ELEVENLABS_VOICES_EXTRA` = voces que SOLO se usan si la ficha del cliente tiene el campo `voz` (nombre). Así una voz clonada nunca sale en el video de otro cliente por azar. `/voces.html` permite oír una muestra y asignarla a un cliente. No poner IDs ni nombres de voces clonadas en el repo (es público).
+- **Efectos de sonido en HyperFrames** (`server/efectos.js`): 9 tipos sintetizados con ffmpeg (gratis); Micho los pide con `efectos:[{tipo,inicio}]` y se mezclan con voz y música. Probado el audio y la mezcla; **falta verlos en una corrida real de Micho** (la primera corrida real se hizo con el servidor sin reiniciar y no los tuvo).
+- **Logo del cliente en HyperFrames**: el servidor copia el logo del kit como `assets/logo.png` (antes Micho no lo tenía y `{{LOGO}}` solo sirve en el motor antiguo). **Sin probar en corrida real.**
+- Instrucciones de Micho: 3D con perspectiva en GSAP (`rotationY`, `z`, capas). Se ve discreto; Three.js real sigue pendiente.
 - Probado con la API real (11-nov, local): caché funciona (lecturas de caché grandes en director y video), límites y modelo por tarea funcionan. Una campaña corta de 1 reel `v2` cuesta centavos (~US$0.10–0.15), casi todo el director. **Falta probar** el PNG del servidor (sin Chromium local) y HyperFrames/Micho con API real.
 - **Decisión de modelo para video (prueba comparativa, mismo brief, reel `v2` de 15 s por Max): Sonnet 5.5 se vio MEJOR que Haiku 5.5** según el dueño. Haiku cuesta ~9× menos en el agente de video, pero en esta campaña corta la diferencia total fue de centavos. Se queda Sonnet 5.5 para video; Haiku solo si se necesita abaratar más. Opus 5.5 NO se probó para video: no usarlo sin avisar.
 
 ## Pendientes (en orden)
-1. Probar Micho/HyperFrames (videos premium con render en servidor) con API real, UNA campaña corta, límite bajo, y medir costo (los guiones HTML son largos: aquí sí puede pesar el modelo).
+1. **Three.js real en HyperFrames** (3D de verdad): probar primero gratis que WebGL renderice en el Chromium de HyperFrames y que la escena sea función del tiempo de la línea; luego una corrida real. Referencia de costo: un video de ~36 s con Micho (Sonnet 5.5) costó ≈ US$1 en total (Micho ≈ 0.43, director ≈ 0.17, música IA ≈ 0.32 estimado, voz ≈ 0.04). Pixel (cliente propio) es el cliente de pruebas.
+2. Verificar en corrida real: logo oficial en el cierre y efectos de sonido sincronizados.
 2. Decidir si vale la pena probar Opus 5.5 solo para motion graphics 3D (mayor calidad, ~2× el costo).
 3. Entregable final de video: hoy los `v2` se graban a MP4 solo al aprobar (`RENDER_AUTO`); los `hf` ya son MP4. Falta mostrar/descargar el MP4 de `v2` en Archivo y evitar guardar JSON como "final".
 4. Motion graphics 3D (Three.js/WebGL dentro de HyperFrames) — aún no hay calidad aceptable; investigar con modelo barato.
 5. Exportar GIF y JPG además de PNG.
 6. Subir el volumen de Railway (500 MB) si se guardan videos.
+7. **Respaldo automático** de clientes y piezas aprobadas (hoy solo existe en el volumen de Railway). Ideas: ZIP periódico a Google Drive.
 
 ## Bitácora (más reciente arriba; formato: fecha · máquina · quién · qué)
+- 2026-11-11 · Linux (Omarchy) · Claude Code · Primera corrida real de Micho/HyperFrames para el cliente Pixel (video explicativo de chatbot, 36 s, voz + música IA + motion graphics con perspectiva): costó ≈ US$1 en total, caché funcionando. Fallos encontrados y corregidos en código: Micho no tenía el logo (ahora `assets/logo.png` automático) y no había efectos de sonido (nuevos, `server/efectos.js`). Voces: separadas en "rotan" y "solo por cliente", página `/voces.html`. Pendiente verificar ambos en la próxima corrida y probar Three.js.
 - 2026-11-11 · Linux (Omarchy) · Claude Code · Prueba con API real: 2 campañas cortas idénticas (Haiku vs Sonnet en video). Ambas terminaron solas con topes de gasto bajos. Sonnet 5.5 elegido para video. `.env.example` corregido (antes traía Opus como modelo por defecto). Las campañas de prueba (cliente ficticio) están solo en la base local.
 - 2026-11-11 · Linux (Omarchy) · Claude Code · Revisadas capturas de la Consola con el dueño: confirmada la causa del gasto y apagada la recarga automática. Reglas anotadas arriba, sin cifras.
 - 2026-11-11 · Linux (Omarchy) · Claude Code · Auditoría de costos: causas = bucle sin caché con historial completo, auto-reanudación en cada deploy, Opus para todo, `MAX_CAMPANAS=3`, sin topes de gasto, plan del mes sin contabilizar. Aplicados los arreglos de "Estado actual". Archivo de videos y PNG de arte corregidos. Creado este archivo.

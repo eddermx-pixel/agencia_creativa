@@ -10,6 +10,7 @@ import { DATA_DIR } from './store.js';
 import { conTurno } from './pesado.js';
 import { agregarVoz } from './voz.js';
 import { agregarMusica } from './musica.js';
+import { prepararEfectos, TIPOS as TIPOS_SFX } from './efectos.js';
 import { buscarTomas } from './video.js';
 import { rutaArchivo } from './workspace.js';
 
@@ -94,10 +95,11 @@ export async function descargarTomas(dir, tomas, formato, sub = path.join('asset
   return listas;
 }
 
-export async function mezclar(silencioso, salida, { voces, musica, duracion }) {
+export async function mezclar(silencioso, salida, { voces, musica, duracion, efectos = [] }) {
   const entradas = ['-i', silencioso]; const filtros = []; const etiquetas = [];
   voces.forEach((v, i) => { entradas.push('-i', v.archivo); const ms = Math.max(0, Math.round(v.inicio * 1000)); filtros.push(`[${i + 1}:a]adelay=${ms}|${ms},volume=1.5[v${i}]`); etiquetas.push(`[v${i}]`); });
   if (musica) { entradas.push('-i', musica); const k = voces.length + 1; filtros.push(`[${k}:a]volume=${voces.length ? 0.2 : 0.5},atrim=0:${duracion.toFixed(2)},afade=t=out:st=${Math.max(0, duracion - 1.2).toFixed(2)}:d=1.2[mus]`); etiquetas.push('[mus]'); }
+  efectos.forEach((x, i) => { const k = entradas.filter((e) => e === '-i').length; entradas.push('-i', x.archivo); const ms = Math.round(x.inicio * 1000); filtros.push(`[${k}:a]adelay=${ms}|${ms},volume=${x.vol}[e${i}]`); etiquetas.push(`[e${i}]`); });
   if (!etiquetas.length) { fs.copyFileSync(silencioso, salida); return; }
   filtros.push(`${etiquetas.join('')}amix=inputs=${etiquetas.length}:normalize=0:duration=longest,loudnorm=I=-14:TP=-1.5,atrim=0:${duracion.toFixed(2)}[a]`);
   const r = await correr('ffmpeg', ['-y', ...entradas, '-filter_complex', filtros.join(';'), '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', salida], { timeout: 300000 });
@@ -168,7 +170,7 @@ async function instalarBloques(dir, bloques) {
 
 // ---------- Entrega ----------
 // Devuelve { clave, archivo, duracion, resumen } o lanza Error con instrucciones para que el agente corrija.
-export async function producir({ clave, html, archivos = [], bloques = [], narraciones = [], musicaPrompt = '', tomas = [], campaignId = null, agente = 'editor2', formato = 'vertical' }) {
+export async function producir({ clave, html, archivos = [], bloques = [], narraciones = [], musicaPrompt = '', efectos = [], logo = '', tomas = [], campaignId = null, agente = 'editor2', formato = 'vertical' }) {
   if (!hfDisponible()) throw new Error('HyperFrames no está instalado en este servidor.');
   const k = seguro(clave); const dir = path.join(TRABAJO, k); const final = path.join(dir, 'final.mp4'); const persistente = path.join(HF_DIR, k, 'final.mp4');
   if (fs.existsSync(persistente)) return { clave: k, archivo: 'final.mp4', duracion: await dur(persistente), resumen: 'ya estaba renderizado' };
@@ -179,6 +181,9 @@ export async function producir({ clave, html, archivos = [], bloques = [], narra
     const notasTomas = await descargarTomas(dir, tomas, formato);
     await instalarBloques(dir, bloques);
     copiarArchivos(dir, agente, archivos, 'assets');
+    // Logo oficial del cliente (kit de marca) disponible siempre como assets/logo.png (o .svg)
+    const ml = /^data:image\/(png|jpeg|webp|svg\+xml);base64,(.*)$/.exec(logo || '');
+    if (ml) fs.writeFileSync(path.join(dir, 'assets', `logo.${{ png: 'png', jpeg: 'jpg', webp: 'webp', 'svg+xml': 'svg' }[ml[1]]}`), Buffer.from(ml[2], 'base64'));
     fs.writeFileSync(path.join(dir, 'index.html'), limpio);
     return await conTurno(async () => {
       const c = await correr(process.execPath, [HF_BIN, 'check', '--json'], { cwd: dir, timeout: 240000 });
@@ -189,10 +194,11 @@ export async function producir({ clave, html, archivos = [], bloques = [], narra
       if (r.code !== 0 || !fs.existsSync(silencio)) throw new Error(`El render falló: ${(r.err + r.out).slice(-400)}`);
       const d = await dur(silencio);
       const { voces, musica } = await generarAudio({ narraciones, musicaPrompt, duracion: d, campaignId, agente });
-      await mezclar(silencio, final, { voces, musica, duracion: d });
+      const sfx = await prepararEfectos(efectos);
+      await mezclar(silencio, final, { voces, musica, duracion: d, efectos: sfx });
       fs.unlinkSync(silencio);
       guardarFinal(k, final);
-      return { clave: k, archivo: 'final.mp4', duracion: d, resumen: `${d.toFixed(1)} s · ${voces.length} voz(es) · música ${musica ? 'IA' : 'no'}` };
+      return { clave: k, archivo: 'final.mp4', duracion: d, resumen: `${d.toFixed(1)} s · ${voces.length} voz(es) · música ${musica ? 'IA' : 'no'} · ${sfx.length} efecto(s)` };
     });
   } finally {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch {}
@@ -215,8 +221,11 @@ REGLAS (el validador las exige):
 6. Fuentes por nombre (ya incluidas): Inter, Montserrat, Outfit, Poppins, Oswald, Archivo Black, League Gothic, Playfair Display, EB Garamond, Space Mono, Roboto, Open Sans, Lato, Nunito. Otra fuente no sirve.
 7. Contenido dentro del 90% del cuadro (márgenes de ~100 px); dos textos NO pueden encimarse: cada bloque su zona (el validador lo detecta).
 8. El sonido NO va en el HTML: pásalo en "narraciones" (el servidor genera la voz con ElevenLabs y la coloca en el segundo "inicio") y "musicaPrompt" (música instrumental generada con IA, en inglés, sin nombres de artistas ni canciones).
+8a. EFECTOS DE SONIDO (gratis, hechos en el servidor): pasa "efectos" [{tipo, inicio, volumen?}] con tipos: ${TIPOS_SFX.join(', ')}. Pon uno en cada entrada o salida importante (whoosh al entrar un bloque, pop al aparecer un icono, teclas mientras se escribe, notificacion/ding en un mensaje del chat, impacto en el título, exito al cierre). El segundo de inicio debe coincidir con la animación en tu línea de tiempo. No satures: 1 efecto cada 1.5–3 s.
+8c. LOGO OFICIAL DEL CLIENTE: si el cliente tiene logo en su kit, el servidor lo pone SIEMPRE en el proyecto como assets/logo.png (o logo.jpg/.webp/.svg según el archivo). Úsalo con <img src="assets/logo.png"> en el cierre y donde convenga; NO uses el marcador {{LOGO}} (solo sirve en el motor antiguo) ni pongas el nombre en texto en su lugar. Si el logo es blanco sobre transparente, ponlo sobre fondo oscuro.
 8b. ARCHIVOS DEL JEFE (logo, fotos, audio): están en tu carpeta subidos/ (míralos con ver_archivos y ver_imagen). Para usarlos pasa "archivos" [{ruta:"subidos/logo.png", nombre:"logo.png"}] y refiérelos como src="assets/logo.png". Si necesitas el logo y no lo tienes, pídeselo al jefe con preguntar_al_jefe.
 9. Tomas reales: pasa "tomas" [{id:"t1", busqueda:"concrete english query", duracion:3}] y úsalas así (silenciosas, a cuadro completo): <video id="clip-t1" class="clip" src="assets/tomas/t1.mp4" muted playsinline data-start="0" data-duration="3" style="position:absolute;left:0;top:0;width:1080px;height:1920px;object-fit:cover"></video>. Si alguna no se encuentra, el error te lo dirá.
+9b. 3D CON GSAP (sin WebGL, rápido y fiable): da profundidad real con perspectiva CSS. Pon en un contenedor style="perspective:1400px" y anima con GSAP sus hijos con rotationY, rotationX, z (px) y transformPerspective, p. ej. un teléfono o tarjeta que gira 25°→-15°, capas separadas en z (parallax 3D), cubos o tarjetas que se apilan y giran, sombras suaves bajo los objetos y luz con gradientes. Usa varias capas a distinto z con movimiento lento de cámara (anima rotationY/rotationX del contenedor ±8°). Sé consistente con la paleta del cliente.
 10. Mueve cosas con intención: entradas con ease power4.out / back.out, salidas rápidas, escalonar (stagger), contadores, barras que crecen, textos que se dibujan, cámara (escala lenta del fondo). Nada de objetos quietos 4 segundos. Máx. 45 s.
 
 PLANTILLA MÍNIMA (cópiala y amplíala):

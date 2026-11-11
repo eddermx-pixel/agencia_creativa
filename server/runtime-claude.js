@@ -16,6 +16,7 @@ import { makeActions, withAgent } from './actions.js';
 import { hfGuide, estiloPelicula, hfDisponible, buscarBloques, verBloque } from './hyperframes.js';
 import { remotionGuide, remotionDisponible } from './remotion.js';
 import { modeloPara, verificar } from './presupuesto.js';
+import { TIPOS as TIPOS_SFX } from './efectos.js';
 
 const client = new Anthropic({ maxRetries: 4, timeout: 6 * 60 * 1000 });
 const EFFORT = process.env.CLAUDE_EFFORT || 'medium';
@@ -102,6 +103,7 @@ const TOOLS = {
       bloques: { type: 'array', description: 'Nombres de bloques del registro que tu HTML usa (el servidor los instala)', items: { type: 'string' } },
       narraciones: { type: 'array', description: 'Voz en off: texto hablado y segundo de inicio', items: obj({ inicio: { type: 'number' }, texto: { type: 'string' } }, ['inicio', 'texto']) },
       musicaPrompt: { type: 'string', description: 'Estilo de la música instrumental (inglés, sin artistas)' },
+      efectos: { type: 'array', description: 'Efectos de sonido (gratis): tipo y segundo de inicio, sincronizados con tus animaciones', items: obj({ tipo: { type: 'string', enum: TIPOS_SFX }, inicio: { type: 'number' }, volumen: { type: 'number', description: '0.1 a 1.5, por defecto 0.7' } }, ['tipo', 'inicio']) },
       tomas: { type: 'array', description: 'Tomas de stock a descargar', items: obj({ id: { type: 'string' }, busqueda: { type: 'string' }, duracion: { type: 'number' } }, ['id', 'busqueda']) },
       version: { type: 'number' },
     }, ['titulo', 'html']),

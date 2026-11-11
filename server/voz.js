@@ -10,6 +10,17 @@ const DIR = path.join(DATA_DIR, 'voz');
 export function voces() {
   return (process.env.ELEVENLABS_VOICE_ID || '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => { const i = x.indexOf(':'); return i > 0 ? { nombre: x.slice(0, i).trim(), id: x.slice(i + 1).trim() } : { nombre: x.slice(0, 6), id: x }; });
 }
+// ELEVENLABS_VOICES_EXTRA: voces que NO rotan solas (p. ej. las clonadas); solo se usan si un cliente las elige (campo "voz" de su ficha).
+export function vocesExtra() {
+  return (process.env.ELEVENLABS_VOICES_EXTRA || '').split(',').map((x) => x.trim()).filter(Boolean).map((x) => { const i = x.indexOf(':'); return i > 0 ? { nombre: x.slice(0, i).trim(), id: x.slice(i + 1).trim() } : { nombre: x.slice(0, 6), id: x }; });
+}
+// Voz fijada en la ficha del cliente (por nombre, sin importar mayúsculas), si existe en alguna de las dos listas.
+function vozDelCliente(campaignId) {
+  const camp = db.campaigns.find((x) => x.id === campaignId);
+  const nombre = String(db.clients.find((x) => x.id === camp?.clientId)?.voz || '').trim().toLowerCase();
+  if (!nombre) return '';
+  return [...voces(), ...vocesExtra()].find((v) => v.nombre.toLowerCase() === nombre)?.id || '';
+}
 // Cada video usa una sola voz (consistente en todas sus escenas); entre videos van rotando.
 function elegirVoz(semilla) {
   const l = voces(); if (!l.length) return '';
@@ -39,7 +50,7 @@ async function sintetizar(texto, voiceId) {
 // Agrega e.voz (URL) a cada escena con narración. Si falla, el video sigue sin esa voz.
 export async function agregarVoz(spec, { campaignId = null, agente = 'video', voiceId = '' } = {}) {
   if (!vozDisponible()) return { usadas: 0, motivo: 'sin llave' };
-  const voz = voiceId || elegirVoz(campaignId);
+  const voz = voiceId || vozDelCliente(campaignId) || elegirVoz(campaignId);
   if (!voz) return { usadas: 0, motivo: 'sin voz' };
   let chars = 0, usadas = 0, error = '';
   for (const e of spec.escenas) {
@@ -60,12 +71,27 @@ export async function agregarVoz(spec, { campaignId = null, agente = 'video', vo
   return { usadas, chars, error };
 }
 
+// Muestra corta de una voz (por nombre) para poder elegirla oyéndola. Se guarda en caché.
+export async function muestra(nombre, texto) {
+  const v = [...voces(), ...vocesExtra()].find((x) => x.nombre.toLowerCase() === String(nombre || '').toLowerCase());
+  if (!v) throw new Error('Esa voz no está en la lista');
+  const { hash, nuevo } = await sintetizar(texto, v.id);
+  if (nuevo) db.usage.push({ t: Date.now(), c: null, a: 'muestra', m: 'elevenlabs', usd: (texto.length / 1000) * PRECIO(), i: texto.length, o: 0, cr: 0, cw: 0, ws: 0 });
+  save();
+  return `/api/voz/${hash}.mp3`;
+}
+
 export function registrar(app) {
+  app.get('/api/voz/lista', (req, res) => res.json({ rotan: voces().map((v) => v.nombre), porCliente: vocesExtra().map((v) => v.nombre) }));
+  app.get('/api/voz/muestra', async (req, res) => {
+    const texto = String(req.query.texto || 'Hola, soy tu asistente. Cuéntame de tu negocio y te ayudo a atender a tus clientes todo el día.').slice(0, 200);
+    try { res.json({ url: await muestra(req.query.nombre, texto) }); } catch (e) { res.status(400).json({ error: e.message }); }
+  });
   app.get('/api/voz/:hash.mp3', (req, res) => {
     const f = path.join(DIR, `${req.params.hash.replace(/[^a-f0-9]/g, '')}.mp3`);
     if (!fs.existsSync(f)) return res.status(404).end();
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.type('audio/mpeg').sendFile(f);
   });
-  app.get('/api/voz/estado', (req, res) => res.json({ disponible: vozDisponible(), voz: voces().length > 0, voces: voces().map((v) => v.nombre), modelo: MODELO() }));
+  app.get('/api/voz/estado', (req, res) => res.json({ disponible: vozDisponible(), voz: voces().length > 0, voces: voces().map((v) => v.nombre), extra: vocesExtra().map((v) => v.nombre), modelo: MODELO() }));
 }
