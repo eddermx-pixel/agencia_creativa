@@ -29,17 +29,19 @@ Agencia de marketing operada por agentes de Claude (personajes en una estación 
 - `MAX_CAMPANAS` por defecto 1 (era 3), `MAX_TURNS` 40 (era 60), `max_tokens` 32000 (era 48000).
 - `server/planeacion.js` (plan del mes) NO registraba su gasto: ya lo registra.
 - **Archivo**: las miniaturas de video ya no se reproducen (antes todas sonaban a la vez); solo se reproduce al abrir una pieza y se corta al cerrar. Arte: PNG 1080×1350 hecho en el servidor (`server/png.js`, `/api/pieces/:id/png`, y se guarda junto al SVG en "Resultado final").
-- Probado: arranque en demo, endpoints de ajustes. **NO probado con la API real** (caché, límites, modelo por tarea) ni el PNG del servidor sin Chromium local.
+- Probado con la API real (11-nov, local): caché funciona (lecturas de caché grandes en director y video), límites y modelo por tarea funcionan. Una campaña corta de 1 reel `v2` cuesta centavos (~US$0.10–0.15), casi todo el director. **Falta probar** el PNG del servidor (sin Chromium local) y HyperFrames/Micho con API real.
+- **Decisión de modelo para video (prueba comparativa, mismo brief, reel `v2` de 15 s por Max): Sonnet 5.5 se vio MEJOR que Haiku 5.5** según el dueño. Haiku cuesta ~9× menos en el agente de video, pero en esta campaña corta la diferencia total fue de centavos. Se queda Sonnet 5.5 para video; Haiku solo si se necesita abaratar más. Opus 5.5 NO se probó para video: no usarlo sin avisar.
 
 ## Pendientes (en orden)
-1. Probar con API real y poco presupuesto (límite diario bajo) UNA campaña corta; revisar en `/uso.html` el costo por llamada y que `cr` (caché leída) sea > 0.
-2. Prueba comparativa de modelos para video: Haiku 5.5 vs Sonnet 5.5 con el mismo brief (Micho/HyperFrames); guardar resultados y costo aquí.
+1. Probar Micho/HyperFrames (videos premium con render en servidor) con API real, UNA campaña corta, límite bajo, y medir costo (los guiones HTML son largos: aquí sí puede pesar el modelo).
+2. Decidir si vale la pena probar Opus 5.5 solo para motion graphics 3D (mayor calidad, ~2× el costo).
 3. Entregable final de video: hoy los `v2` se graban a MP4 solo al aprobar (`RENDER_AUTO`); los `hf` ya son MP4. Falta mostrar/descargar el MP4 de `v2` en Archivo y evitar guardar JSON como "final".
 4. Motion graphics 3D (Three.js/WebGL dentro de HyperFrames) — aún no hay calidad aceptable; investigar con modelo barato.
 5. Exportar GIF y JPG además de PNG.
 6. Subir el volumen de Railway (500 MB) si se guardan videos.
 
 ## Bitácora (más reciente arriba; formato: fecha · máquina · quién · qué)
+- 2026-11-11 · Linux (Omarchy) · Claude Code · Prueba con API real: 2 campañas cortas idénticas (Haiku vs Sonnet en video). Ambas terminaron solas con topes de gasto bajos. Sonnet 5.5 elegido para video. `.env.example` corregido (antes traía Opus como modelo por defecto). Las campañas de prueba (cliente ficticio) están solo en la base local.
 - 2026-11-11 · Linux (Omarchy) · Claude Code · Revisadas capturas de la Consola con el dueño: confirmada la causa del gasto y apagada la recarga automática. Reglas anotadas arriba, sin cifras.
 - 2026-11-11 · Linux (Omarchy) · Claude Code · Auditoría de costos: causas = bucle sin caché con historial completo, auto-reanudación en cada deploy, Opus para todo, `MAX_CAMPANAS=3`, sin topes de gasto, plan del mes sin contabilizar. Aplicados los arreglos de "Estado actual". Archivo de videos y PNG de arte corregidos. Creado este archivo.
 - 2026-11-07 · otra computadora · Claude Code · Subida de archivos a la compu de cada agente; Remotion/HyperFrames con poca memoria (ver `git log`).
