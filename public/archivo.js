@@ -160,9 +160,18 @@ async function toPng(p) {
 
 // Descargar todo lo aprobado del mes (y del cliente elegido) en un ZIP con los archivos finales
 $('fMes').value = new Date().toLocaleDateString('sv-SE').slice(0, 7);
-$('zipMes').onclick = () => {
+$('zipMes').onclick = async () => {
   const mes = $('fMes').value || 'todo'; const cl = $('fCliente').value;
-  location.href = `/api/aprobadas/zip?mes=${encodeURIComponent(mes)}${cl ? `&cliente=${encodeURIComponent(cl)}` : ''}`;
+  const q = `mes=${encodeURIComponent(mes)}${cl ? `&cliente=${encodeURIComponent(cl)}` : ''}`;
+  const info = $('zipInfo'); const b = $('zipMes'); b.disabled = true;
+  try {
+    info.textContent = 'Revisando lo aprobado…';
+    const r = await (await fetch(`/api/aprobadas/resumen?${q}`)).json();
+    if (!r.piezas) { info.textContent = 'No hay piezas aprobadas en ese periodo.'; return; }
+    info.textContent = `Preparando ${r.piezas} pieza(s) (${r.videos} video, ${r.artes} arte${r.mb ? `, ~${r.mb} MB` : ''}). La descarga empieza en unos segundos…${r.sinMp4 ? ` (${r.sinMp4} video(s) sin MP4 se omiten)` : ''}`;
+    location.href = `/api/aprobadas/zip?${q}`;
+    setTimeout(() => { info.textContent = ''; }, 15000);
+  } catch (e) { info.textContent = 'No se pudo iniciar la descarga: ' + e.message; } finally { setTimeout(() => (b.disabled = false), 3000); }
 };
 for (const id of ['fCliente', 'fEstado', 'fTipo']) $(id).addEventListener('change', render);
 $('fBuscar').addEventListener('input', render);

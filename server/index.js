@@ -10,6 +10,7 @@ import { publicRoster, byId } from './roster.js';
 import { bus, agentState, answerRequest, judgePiece, log, pieceSummary, tokenPieza, usageSummary, usageReport, addMemory } from './hub.js';
 import { startTelegram } from './telegram.js';
 import { makeZip } from './zip.js';
+import { ZipEscritor } from './zipstream.js';
 import * as files from './files.js';
 import { initCursos, proponer, cursosDe } from './cursos.js';
 import * as ws from './workspace.js';
@@ -418,28 +419,48 @@ app.get('/api/pieces/:id/download', (req, res) => {
 
 // Todo lo aprobado de un mes (o de todo el historial con mes=todo), ya listo para usar: Cliente/Campaña/archivos finales.
 // ?mes=AAAA-MM (por defecto el actual) &cliente=<id del cliente o n:Nombre> (opcional)
-app.get('/api/aprobadas/zip', async (req, res) => {
-  const mes = /^\d{4}-\d{2}$/.test(req.query.mes || '') ? req.query.mes : (req.query.mes === 'todo' ? '' : fechaLocal(Date.now()).slice(0, 7));
-  const cli = String(req.query.cliente || '');
+function aprobadasDelMes(q) {
+  const mes = /^\d{4}-\d{2}$/.test(q.mes || '') ? q.mes : (q.mes === 'todo' ? '' : fechaLocal(Date.now()).slice(0, 7));
+  const cli = String(q.cliente || '');
   const sel = db.pieces.filter((p) => {
     if (p.estado !== 'aprobada' || p.propuesta) return false;
     const c = db.campaigns.find((x) => x.id === p.campaignId); if (!c) return false;
     if (cli && (c.clientId || `n:${c.cliente}`) !== cli) return false;
     return !mes || fechaLocal(p.juzgada || p.creada).startsWith(mes);
-  });
-  if (!sel.length) return res.status(404).json({ error: `No hay piezas aprobadas${mes ? ` en ${mes}` : ''}${cli ? ' de ese cliente' : ''}.` });
-  const pesoVideos = sel.reduce((n, p) => { const f = p.tipo === 'video' && finales.rutaVideo(p); try { return n + (f ? fs.statSync(f).size : 0); } catch { return n; } }, 0);
-  if (pesoVideos > 500e6) return res.status(413).json({ error: `Son ${Math.round(pesoVideos / 1e6)} MB de video: elige un cliente o un mes más corto.` });
-  const archivos = []; const faltan = []; const lista = [];
-  for (const p of sel.sort((a, b) => (a.juzgada || a.creada) - (b.juzgada || b.creada))) {
-    const c = db.campaigns.find((x) => x.id === p.campaignId);
-    const r = await finales.paraZip(p, p.tipo === 'arte' ? pieceBody(p) : '');
-    for (const f of r.out) { archivos.push({ name: `${carpetaZip(c)}/${f.name}`, data: f.data }); if (!f.name.startsWith('fuentes/')) lista.push(`${carpetaZip(c)}/${f.name}`); }
-    faltan.push(...r.faltan);
+  }).sort((a, b) => (a.juzgada || a.creada) - (b.juzgada || b.creada));
+  return { mes, cli, sel };
+}
+// Vista previa rápida (sin generar nada) para avisar cuánto va a pesar y qué falta
+app.get('/api/aprobadas/resumen', (req, res) => {
+  const { mes, sel } = aprobadasDelMes(req.query);
+  let mb = 0, sinMp4 = 0, artesNuevos = 0;
+  for (const p of sel) {
+    if (p.tipo === 'video') { const f = finales.rutaVideo(p); if (f) { try { mb += fs.statSync(f).size / 1e6; } catch {} } else sinMp4++; }
+    if (p.tipo === 'arte' && !p.jpgRuta) artesNuevos++;
   }
-  const leeme = [`APROBADAS ${mes || 'DE TODO EL HISTORIAL'}${cli ? ' · un cliente' : ''}`, `${sel.length} pieza(s)`, '', ...lista, ...(faltan.length ? ['', 'AVISOS:', ...faltan.map((x) => `- ${x}`)] : [])].join('\n');
-  res.setHeader('Content-Disposition', `attachment; filename="aprobadas-${mes || 'todo'}.zip"`);
-  res.type('application/zip').send(makeZip([{ name: 'LEEME.txt', data: leeme }, ...archivos]));
+  res.json({ mes, piezas: sel.length, videos: sel.filter((p) => p.tipo === 'video').length, artes: sel.filter((p) => p.tipo === 'arte').length, textos: sel.filter((p) => p.tipo === 'texto').length, mb: Math.round(mb), sinMp4, artesNuevos });
+});
+app.get('/api/aprobadas/zip', async (req, res) => {
+  const { mes, cli, sel } = aprobadasDelMes(req.query);
+  if (!sel.length) return res.status(404).json({ error: `No hay piezas aprobadas${mes ? ` en ${mes}` : ''}${cli ? ' de ese cliente' : ''}.` });
+  const mb = sel.reduce((n, p) => { const f = p.tipo === 'video' && finales.rutaVideo(p); try { return n + (f ? fs.statSync(f).size : 0); } catch { return n; } }, 0);
+  if (mb > 2e9) return res.status(413).json({ error: `Son ${Math.round(mb / 1e6)} MB de video: elige un cliente o un mes más corto.` });
+  res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="aprobadas-${mes || 'todo'}.zip"`, 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+  const zip = new ZipEscritor(res); const lista = []; const faltan = [];
+  try {
+    for (const p of sel) {
+      const c = db.campaigns.find((x) => x.id === p.campaignId);
+      const r = await finales.paraZip(p, p.tipo === 'arte' ? pieceBody(p) : '');
+      for (const f of r.out) {
+        const nombre = `${carpetaZip(c)}/${f.name}`;
+        if (f.ruta) await zip.agregarArchivo(nombre, f.ruta); else await zip.agregarBuffer(nombre, f.data);
+        if (!f.name.startsWith('fuentes/')) lista.push(nombre);
+      }
+      faltan.push(...r.faltan);
+    }
+    await zip.agregarBuffer('LEEME.txt', [`APROBADAS ${mes || 'DE TODO EL HISTORIAL'}${cli ? ' · un cliente' : ''}`, `${sel.length} pieza(s)`, '', ...lista, ...(faltan.length ? ['', 'AVISOS:', ...faltan.map((x) => `- ${x}`)] : [])].join('\n'));
+    await zip.cerrar();
+  } catch (e) { console.warn('[zip mes]', e.message); try { res.destroy(); } catch {} }
 });
 app.get('/api/campaigns/:id/zip', async (req, res) => {
   const c = db.campaigns.find((x) => x.id === req.params.id);
@@ -454,17 +475,20 @@ app.get('/api/campaigns/:id/zip', async (req, res) => {
     'PIEZAS:', ...all.map((p) => `- [${p.estado}] ${p.tipo} "${p.titulo}" v${p.version || 1}${p.comentario ? ` — comentario: ${p.comentario}` : ''}`),
   ].join('\n');
   // Lo que se baja es lo FINAL listo para usar: MP4, JPG/PNG o TXT. Las fuentes editables (SVG/JSON) van en fuentes/.
-  const archivos = []; const faltan = [];
-  for (const p of sel) {
-    const carpeta = p.estado === 'aprobada' ? 'aprobadas' : p.estado;
-    const r = await finales.paraZip(p, p.tipo === 'arte' ? pieceBody(p) : '');
-    for (const f of r.out) archivos.push({ name: `${carpeta}/${f.name}`, data: f.data });
-    faltan.push(...r.faltan);
-  }
-  const files = [{ name: 'resumen.txt', data: resumen + (faltan.length ? `\n\nAVISOS:\n${faltan.map((x) => `- ${x}`).join('\n')}` : '') }, ...archivos];
-  res.setHeader('Content-Disposition', `attachment; filename="${slug(c.cliente)}-${fecha}.zip"`);
-  res.type('application/zip').send(makeZip(files));
+  res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${slug(c.cliente)}-${fecha}.zip"`, 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+  const zip = new ZipEscritor(res); const faltan = [];
+  try {
+    for (const p of sel) {
+      const carpeta = p.estado === 'aprobada' ? 'aprobadas' : p.estado;
+      const r = await finales.paraZip(p, p.tipo === 'arte' ? pieceBody(p) : '');
+      for (const f of r.out) { if (f.ruta) await zip.agregarArchivo(`${carpeta}/${f.name}`, f.ruta); else await zip.agregarBuffer(`${carpeta}/${f.name}`, f.data); }
+      faltan.push(...r.faltan);
+    }
+    await zip.agregarBuffer('resumen.txt', resumen + (faltan.length ? `\n\nAVISOS:\n${faltan.map((x) => `- ${x}`).join('\n')}` : ''));
+    await zip.cerrar();
+  } catch (e) { console.warn('[zip campaña]', e.message); try { res.destroy(); } catch {} }
 });
+
 
 // ---- Memoria ----
 app.get('/api/memories', (req, res) => {

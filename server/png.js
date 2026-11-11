@@ -32,9 +32,8 @@ export function svgAPng(svg, w, h) {
   });
 }
 
-// JPG listo para subir (calidad alta, fondo blanco) a partir del mismo SVG.
-export async function svgAJpg(svg) {
-  const png = await svgAPng(svg);
+// JPG listo para subir (calidad alta, fondo blanco) a partir de un PNG ya hecho.
+export function pngAJpg(png) {
   return new Promise((ok, fail) => {
     const p = spawn('ffmpeg', ['-loglevel', 'error', '-i', 'pipe:0', '-q:v', '2', '-pix_fmt', 'yuvj420p', '-f', 'mjpeg', 'pipe:1']);
     const out = []; let err = '';
@@ -43,3 +42,4 @@ export async function svgAJpg(svg) {
     p.stdin.on('error', () => {}); p.stdin.end(png);
   });
 }
+export async function svgAJpg(svg) { return pngAJpg(await svgAPng(svg)); }
