@@ -18,6 +18,7 @@ const aquí = path.dirname(fileURLToPath(import.meta.url));
 const RAIZ = path.resolve(aquí, '..');
 const HF_BIN = path.join(RAIZ, 'node_modules', 'hyperframes', 'bin', 'hyperframes.mjs');
 const GSAP = path.join(RAIZ, 'node_modules', 'gsap', 'dist', 'gsap.min.js');
+const THREE_DIR = path.join(RAIZ, 'node_modules', 'three', 'build'); // Three.js local (sin internet al renderizar)
 export const HF_DIR = path.join(DATA_DIR, 'hf');
 // El trabajo pesado (frames, temporales) va al disco del contenedor, NO al volumen /data (que suele ser chico).
 export const TRABAJO = process.env.TRABAJO_DIR || path.join(os.tmpdir(), 'agencia-trabajo');
@@ -178,6 +179,10 @@ export async function producir({ clave, html, archivos = [], bloques = [], narra
   fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
   try {
     fs.copyFileSync(GSAP, path.join(dir, 'assets', 'gsap.min.js'));
+    if (/assets\/three\//.test(limpio)) {
+      fs.mkdirSync(path.join(dir, 'assets', 'three'), { recursive: true });
+      for (const f of ['three.module.js', 'three.core.js']) fs.copyFileSync(path.join(THREE_DIR, f), path.join(dir, 'assets', 'three', f));
+    }
     const notasTomas = await descargarTomas(dir, tomas, formato);
     await instalarBloques(dir, bloques);
     copiarArchivos(dir, agente, archivos, 'assets');
@@ -226,6 +231,9 @@ REGLAS (el validador las exige):
 8b. ARCHIVOS DEL JEFE (logo, fotos, audio): están en tu carpeta subidos/ (míralos con ver_archivos y ver_imagen). Para usarlos pasa "archivos" [{ruta:"subidos/logo.png", nombre:"logo.png"}] y refiérelos como src="assets/logo.png". Si necesitas el logo y no lo tienes, pídeselo al jefe con preguntar_al_jefe.
 9. Tomas reales: pasa "tomas" [{id:"t1", busqueda:"concrete english query", duracion:3}] y úsalas así (silenciosas, a cuadro completo): <video id="clip-t1" class="clip" src="assets/tomas/t1.mp4" muted playsinline data-start="0" data-duration="3" style="position:absolute;left:0;top:0;width:1080px;height:1920px;object-fit:cover"></video>. Si alguna no se encuentra, el error te lo dirá.
 9b. 3D CON GSAP (sin WebGL, rápido y fiable): da profundidad real con perspectiva CSS. Pon en un contenedor style="perspective:1400px" y anima con GSAP sus hijos con rotationY, rotationX, z (px) y transformPerspective, p. ej. un teléfono o tarjeta que gira 25°→-15°, capas separadas en z (parallax 3D), cubos o tarjetas que se apilan y giran, sombras suaves bajo los objetos y luz con gradientes. Usa varias capas a distinto z con movimiento lento de cámara (anima rotationY/rotationX del contenedor ±8°). Sé consistente con la paleta del cliente.
+9c. 3D REAL CON THREE.js (objetos 3D de verdad: teléfono, cubos, tarjetas con volumen, luces y sombras). Úsalo cuando el concepto pida 3D de calidad; para giros simples basta 9b. El servidor pone Three.js en el proyecto; impórtalo en un <script type="module"> al final del body, DESPUÉS del script de GSAP y de window.__timelines["main"]=tl:
+import * as THREE from "./assets/three/three.module.js";
+Reglas: (a) un <canvas id="c3" class="clip" data-start data-duration width="1080" height="1200"> con fondo transparente (alpha:true y setClearColor(0x000000,0)) sobre tu fondo; (b) renderer.setPixelRatio(1); renderer.setSize(1080,1200,false); (c) la escena es función del tiempo: const state={p:0}; function render(){ coloca y rota los objetos según state.p (0 a 1) y llama renderer.render(scene,camera) } render(); y al final: window.__timelines["main"].to(state,{p:1,duration:DURACION_DEL_CLIP,ease:"none",onUpdate:render},INICIO_DEL_CLIP). NUNCA uses requestAnimationFrame, THREE.Clock, Date.now ni Math.random; (d) MeshStandardMaterial con los colores del cliente + AmbientLight (1.1) y DirectionalLight (2.4) para que haya volumen; (e) máximo ~30 mallas con geometrías simples (BoxGeometry, PlaneGeometry, CylinderGeometry, SphereGeometry, TorusGeometry); el texto NO va en 3D: ponlo como HTML encima del canvas; (f) anima rotation.y, position.z/y, escala y la cámara con state.p; para varias tomas usa rangos de state.p o un canvas por toma. Ejemplo: teléfono = Box(2.4,4.8,0.3) + Plane de pantalla en z=0.16; burbujas de chat = Box(1.6,0.5,0.12) a distintas z que flotan; giro de -35° a 40° durante 3 s. Si el render con 3D falla, devuelve el error: simplifica la escena o usa 9b.
 10. Mueve cosas con intención: entradas con ease power4.out / back.out, salidas rápidas, escalonar (stagger), contadores, barras que crecen, textos que se dibujan, cámara (escala lenta del fondo). Nada de objetos quietos 4 segundos. Máx. 45 s.
 
 PLANTILLA MÍNIMA (cópiala y amplíala):
