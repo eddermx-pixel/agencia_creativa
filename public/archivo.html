@@ -29,6 +29,9 @@
     @media (max-width: 760px) { .det { grid-template-columns: 1fr; } }
     .prev { background: #07070c; border-radius: 12px; overflow: hidden; position: relative; min-height: 300px; display: flex; align-items: center; justify-content: center; }
     .prev img { max-width: 100%; max-height: 70vh; }
+    .th .play { position: absolute; inset: 0; display: grid; place-items: center; font-size: 34px; color: #fff; text-shadow: 0 2px 10px #000a; pointer-events: none; }
+    .th .play-ph { position: absolute; inset: 0; display: grid; place-items: center; background: #14141f; color: #aaa; }
+    .th .play-ph small { position: absolute; bottom: 10px; }
     .prev iframe { border: 0; width: 1080px; height: 1920px; transform-origin: top left; position: absolute; left: 0; top: 0; }
     .prev pre { white-space: pre-wrap; margin: 0; padding: 16px; font: 15px/1.5 system-ui; color: var(--ink); background: var(--panel); width: 100%; }
     .kv { font-size: 14px; display: flex; flex-direction: column; gap: 8px; } .kv b { color: var(--muted); font-weight: 600; font-size: 12px; display: block; }

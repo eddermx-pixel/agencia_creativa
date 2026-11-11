@@ -15,11 +15,24 @@ import * as ws from './workspace.js';
 import { makeActions, withAgent } from './actions.js';
 import { hfGuide, estiloPelicula, hfDisponible, buscarBloques, verBloque } from './hyperframes.js';
 import { remotionGuide, remotionDisponible } from './remotion.js';
+import { modeloPara, verificar } from './presupuesto.js';
 
 const client = new Anthropic({ maxRetries: 4, timeout: 6 * 60 * 1000 });
-const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
 const EFFORT = process.env.CLAUDE_EFFORT || 'medium';
-const MAX_TURNS = 60;
+const MAX_TURNS = Number(process.env.MAX_TURNS || 40);
+
+// Caché de instrucciones, herramientas y conversación: en cada vuelta del agente solo se paga completo lo nuevo.
+function conCache(system, tools, messages) {
+  const marca = { cache_control: { type: 'ephemeral' } };
+  const out = { system: [{ type: 'text', text: system, ...marca }], tools: tools?.length ? tools.map((t, i) => (i === tools.length - 1 ? { ...t, ...marca } : t)) : tools, messages };
+  const last = messages.at(-1);
+  if (last?.role === 'user') {
+    const blocks = typeof last.content === 'string' ? [{ type: 'text', text: last.content }] : last.content.map((b) => ({ ...b }));
+    blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], ...marca };
+    out.messages = [...messages.slice(0, -1), { ...last, content: blocks }];
+  }
+  return out;
+}
 
 const REGLAS = `Trabajas en una agencia de marketing operada por agentes de IA. El "jefe" es el dueño de la agencia (humano).
 - Usa la herramienta estado cada vez que empieces algo nuevo, con una frase corta en primera persona ("Buscando referencias de color…"). El jefe te ve como un astronauta en una estación espacial y lee esa frase.
@@ -213,8 +226,8 @@ async function delegate(parent, toolUseId, agentId, task, campaign) {
   return runJob(child);
 }
 
-// Cuántas campañas pueden trabajar a la vez (cada una gasta API en paralelo). MAX_CAMPANAS, por defecto 3.
-const MAX_CAMPANAS = Math.max(1, Number(process.env.MAX_CAMPANAS || 3));
+// Cuántas campañas pueden trabajar a la vez (cada una gasta API en paralelo). MAX_CAMPANAS, por defecto 1.
+const MAX_CAMPANAS = Math.max(1, Number(process.env.MAX_CAMPANAS || 1));
 let campanasActivas = 0; const esperandoTurno = [];
 async function tomarTurno(job) {
   const camp = db.campaigns.find((c) => c.id === job.campaignId);
@@ -294,21 +307,24 @@ async function loop(job) {
       }
 
       setAgent(job.agentId, { estado: 'trabajando', campaignId: campaign.id, pensando: Date.now() });
+      verificar(campaign.id);
+      const modelo = modeloPara(job.agentId);
+      const c = conCache(job.system, toolDefs(job.agentId), withRefs(job, campaign));
       const resp = await client.beta.messages.stream({
-        model: MODEL,
-        max_tokens: 48000,
+        model: modelo,
+        max_tokens: 32000,
         output_config: { effort: EFFORT },
         // Si una conversación vieja quedó con "pensamientos" que ya no coinciden
         // (por ejemplo, tras una actualización), la API los descarta y sigue.
         thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } },
         betas: ['server-side-fallback-2026-07-01', 'thinking-binding-controls-2026-08-01'],
         fallbacks: 'default',
-        system: job.system,
-        tools: toolDefs(job.agentId),
-        messages: withRefs(job, campaign),
+        system: c.system,
+        tools: c.tools,
+        messages: c.messages,
       }).finalMessage();
       setAgent(job.agentId, { pensando: null });
-      addUsage(campaign.id, MODEL, resp.usage, job.agentId);
+      addUsage(campaign.id, resp.model || modelo, resp.usage, job.agentId);
       if (resp.stop_reason === 'refusal') {
         throw new Error(`${agent.nombre} no pudo continuar: el modelo rechazó la solicitud (${resp.stop_details?.category || 'política'}).`);
       }
@@ -374,8 +390,9 @@ async function junta(key, tema, contexto, campaign) {
   const mem = memoryText(campaign.clientId, campaign.id);
   try {
     await Promise.all(equipo.filter((a) => !m.aportes.some((x) => x.agente === a.id)).map(async (a) => {
+      verificar(campaign.id);
       const res = await client.messages.create({
-        model: MODEL,
+        model: modeloPara(a.id),
         max_tokens: 1500,
         output_config: { effort: 'low' },
         system: `${REGLAS}
@@ -394,7 +411,7 @@ Contexto: ${contexto}
 
 Desde tu especialidad y con tu personalidad, propone 2 ideas concretas y distintas (una frase cada una) y di un riesgo o crítica honesta. Si hay comentarios del jefe, respétalos. Máximo 90 palabras, sin saludos ni presentación.` }],
       });
-      addUsage(campaign.id, MODEL, res.usage, a.id);
+      addUsage(campaign.id, res.model || modeloPara(a.id), res.usage, a.id);
       const texto = textOf(res.content) || '(sin ideas)';
       addAporte(m, a.id, texto);
       setAgent(a.id, { burbuja: texto.replace(/\s+/g, ' ').slice(0, 140) });
@@ -437,6 +454,13 @@ export async function runCampaign(campaign) {
 
 // Al arrancar: retoma las campañas que estaban en curso.
 export function boot() {
+  // Reanudar solo tras cada reinicio gastaba API sin que nadie lo pidiera (cada deploy de Railway).
+  // Ahora hay que pedirlo: botón Reintentar, o responder algo de la campaña. AUTO_RESUME=1 lo restaura.
+  if (process.env.AUTO_RESUME !== '1') {
+    const n = db.campaigns.filter((c) => c.estado === 'en_curso' && c.jobId).length;
+    if (n) log('director', `⏸️ ${n} campaña(s) quedaron en pausa tras el reinicio. Pulsa Reintentar para seguir (no se reanudan solas para no gastar IA).`);
+    return [];
+  }
   return db.campaigns
     .filter((c) => c.estado === 'en_curso' && c.jobId)
     .map((c) => {
@@ -466,8 +490,9 @@ export async function chatWithAgent(agentId, mensaje, contexto, extra = {}) {
   const messages = [{ role: 'user', content: mensaje }];
   let texto = '';
   for (let k = 0; k < 3; k++) {
-    const res = await client.messages.create({ model: MODEL, max_tokens: 2000, output_config: { effort: 'low' }, system, tools, messages });
-    addUsage(null, MODEL, res.usage, agentId);
+    verificar();
+    const res = await client.messages.create({ model: modeloPara(agentId), max_tokens: 2000, output_config: { effort: 'low' }, system, tools, messages });
+    addUsage(null, res.model || modeloPara(agentId), res.usage, agentId);
     texto = textOf(res.content) || texto;
     const usos = res.content.filter((b) => b.type === 'tool_use');
     if (!usos.length) break;
@@ -491,15 +516,16 @@ Investiga en internet (prioriza fuentes de 2025-2026) las técnicas, herramienta
 Al terminar responde ÚNICAMENTE con un JSON así:
 {"apuntes": ["8 a 10 aprendizajes concretos y accionables, en español"], "skills": [{"nombre": "habilidad nueva o mejorada", "nivel": 60-95}], "fuentes": ["https://..."]}` }];
   for (let k = 0; k < 6; k++) {
+    verificar();
     const res = await client.messages.create({
-      model: MODEL,
+      model: modeloPara(agent.id),
       max_tokens: 16000,
       output_config: { effort: 'medium' },
       system: `${REGLAS}\n\nEres ${agent.nombre}, ${agent.rol} de la agencia.\n${personaText(agent)}`,
       tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 6 }],
       messages,
     });
-    addUsage(null, MODEL, res.usage, agent.id);
+    addUsage(null, res.model || modeloPara(agent.id), res.usage, agent.id);
     if (res.stop_reason === 'pause_turn') { messages.push({ role: 'assistant', content: res.content }); continue; }
     if (res.stop_reason === 'refusal') throw new Error('El modelo no pudo completar el curso.');
     return parseCurso(textOf(res.content));

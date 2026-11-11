@@ -17,6 +17,8 @@ import * as entregables from './entregables.js';
 import QRCode from 'qrcode';
 import * as planeacion from './planeacion.js';
 import * as costos from './costos.js';
+import * as presupuesto from './presupuesto.js';
+import { svgAPng } from './png.js';
 import * as voz from './voz.js';
 import * as render from './render.js';
 import * as motores from './motores.js';
@@ -353,6 +355,7 @@ function track(c, promise) {
 }
 
 costos.registrar(app);
+presupuesto.registrar(app);
 voz.registrar(app);
 render.registrar(app);
 motores.registrar(app);
@@ -547,6 +550,15 @@ app.get('/api/prueba/chatbot', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get('/api/broll/proxy', (req, res) => proxyBroll(req, res).catch(() => res.status(502).end()));
+// PNG 1080×1350 del arte, hecho en el servidor (para subir a redes)
+app.get('/api/pieces/:id/png', async (req, res) => {
+  const p = db.pieces.find((x) => x.id === req.params.id);
+  if (!p || p.tipo !== 'arte') return res.status(404).end();
+  try {
+    const b = await svgAPng(pieceBody(p));
+    res.type('image/png').set('Content-Disposition', `attachment; filename="${fileName(p).replace(/\.[^.]+$/, '')}.png"`).send(b);
+  } catch (e) { res.status(501).json({ error: e.message }); }
+});
 app.get('/api/pieces/:id/media', (req, res) => {
   const p = db.pieces.find((x) => x.id === req.params.id);
   if (!p || p.motor !== 'hf') return res.status(404).end();

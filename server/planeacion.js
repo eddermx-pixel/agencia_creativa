@@ -1,7 +1,8 @@
 // Planeación mensual por objetivos, búsqueda de campañas, métricas y publicación por GoHighLevel.
 import Anthropic from '@anthropic-ai/sdk';
+import { modeloPara, verificar } from './presupuesto.js';
 import { db, save, newId } from './store.js';
-import { bus, log } from './hub.js';
+import { bus, log, addUsage } from './hub.js';
 import * as files from './files.js';
 import fs from 'node:fs';
 
@@ -65,7 +66,9 @@ async function planReal(cl, mes, n, objetivos) {
   const client = new Anthropic({ maxRetries: 3, timeout: 4 * 60 * 1000 });
   const mems = db.memories.filter((m) => m.clientId === cl.id).slice(-12).map((m) => `- ${m.texto}`).join('\n');
   const prompt = `Eres el director creativo de una agencia de marketing. Crea el plan de contenido de ${mes} para ${cl.nombre}.\n\n${metaCliente(cl) || '(sin metas definidas: propón objetivos razonables)'}\nRubro: ${cl.rubro || '-'}. Público: ${cl.publico || '-'}. Tono: ${cl.tono || '-'}.\nObjetivos prioritarios para este mes: ${objetivos.join(', ')}.\n${aprendizajeMetricas(cl.id)}\n${mems ? `Lo que sabemos del cliente:\n${mems}` : ''}\n\nPropón exactamente ${n} publicaciones repartidas en el mes (mezcla formatos y plataformas, alineadas con los ads descritos y con un embudo: atraer → convencer → convertir). Responde SOLO con un arreglo JSON, sin texto extra, con objetos {"fecha":"YYYY-MM-DD","objetivo":"${Object.keys(OBJETIVOS).join('|')}","plataforma":"${PLATAFORMAS.join('|')}","formato":"${FORMATOS.join('|')}","tema":"idea concreta","notas":"mensaje clave y llamada a la acción"}.`;
-  const r = await client.messages.create({ model: process.env.CLAUDE_MODEL || 'claude-opus-5-5', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] });
+  verificar();
+  const r = await client.messages.create({ model: modeloPara('director'), max_tokens: 4000, messages: [{ role: 'user', content: prompt }] });
+  addUsage(null, r.model || modeloPara('director'), r.usage, 'director');
   const txt = r.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
   const m = txt.match(/\[[\s\S]*\]/);
   if (!m) throw new Error('La IA no devolvió un plan válido. Intenta de nuevo.');

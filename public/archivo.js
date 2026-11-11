@@ -22,7 +22,10 @@ function fitIframes(root) {
 function thumb(p) {
   const src = `/api/pieces/${p.id}/render?t=${p.rt}`;
   if (p.tipo === 'arte') return `<img src="${src}" alt="" loading="lazy">`;
-  if (p.tipo === 'video') return `<iframe ${['v2', 'hf'].includes(p.motor) ? '' : 'sandbox="allow-scripts"'} src="${['v2', 'hf'].includes(p.motor) ? `/player.html?id=${p.id}&embed=1` : src}" loading="lazy" tabindex="-1"></iframe>`;
+  // Las miniaturas de video no se reproducen (todas sonaban a la vez): solo se ve un cuadro fijo; se reproduce al abrir la pieza.
+  if (p.tipo === 'video' && p.motor === 'hf') return `<video src="/api/pieces/${p.id}/media#t=0.5" preload="metadata" muted playsinline tabindex="-1" style="width:100%;height:100%;object-fit:cover;pointer-events:none"></video><span class="play">▶</span>`;
+  if (p.tipo === 'video' && p.motor === 'v2') return `<div class="play-ph"><span class="play">▶</span><small>Video</small></div>`;
+  if (p.tipo === 'video') return `<iframe sandbox="allow-scripts" src="${src}" loading="lazy" tabindex="-1"></iframe>`;
   return `<pre data-src="${src}">…</pre>`;
 }
 
@@ -91,7 +94,7 @@ function showBrief(c) {
 function showPiece(p, c) {
   const src = `/api/pieces/${p.id}/render?t=${p.rt}`;
   const versiones = data.pieces.filter((x) => x.campaignId === p.campaignId && x.agente === p.agente && x.tipo === p.tipo).sort((a, b) => a.creada - b.creada);
-  const media = p.tipo === 'arte' ? `<img src="${src}" alt="">` : p.tipo === 'video' ? `<iframe ${['v2', 'hf'].includes(p.motor) ? '' : 'sandbox="allow-scripts"'} src="${['v2', 'hf'].includes(p.motor) ? `/player.html?id=${p.id}&embed=1` : src}"></iframe>` : `<pre data-src="${src}">…</pre>`;
+  const media = p.tipo === 'arte' ? `<img src="${src}" alt="">` : p.tipo === 'video' ? (p.motor === 'hf' ? `<video src="/api/pieces/${p.id}/media" controls playsinline autoplay style="width:100%;height:100%;object-fit:contain;background:#000"></video>` : p.motor === 'v2' ? `<iframe src="/player.html?id=${p.id}&embed=1&full=1" allow="autoplay; fullscreen"></iframe>` : `<iframe sandbox="allow-scripts" src="${src}"></iframe>`) : `<pre data-src="${src}">…</pre>`;
   $('dlgBody').innerHTML = `
     <div class="head"><h3>${esc(p.titulo)}</h3><span style="flex:1"></span><button id="x">✕</button></div>
     <div class="det">
@@ -113,7 +116,7 @@ function showPiece(p, c) {
   body.querySelector('#x').onclick = () => $('dlg').close();
   body.querySelectorAll('[data-v]').forEach((b) => (b.onclick = () => showPiece(data.pieces.find((x) => x.id === b.dataset.v), c)));
   const png = body.querySelector('#png');
-  if (png) png.onclick = () => toPng(p);
+  if (png) png.onclick = async () => { try { const r = await fetch(`/api/pieces/${p.id}/png`); if (!r.ok) throw 0; const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await r.blob()), download: `${(p.titulo.replace(/[^\w\- ]+/g, '').trim() || 'arte')}-v${p.version || 1}.png` }); a.click(); } catch { toPng(p); } };
   const pre = body.querySelector('pre[data-src]');
   if (pre) fetch(src).then((r) => r.text()).then((t) => (pre.textContent = t));
   if (!$('dlg').open) $('dlg').showModal();
@@ -144,5 +147,6 @@ $('fBuscar').addEventListener('input', render);
 window.addEventListener('hashchange', render);
 window.addEventListener('resize', () => fitIframes($('list')));
 $('dlg').addEventListener('click', (e) => e.target === $('dlg') && $('dlg').close());
+$('dlg').addEventListener('close', () => $('dlgBody').replaceChildren()); // corta audio y video al cerrar
 
 connect((type) => { if (['snapshot', 'piece', 'campaign'].includes(type)) load(); });

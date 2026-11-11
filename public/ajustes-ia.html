@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agencia IA — Ajustes de IA</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .card h2 { margin: 0; font-size: 17px; }
+    .card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+    select, input { font: inherit; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); color: inherit; }
+    .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+    .hoy { font-variant-numeric: tabular-nums; font-size: 14px; }
+    #ok { color: var(--ok, #6fdc8c); font-size: 13px; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="uso.html" style="text-decoration:none"><button>←<span class="lbl"> Uso de IA</span></button></a>
+    <span class="sp"></span>
+  </header>
+  <main class="wrap">
+    <section class="card">
+      <h2>Modelo de IA</h2>
+      <p>Cada modelo cuesta distinto por millón de tokens (entrada / salida). Puedes cambiarlo cuando quieras, incluso solo para los videos; el cambio aplica desde la siguiente llamada.</p>
+      <div class="row">
+        <label>Agencia en general<select id="modelo"></select></label>
+        <label>Videos (Max y Micho)<select id="modeloVideo"></select></label>
+      </div>
+      <p id="precios"></p>
+    </section>
+    <section class="card">
+      <h2>Frenos de gasto (US$)</h2>
+      <p>Antes de cada llamada se revisa el gasto. Si pasa un límite, el trabajo se detiene con un aviso y puedes seguir con <b>Reintentar</b> después de subirlo. 0 = sin límite.</p>
+      <div class="row">
+        <label>Por día<input id="lDia" type="number" min="0" step="1"></label>
+        <label>Por mes<input id="lMes" type="number" min="0" step="1"></label>
+        <label>Por campaña<input id="lCampana" type="number" min="0" step="1"></label>
+      </div>
+      <div class="hoy" id="hoy"></div>
+    </section>
+    <section class="card">
+      <h2>Importante</h2>
+      <p>Tu plan de Claude (Pro/Max) <b>no cubre</b> la API: los agentes de esta agencia se cobran aparte, por tokens, en platform.claude.com → Billing. Allí conviene poner un <b>límite de gasto mensual</b> y apagar la recarga automática.</p>
+      <p>Las campañas ya <b>no se reanudan solas</b> al reiniciar el servidor (cada deploy de Railway las reiniciaba y gastaba IA). Si quieres lo de antes: variable <code>AUTO_RESUME=1</code>.</p>
+    </section>
+    <div><button class="primary" id="guardar">Guardar</button> <span id="ok"></span></div>
+  </main>
+  <script type="module">
+    import { api } from './common.js';
+    const $ = (id) => document.getElementById(id);
+    const usd = (n) => `US$${(+n).toFixed(2)}`;
+    let a;
+    async function cargar() {
+      a = await (await fetch('/api/ia/ajustes')).json();
+      const opts = Object.entries(a.modelos).map(([id, m]) => `<option value="${id}">${m.nombre}</option>`).join('');
+      $('modelo').innerHTML = opts; $('modeloVideo').innerHTML = opts;
+      $('modelo').value = a.modelo; $('modeloVideo').value = a.modeloVideo;
+      $('precios').innerHTML = Object.values(a.modelos).map((m) => `${m.nombre.split(' (')[0]}: ${m.precio[0]} / ${m.precio[1]} US$ por millón`).join(' · ');
+      $('lDia').value = a.limites.dia; $('lMes').value = a.limites.mes; $('lCampana').value = a.limites.campana;
+      $('hoy').textContent = `Gastado hoy: ${usd(a.gasto.dia)} · este mes: ${usd(a.gasto.mes)} (estimado)`;
+    }
+    $('guardar').onclick = async () => {
+      try {
+        await api('/api/ia/ajustes', { modelo: $('modelo').value, modeloVideo: $('modeloVideo').value, limites: { dia: $('lDia').value, mes: $('lMes').value, campana: $('lCampana').value } }, 'PUT');
+        $('ok').textContent = 'Guardado ✓'; cargar();
+      } catch (e) { $('ok').textContent = e.message; }
+    };
+    cargar();
+  </script>
+</body>
+</html>

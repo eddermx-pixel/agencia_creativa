@@ -6,6 +6,7 @@ import path from 'node:path';
 import { db, save, DATA_DIR } from './store.js';
 import * as files from './files.js';
 import * as ws from './workspace.js';
+import { svgAPng, pngDisponible } from './png.js';
 
 const slug = ws.slug;
 const EXT = { arte: 'svg', video: 'html', texto: 'txt' };
@@ -35,6 +36,11 @@ export function guardar(p) {
       fs.copyFileSync(src, full);
       p.mediaRuta = rel;
     } else fs.writeFileSync(full, cuerpo(p));
+    // El arte también se entrega como PNG listo para subir (el SVG queda como fuente editable).
+    if (p.tipo === 'arte' && pngDisponible()) {
+      const png = full.replace(/\.svg$/i, '.png');
+      svgAPng(cuerpo(p)).then((b) => { fs.writeFileSync(png, b); p.pngRuta = rel.replace(/\.svg$/i, '.png'); save(); }).catch((e) => console.warn('[png]', e.message));
+    }
     ws.piezaAprobada(camp, p, rel);
     ws.concepto(camp);
     save();
