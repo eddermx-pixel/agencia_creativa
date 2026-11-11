@@ -31,19 +31,14 @@ export const EMOCIONES = {
   hablando:    { angulo: 0.02,  cejaY: 0.03,  ojo: 1,    curv: 0.5,  abierta: 0.25, ancho: 1 },
 };
 function mezclaEmocion(lista, t) {
-  // lista: [[segundo, 'emocion'], ...] → interpola suavemente (0.45 s) hacia cada emoción
+  // lista: [[segundo, 'emocion'], ...] → interpola suavemente (0.45 s) hacia la ÚLTIMA marca que ya pasó
   const k = (lista && lista.length ? lista : [[0, 'neutral']]).slice().sort((a, b) => a[0] - b[0]);
-  let prev = EMOCIONES[k[0][1]] || EMOCIONES.neutral, act = prev;
-  for (let i = 0; i < k.length; i++) {
-    if (t >= k[i][0]) {
-      act = EMOCIONES[k[i][1]] || EMOCIONES.neutral;
-      prev = i > 0 ? (EMOCIONES[k[i - 1][1]] || EMOCIONES.neutral) : act;
-      const f = suave(clamp((t - k[i][0]) / 0.45));
-      const r = {}; for (const c of Object.keys(act)) r[c] = lerp(prev[c], act[c], f);
-      return r;
-    }
-  }
-  return { ...prev };
+  const emo = (i) => EMOCIONES[k[Math.max(0, i)][1]] || EMOCIONES.neutral;
+  let i = -1; for (let j = 0; j < k.length; j++) if (t >= k[j][0]) i = j;
+  if (i < 0) return { ...emo(0) };
+  const act = emo(i), prev = i > 0 ? emo(i - 1) : act, f = suave(clamp((t - k[i][0]) / 0.45));
+  const r = {}; for (const c of Object.keys(act)) r[c] = lerp(prev[c], act[c], f);
+  return r;
 }
 
 // ---------------- Gestos de brazo ----------------
@@ -61,15 +56,11 @@ export const GESTOS = {
 };
 function mezclaGesto(lista, t) {
   const k = (lista && lista.length ? lista : [[0, 'reposo']]).slice().sort((a, b) => a[0] - b[0]);
-  let act = GESTOS[k[0][1]] || GESTOS.reposo, prev = act;
-  for (let i = 0; i < k.length; i++) {
-    if (t >= k[i][0]) {
-      act = GESTOS[k[i][1]] || GESTOS.reposo; prev = i > 0 ? (GESTOS[k[i - 1][1]] || GESTOS.reposo) : act;
-      const f = suave(clamp((t - k[i][0]) / 0.5));
-      return act.map((v, j) => lerp(prev[j], v, f));
-    }
-  }
-  return prev.slice();
+  const ges = (i) => GESTOS[k[Math.max(0, i)][1]] || GESTOS.reposo;
+  let i = -1; for (let j = 0; j < k.length; j++) if (t >= k[j][0]) i = j;
+  if (i < 0) return ges(0).slice();
+  const act = ges(i), prev = i > 0 ? ges(i - 1) : act, f = suave(clamp((t - k[i][0]) / 0.5));
+  return act.map((v, j) => lerp(prev[j], v, f));
 }
 
 // ---------------- Personaje ----------------
@@ -91,9 +82,11 @@ export function crearPersonaje(opts = {}) {
     const cuello = malla(new THREE.BoxGeometry(0.42, 0.55, 0.05), ropa.acento ?? acento); cuello.position.set(0, 1.58, 0.63); tronco.add(cuello);
   }
   if (ropa.tipo === 'delantal') {
-    const del = contorno(malla(new THREE.BoxGeometry(1.05, 1.35, 0.12), ropa.acento ?? 0xffffff, { roughness: 0.8 }), 0.03); del.position.set(0, 0.85, 0.6); tronco.add(del);
-    const bols = malla(new THREE.BoxGeometry(0.55, 0.3, 0.05), 0xdddddd); bols.position.set(0, 0.7, 0.68); tronco.add(bols);
-    const tira = malla(new THREE.TorusGeometry(0.4, 0.04, 8, 24, Math.PI), 0xffffff); tira.position.set(0, 1.55, 0.42); tira.rotation.set(0.2, 0, Math.PI); tronco.add(tira);
+    const geo = new THREE.CylinderGeometry(0.7, 0.74, 1.25, 36, 1, true, -Math.PI * 0.4, Math.PI * 0.8);
+    const del = new THREE.Mesh(geo, std(ropa.acento ?? 0xffffff, { roughness: 0.8, side: THREE.DoubleSide })); del.position.y = 0.82; tronco.add(del);
+    const borde = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: TINTA, side: THREE.BackSide })); borde.scale.set(1.03, 1.02, 1.03); del.add(borde);
+    const bols = contorno(malla(new THREE.BoxGeometry(0.5, 0.3, 0.05), 0xffffff, { roughness: 0.8 }), 0.06); bols.position.set(0, 0.62, 0.76); tronco.add(bols);
+    const tira = malla(new THREE.TorusGeometry(0.36, 0.035, 8, 24, Math.PI), ropa.acento ?? 0xffffff); tira.position.set(0, 1.5, 0.38); tira.rotation.set(0.35, 0, Math.PI); tronco.add(tira);
   }
   if (ropa.tipo === 'saco') {
     for (const s of [-1, 1]) { const sol = malla(new THREE.BoxGeometry(0.22, 0.9, 0.07), 0x10192e); sol.position.set(s * 0.26, 1.4, 0.62); sol.rotation.z = s * -0.3; tronco.add(sol); }
@@ -140,8 +133,8 @@ export function crearPersonaje(opts = {}) {
   // Accesorios de cara
   let cubrebocas = null;
   if (acc.has('cubrebocas')) {
-    cubrebocas = new THREE.Group(); cubrebocas.position.set(0, -0.36, 0.62); cabeza.add(cubrebocas);
-    const placa = contorno(malla(new THREE.SphereGeometry(0.66, 28, 18), 0xaee3f5, { roughness: 0.8 }), 0.05); placa.scale.set(1.0, 0.5, 0.55); cubrebocas.add(placa);
+    cubrebocas = new THREE.Group(); cubrebocas.position.set(0, -0.3, 0.64); cabeza.add(cubrebocas);
+    const placa = contorno(malla(new THREE.SphereGeometry(0.66, 28, 18), 0xaee3f5, { roughness: 0.8 }), 0.05); placa.scale.set(1.04, 0.58, 0.55); cubrebocas.add(placa);
     for (let i = -1; i <= 1; i++) { const pl = malla(new THREE.BoxGeometry(1.0, 0.025, 0.02), 0x7fc3dc); pl.position.set(0, i * 0.13, 0.36 - Math.abs(i) * 0.06); cubrebocas.add(pl); }
     for (const s of [-1, 1]) { const li = malla(new THREE.TorusGeometry(0.3, 0.015, 6, 16, Math.PI), 0xd5eef7); li.position.set(s * 0.62, 0.1, -0.1); li.rotation.set(0, s * Math.PI / 2, 0); cubrebocas.add(li); }
     boca.visible = false;
@@ -155,14 +148,14 @@ export function crearPersonaje(opts = {}) {
   }
 
   // Pelo y sombreros
-  const cap = (r, y, z = 0, desde = 0, hasta = Math.PI * 0.58) => { const m = contorno(malla(new THREE.SphereGeometry(r, 32, 22, 0, Math.PI * 2, desde, hasta), pelo.color, { roughness: 0.85 }), 0.04); m.position.set(0, y, z); return m; };
+  const cap = (r, y, z = 0, desde = 0, hasta = Math.PI * 0.37) => { const m = contorno(malla(new THREE.SphereGeometry(r, 32, 22, 0, Math.PI * 2, desde, hasta), pelo.color, { roughness: 0.85 }), 0.04); m.position.set(0, y, z); return m; };
   if (pelo.estilo === 'corto') { const m = cap(0.97, 0.02, -0.04); m.rotation.x = -0.28; cabeza.add(m); }
   if (pelo.estilo === 'mono') {
     const m = cap(0.97, 0.02, -0.05); m.rotation.x = -0.35; cabeza.add(m);
     const mo = contorno(malla(new THREE.SphereGeometry(0.34, 20, 16), pelo.color, { roughness: 0.85 }), 0.07); mo.position.set(0, 1.0, -0.38); cabeza.add(mo);
   }
   if (pelo.estilo === 'largo') {
-    const m = cap(0.98, 0.02, -0.06, 0, Math.PI * 0.62); m.rotation.x = -0.3; cabeza.add(m);
+    const m = cap(0.98, 0.02, -0.06, 0, Math.PI * 0.46); m.rotation.x = -0.3; cabeza.add(m);
     for (const s of [-1, 1]) { const l = contorno(malla(new THREE.CapsuleGeometry(0.22, 1.1, 6, 12), pelo.color, { roughness: 0.85 }), 0.05); l.position.set(s * 0.82, -0.6, -0.22); cabeza.add(l); }
   }
   if (acc.has('gorro-chef')) {
@@ -170,8 +163,8 @@ export function crearPersonaje(opts = {}) {
     for (const [x, z] of [[-0.35, 0], [0.35, 0], [0, 0.25], [0, -0.25], [0, 0]]) { const p = contorno(malla(new THREE.SphereGeometry(0.42, 20, 16), 0xffffff, { roughness: 0.9 }), 0.05); p.position.set(x, 1.45, z); cabeza.add(p); }
   }
   if (acc.has('gorra')) {
-    const c = cap(0.99, 0.04, -0.02, 0, Math.PI * 0.5); c.material.color.setHex(acento); c.rotation.x = -0.15; cabeza.add(c);
-    const v = contorno(malla(new THREE.BoxGeometry(1.0, 0.07, 0.55), acento), 0.05); v.position.set(0, 0.5, 0.95); v.rotation.x = 0.12; cabeza.add(v);
+    const c = cap(1.0, 0.06, -0.02, 0, Math.PI * 0.42); c.material.color.setHex(acento); c.rotation.x = -0.1; cabeza.add(c);
+    const v = contorno(malla(new THREE.SphereGeometry(0.6, 24, 12), acento), 0.05); v.scale.set(1.05, 0.13, 0.85); v.position.set(0, 0.52, 0.78); v.rotation.x = 0.18; cabeza.add(v);
   }
 
   // Brazos (hombro + codo)
@@ -228,9 +221,10 @@ export function animarPersonaje(p, t, o = {}) {
   p.brazos.forEach((b, i) => {
     const [out, adel, cod] = mezclaGesto(lados[b.lado], t);
     const sway = Math.sin((t + f) * 2.4 + i * 1.7) * 0.05 * en;
-    const trabajo = (lados[b.lado] || []).some(([a, g]) => g === 'trabajando' && t >= a) ? Math.sin(t * 7 + i * Math.PI) * 0.22 * en : 0;
-    const agita = (lados[b.lado] || []).some(([a, g]) => g === 'saludo' && t >= a) ? Math.sin(t * 8) * 0.28 : 0;
-    const pan = (lados[b.lado] || []).some(([a, g]) => g === 'panico' && t >= a) ? Math.sin(t * 14 + i) * 0.12 : 0;
+    const actual = (() => { const l = (lados[b.lado] || []).filter(([a]) => t >= a).sort((x, y) => x[0] - y[0]); return l.length ? l[l.length - 1][1] : 'reposo'; })();
+    const trabajo = actual === 'trabajando' ? Math.sin(t * 7 + i * Math.PI) * 0.22 * en : 0;
+    const agita = actual === 'saludo' ? Math.sin(t * 8) * 0.28 : 0;
+    const pan = actual === 'panico' ? Math.sin(t * 14 + i) * 0.12 : 0;
     b.hombro.rotation.set(adel + trabajo * 0.4, 0, b.lado * out + sway + pan);
     b.codo.rotation.set(cod + trabajo + agita, 0, 0);
   });
