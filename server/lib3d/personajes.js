@@ -65,17 +65,28 @@ function mezclaGesto(lista, t) {
 
 // ---------------- Personaje ----------------
 // opts: { piel, pelo:{estilo:'mono'|'corto'|'largo'|'calvo', color}, ropa:{tipo:'bata'|'delantal'|'playera'|'saco', color, acento}, acento,
-//         accesorios:['cubrebocas','guantes','gorro-chef','gorra','bigote','lentes','corbata'], cuerpo:'busto'|'completo', escala }
+//         accesorios:['cubrebocas','guantes','gorro-chef','gorra','bigote','lentes','corbata'], cuerpo:'busto'|'completo', escala,
+//         fisico:'normal'|'fuerte' (fuerte = hombros anchos, pecho, brazos gruesos y cabeza más chica: gimnasio, deportistas, cargadores), cabeza: escala de la cabeza (1 por defecto) }
 export function crearPersonaje(opts = {}) {
   const piel = opts.piel ?? 0xf0c4a0, acento = opts.acento ?? 0xff7a1a;
   const pelo = { estilo: 'corto', color: 0x2a1a14, ...(opts.pelo || {}) };
   const ropa = { tipo: 'playera', color: 0x1b4fd6, acento, ...(opts.ropa || {}) };
   const acc = new Set(opts.accesorios || []);
+  const fuerte = opts.fisico === 'fuerte';
   const raiz = new THREE.Group(); const g = new THREE.Group(); raiz.add(g);
   const tronco = new THREE.Group(); g.add(tronco);
 
   // Torso
   const torso = contorno(malla(new THREE.CapsuleGeometry(0.66, 0.95, 8, 24), ropa.color)); torso.position.y = 0.95; tronco.add(torso);
+  if (fuerte) {
+    // silueta en V: cintura angosta + pecho/espalda ancho + trapecios (no una bola)
+    torso.scale.set(0.95, 1, 0.85);
+    const pecho = contorno(malla(new THREE.SphereGeometry(0.8, 28, 20), ropa.color), 0.04); pecho.scale.set(1.5, 0.82, 0.88); pecho.position.set(0, 1.5, 0); tronco.add(pecho);
+    for (const s of [-1, 1]) {
+      const trap = contorno(malla(new THREE.SphereGeometry(0.36, 18, 14), ropa.color), 0.05); trap.scale.set(1.2, 0.8, 0.9); trap.position.set(s * 0.52, 1.95, -0.02); tronco.add(trap);
+    }
+    const cuello = contorno(malla(new THREE.CylinderGeometry(0.3, 0.38, 0.36, 18), piel), 0.06); cuello.position.y = 2.0; tronco.add(cuello);
+  }
   if (ropa.tipo === 'bata') {
     for (const s of [-1, 1]) { const sol = malla(new THREE.BoxGeometry(0.22, 0.75, 0.06), 0xe6eef9); sol.position.set(s * 0.2, 1.62, 0.62); sol.rotation.z = s * -0.38; tronco.add(sol); }
     const bols = malla(new THREE.BoxGeometry(0.3, 0.3, 0.05), 0xdde6f2); bols.position.set(0.32, 1.05, 0.66); tronco.add(bols);
@@ -97,13 +108,13 @@ export function crearPersonaje(opts = {}) {
   // Piernas (solo cuerpo completo)
   if (opts.cuerpo === 'completo') {
     for (const s of [-1, 1]) {
-      const pierna = contorno(malla(new THREE.CapsuleGeometry(0.26, 1.0, 6, 16), 0x24304f)); pierna.position.set(s * 0.32, -0.7, 0); g.add(pierna);
-      const pie = contorno(malla(new THREE.SphereGeometry(0.34, 16, 12), 0x10192e)); pie.scale.set(1, 0.55, 1.4); pie.position.set(s * 0.32, -1.5, 0.16); g.add(pie);
+      const pierna = contorno(malla(new THREE.CapsuleGeometry(0.26, 1.0, 6, 16), 0x24304f)); pierna.position.set(s * (fuerte ? 0.4 : 0.32), -0.7, 0); if (fuerte) pierna.scale.set(1.2, 1, 1.15); g.add(pierna);
+      const pie = contorno(malla(new THREE.SphereGeometry(0.34, 16, 12), 0x10192e)); pie.scale.set(1, 0.55, 1.4); pie.position.set(s * (fuerte ? 0.4 : 0.32), -1.5, 0.16); g.add(pie);
     }
   }
 
   // Cabeza
-  const cabeza = new THREE.Group(); cabeza.position.y = 2.62; g.add(cabeza);
+  const cabeza = new THREE.Group(); cabeza.position.y = fuerte ? 2.52 : 2.62; cabeza.scale.setScalar((opts.cabeza ?? 1) * (fuerte ? 0.84 : 1)); g.add(cabeza);
   const craneo = contorno(malla(new THREE.SphereGeometry(0.92, 40, 30), piel, { roughness: 0.7 })); craneo.scale.set(1, 0.96, 0.96); cabeza.add(craneo);
   for (const s of [-1, 1]) { const oreja = contorno(malla(new THREE.SphereGeometry(0.2, 12, 10), piel), 0.06); oreja.scale.set(0.6, 1, 0.8); oreja.position.set(s * 0.92, -0.02, 0); cabeza.add(oreja); }
   const nariz = malla(new THREE.SphereGeometry(0.1, 12, 10), piel, { roughness: 0.6 }); nariz.position.set(0, -0.12, 0.9); nariz.scale.set(1, 0.9, 0.9); cabeza.add(nariz);
@@ -163,19 +174,21 @@ export function crearPersonaje(opts = {}) {
     for (const [x, z] of [[-0.35, 0], [0.35, 0], [0, 0.25], [0, -0.25], [0, 0]]) { const p = contorno(malla(new THREE.SphereGeometry(0.42, 20, 16), 0xffffff, { roughness: 0.9 }), 0.05); p.position.set(x, 1.45, z); cabeza.add(p); }
   }
   if (acc.has('gorra')) {
-    const c = cap(1.0, 0.06, -0.02, 0, Math.PI * 0.42); c.material.color.setHex(acento); c.rotation.x = -0.1; cabeza.add(c);
-    const v = contorno(malla(new THREE.SphereGeometry(0.6, 24, 12), acento), 0.05); v.scale.set(1.05, 0.13, 0.85); v.position.set(0, 0.52, 0.78); v.rotation.x = 0.18; cabeza.add(v);
+    const c = cap(1.0, 0.1, -0.04, 0, Math.PI * 0.3); c.material.color.setHex(acento); c.rotation.x = -0.32; cabeza.add(c);   // no baja de la frente: deja ver cejas y ojos
+    const v = contorno(malla(new THREE.SphereGeometry(0.6, 24, 12), acento), 0.05); v.scale.set(1.0, 0.1, 0.7); v.position.set(0, 0.8, 0.82); v.rotation.x = 0.1; cabeza.add(v);
   }
 
   // Brazos (hombro + codo)
   const brazos = [];
   for (const s of [-1, 1]) {
-    const hombro = new THREE.Group(); hombro.position.set(s * 0.84, 1.62, 0); tronco.add(hombro);
+    const hombro = new THREE.Group(); hombro.position.set(s * (fuerte ? 1.12 : 0.84), 1.62, 0); tronco.add(hombro);
+    if (fuerte) { const del = contorno(malla(new THREE.SphereGeometry(0.34, 18, 14), ropa.color), 0.05); hombro.add(del); hombro.scale.set(1.0, 1, 1); }
     const manga = ropa.tipo === 'bata' ? 0xffffff : ropa.color;
     const sup = contorno(malla(new THREE.CapsuleGeometry(0.19, 0.5, 6, 14), manga)); sup.position.y = -0.38; hombro.add(sup);
     const codo = new THREE.Group(); codo.position.y = -0.78; hombro.add(codo);
     const antebrazo = contorno(malla(new THREE.CapsuleGeometry(0.16, 0.45, 6, 14), ropa.tipo === 'delantal' ? piel : manga)); antebrazo.position.y = -0.36; codo.add(antebrazo);
     const mano = contorno(malla(new THREE.SphereGeometry(0.21, 16, 12), acc.has('guantes') ? 0x5ec8ea : piel, { roughness: acc.has('guantes') ? 0.35 : 0.7 })); mano.position.y = -0.78; codo.add(mano);
+    if (fuerte) { sup.scale.set(1.5, 1, 1.5); antebrazo.scale.set(1.4, 1, 1.4); mano.scale.setScalar(1.2); }
     brazos.push({ hombro, codo, mano, lado: s });
   }
 
@@ -290,4 +303,32 @@ export function pared(o = {}) {
 }
 export function suelo(o = {}) {
   const m = malla(new THREE.PlaneGeometry(o.ancho ?? 30, o.fondo ?? 16), o.color ?? 0x0c1730, { roughness: 0.9 }); m.rotation.x = -Math.PI / 2; m.position.set(0, 0, o.z ?? 2); return m;
+}
+
+// ---------------- Gimnasio ----------------
+// mancuerna: barra + dos discos. Eje a lo largo de X. Medida total ≈ `largo` (1.5). Para apoyarla en el piso: m.position.y = mancuerna.radio.
+export function mancuerna(o = {}) {
+  const g = new THREE.Group(); const largo = o.largo ?? 1.5, r = o.radio ?? 0.42, c = o.color ?? 0x2c2f38;
+  const barra = contorno(malla(new THREE.CylinderGeometry(0.07, 0.07, largo, 12), 0xb8c0cc, { metalness: 0.7, roughness: 0.3 }), 0.08); barra.rotation.z = Math.PI / 2; g.add(barra);
+  for (const s of [-1, 1]) {
+    const disco = contorno(malla(new THREE.CylinderGeometry(r, r, 0.26, 6), c, { metalness: 0.4, roughness: 0.4 }), 0.05); disco.rotation.z = Math.PI / 2; disco.position.x = s * (largo / 2 - 0.13); g.add(disco);
+    const tope = malla(new THREE.CylinderGeometry(r * 0.45, r * 0.45, 0.3, 12), o.acento ?? 0xff7a1a); tope.rotation.z = Math.PI / 2; tope.position.x = s * (largo / 2 - 0.13); g.add(tope);
+  }
+  g.userData.radio = r; return g;
+}
+mancuerna.radio = 0.42;
+// barra olímpica con discos (press de banca / sentadilla). largo ≈ 4.4 sobre X.
+export function barraPesas(o = {}) {
+  const g = new THREE.Group(); const largo = o.largo ?? 4.4;
+  const barra = contorno(malla(new THREE.CylinderGeometry(0.06, 0.06, largo, 12), 0xb8c0cc, { metalness: 0.7, roughness: 0.3 }), 0.08); barra.rotation.z = Math.PI / 2; g.add(barra);
+  for (const s of [-1, 1]) for (let i = 0; i < (o.discos ?? 2); i++) {
+    const r = 0.62 - i * 0.12; const d = contorno(malla(new THREE.CylinderGeometry(r, r, 0.14, 18), i ? 0x2c2f38 : (o.acento ?? 0xff7a1a), { metalness: 0.35, roughness: 0.45 }), 0.04); d.rotation.z = Math.PI / 2; d.position.x = s * (largo / 2 - 0.4 - i * 0.18); g.add(d);
+  }
+  return g;
+}
+// Pone un objeto EN la mano del personaje (lado 'izq'|'der' de la pantalla) para que nunca flote. Devuelve el objeto.
+export function agarrar(p, lado, obj, o = {}) {
+  const b = p.brazos.find((x) => x.lado === (lado === 'izq' ? -1 : 1)) || p.brazos[0];
+  obj.position.set(o.x ?? 0, o.y ?? -0.05, o.z ?? 0.05); if (o.rot) obj.rotation.set(...o.rot);
+  b.mano.add(obj); return obj;
 }
