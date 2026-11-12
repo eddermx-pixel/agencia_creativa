@@ -13,6 +13,7 @@ import { agregarMusica } from './musica.js';
 import { prepararEfectos, TIPOS as TIPOS_SFX } from './efectos.js';
 import { exigir3d } from './presupuesto.js';
 import { buscarTomas } from './video.js';
+import { personajesGuardados } from './personajes-api.js';
 import { rutaArchivo } from './workspace.js';
 
 const aquí = path.dirname(fileURLToPath(import.meta.url));
@@ -267,6 +268,7 @@ export const rutaFinal = (clave) => path.join(HF_DIR, seguro(clave), 'final.mp4'
 
 // ---------- Guía que recibe Micho ----------
 export function hfGuide() {
+  const propios = personajesGuardados();
   return `VIDEOS PREMIUM CON HYPERFRAMES (herramientas proponer_visual y entregar_hyperframes)
 FLUJO OBLIGATORIO EN 3 PASOS (el jefe aprueba lo visual ANTES de que gastes en producir):
  1) PROPUESTA VISUAL: escribe tu composición con los personajes, la escena y el estilo ya a su aspecto final y llama a proponer_visual con 3-6 "momentos" (segundos) que muestren: el/los personajes, la escena del problema, la de la solución y el cierre con el logo. Es una versión corta y ligera (≤10 s): sin voz, sin música, sin animación completa; lo que importa es que se VEA bien. Se envía al jefe como imágenes.
@@ -301,7 +303,7 @@ import { crearEscena, crearPersonaje, animarPersonaje, sombra, telefono, mostrad
 - En tu función render() (t = state.p * DURACION): animarPersonaje(p, t, { emociones: [[0,"panico"],[6,"alegria"]], gestos: { izq: [[0,"telefono"],[6,"reposo"]], der: [[0,"reposo"]] }, habla: [[1.2,3.4]], mirada: [x,y], giro: rad, energia: 1 }). Emociones: neutral, alegria, tranquilo, panico, preocupado, sorpresa, enojo, cansado, hablando. Gestos: reposo, telefono, saludo, panico, trabajando, senalar, celebrar, cadera, pensar. izq/der son los lados DE LA PANTALLA. Cambia emoción y gesto en los momentos de la historia (p. ej. pánico cuando suena el teléfono → alegría cuando entra el chatbot): la cara es lo que cuenta la emoción. Con cubrebocas la boca no se ve: usa cejas y ojos (preocupado, sorpresa, alegria).
 - Objetos listos: telefono({color,pantalla,insignia}), mostrador({ancho,color}), plancha({tacos}), sillon({color}), burbuja({ancho,color,cola}), pared(), suelo(), sombra(radio). Ponles los colores del cliente.
 - El texto y las burbujas de chat van como HTML encima del canvas. Para cambiar de escena entre tomas usa varios canvas (uno por toma) o muestra/oculta grupos según state.p.
-9e. PLANTILLA 3D OBLIGATORIA: el servidor RECHAZA los videos y propuestas que no importen assets/three/personajes.js (se puede apagar en Ajustes de IA). Empieza SIEMPRE copiando esta plantilla y adaptándola:\n${PLANTILLA_3D}\n10. Mueve cosas con intención: entradas con ease power4.out / back.out, salidas rápidas, escalonar (stagger), contadores, barras que crecen, textos que se dibujan, cámara (escala lenta del fondo). Nada de objetos quietos 4 segundos. Máx. 45 s.
+${propios ? `9d-bis. PERSONAJES YA ARMADOS POR EL JEFE (estudio de personajes): úsalos TAL CUAL (misma config, no los rediseñes) cuando encajen con el rol:\n${propios}\n` : ''}9e. PLANTILLA 3D OBLIGATORIA: el servidor RECHAZA los videos y propuestas que no importen assets/three/personajes.js (se puede apagar en Ajustes de IA). Empieza SIEMPRE copiando esta plantilla y adaptándola:\n${PLANTILLA_3D}\n10. Mueve cosas con intención: entradas con ease power4.out / back.out, salidas rápidas, escalonar (stagger), contadores, barras que crecen, textos que se dibujan, cámara (escala lenta del fondo). Nada de objetos quietos 4 segundos. Máx. 45 s.
 
 PLANTILLA MÍNIMA (cópiala y amplíala):
 <!doctype html><html lang="es"><head><meta charset="utf-8"><script src="assets/gsap.min.js"></script>

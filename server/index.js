@@ -23,6 +23,7 @@ import { svgAPng, svgAJpg } from './png.js';
 import * as finales from './finales.js';
 import { baseNombre, carpetaZip, fechaLocal } from './nombres.js';
 import * as voz from './voz.js';
+import * as personajesApi from './personajes-api.js';
 import * as render from './render.js';
 import * as motores from './motores.js';
 import { rutaFinal as rutaFinalHF } from './hyperframes.js';
@@ -361,6 +362,7 @@ function track(c, promise) {
 costos.registrar(app);
 presupuesto.registrar(app);
 voz.registrar(app);
+personajesApi.registrar(app);
 render.registrar(app);
 motores.registrar(app);
 musica.registrar(app);

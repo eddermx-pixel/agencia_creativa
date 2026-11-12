@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agencia IA — Estudio de personajes</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .card h2 { margin: 0; font-size: 17px; }
+    .card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .editor { display: grid; grid-template-columns: minmax(280px, 420px) 1fr; gap: 16px; }
+    @media (max-width: 800px) { .editor { grid-template-columns: 1fr; } }
+    #vista { width: 100%; aspect-ratio: 3 / 4; border-radius: 12px; background: #13306b; cursor: grab; touch-action: none; display: block; }
+    #vista:active { cursor: grabbing; }
+    .ctl { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; align-content: start; }
+    label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+    select, input[type=text], input[type=range] { font: inherit; padding: 7px 9px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); color: inherit; }
+    input[type=color] { width: 100%; height: 34px; padding: 2px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel2); }
+    .acc { display: flex; flex-wrap: wrap; gap: 6px 12px; grid-column: 1 / -1; font-size: 13px; }
+    .acc label { white-space: nowrap; flex-direction: row; align-items: center; gap: 5px; color: inherit; font-size: 13px; }
+    .sw { display: flex; gap: 6px; grid-column: 1 / -1; align-items: center; font-size: 12px; color: var(--muted); }
+    .sw button { width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 2px solid var(--line); }
+    .fila { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .it { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; position: relative; }
+    .it:hover { border-color: var(--accent, #ff7a1a); }
+    .it img { width: 100%; border-radius: 8px; display: block; }
+    .it b { font-size: 13px; } .it small { color: var(--muted); font-size: 11px; line-height: 1.3; }
+    .it .x { position: absolute; top: 8px; right: 8px; padding: 2px 8px; }
+    #msg { min-height: 18px; font-size: 13px; color: var(--muted); }
+    #aviso { display: none; color: #ff9c9c; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header class="top">
+    <a href="./" style="text-decoration:none"><button>←<span class="lbl"> Oficina</span></button></a>
+    <span class="sp"></span>
+  </header>
+  <main class="wrap">
+    <section class="card">
+      <h2>Estudio de personajes 3D</h2>
+      <p>Combina cuerpo, cara, ropa, accesorios y objetos; arrastra el personaje para girarlo. Lo que guardes en tu biblioteca se le pasa a Micho para que lo use <b>tal cual</b> en los videos. Las sugerencias de abajo sirven de punto de partida.</p>
+      <div id="aviso">Tu navegador no pudo iniciar WebGL (3D). Prueba en Chrome o activa la aceleración por hardware.</div>
+      <div class="editor">
+        <canvas id="vista" width="600" height="800"></canvas>
+        <div class="ctl" id="ctl">
+          <label>Físico<select id="fisico"><option value="normal">Normal</option><option value="fuerte">Fuerte (gimnasio, deporte)</option></select></label>
+          <label>Cuerpo<select id="cuerpo"><option value="completo">Completo (con piernas)</option><option value="busto">Solo busto</option></select></label>
+          <label>Emoción<select id="emocion"></select></label>
+          <label>Brazo izquierdo<select id="gestoIzq"></select></label>
+          <label>Brazo derecho<select id="gestoDer"></select></label>
+          <label>Objeto mano izq.<select id="manoIzq"><option value="">Ninguno</option><option value="mancuerna">Mancuerna</option><option value="telefono">Teléfono</option></select></label>
+          <label>Objeto mano der.<select id="manoDer"><option value="">Ninguno</option><option value="mancuerna">Mancuerna</option><option value="telefono">Teléfono</option></select></label>
+          <label>Pelo<select id="peloEstilo"><option value="corto">Corto</option><option value="mono">Chongo</option><option value="largo">Largo</option><option value="calvo">Calvo</option></select></label>
+          <label>Ropa<select id="ropaTipo"><option value="playera">Playera</option><option value="bata">Bata</option><option value="delantal">Delantal</option><option value="saco">Saco</option></select></label>
+          <label>Tamaño de cabeza <input type="range" id="cabeza" min="0.7" max="1.2" step="0.02"></label>
+          <label>Piel<input type="color" id="piel"></label>
+          <label>Color de pelo<input type="color" id="peloColor"></label>
+          <label>Color de ropa<input type="color" id="ropaColor"></label>
+          <label>Color de acento<input type="color" id="acento"></label>
+          <div class="sw" id="pieles">Tonos de piel:</div>
+          <div class="acc" id="acc"></div>
+        </div>
+      </div>
+      <div class="fila">
+        <input type="text" id="nombre" placeholder="Nombre (ej. Coach Memo)" maxlength="60" style="flex:1;min-width:160px">
+        <input type="text" id="rol" placeholder="Rol (ej. dueño de gimnasio)" maxlength="80" style="flex:1;min-width:160px">
+        <button class="primary" id="guardar">Guardar en mi biblioteca</button>
+        <button id="azar">🎲 Sugiéreme uno</button>
+      </div>
+      <div id="msg"></div>
+    </section>
+    <section class="card">
+      <h2>Mi biblioteca</h2>
+      <p>Los personajes que Micho usará tal cual. Pulsa uno para editarlo.</p>
+      <div class="grid" id="guardados"></div>
+    </section>
+    <section class="card">
+      <h2>Sugerencias para empezar</h2>
+      <div class="grid" id="sugeridos"></div>
+      <div class="fila"><button id="hoja">⬇ Descargar hoja con todos (PNG)</button></div>
+    </section>
+  </main>
+  <script type="module">
+    import { api } from './common.js';
+    import { crearEscena, crearPersonaje, animarPersonaje, sombra, suelo, pared, mancuerna, telefono, agarrar, EMOCIONES, GESTOS } from '/lib3d/personajes.js';
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+    const num = (h) => parseInt(h.slice(1), 16);
+    const ACC = { cubrebocas: 'Cubrebocas', guantes: 'Guantes', 'gorro-chef': 'Gorro de chef', gorra: 'Gorra', bigote: 'Bigote', lentes: 'Lentes', corbata: 'Corbata' };
+    const PIELES = [0xf6d5b8, 0xf0c4a0, 0xe0a97a, 0xc68642, 0x8d5524, 0x5c3a21];
+    const E_ES = { neutral: 'Neutral', alegria: 'Alegría', tranquilo: 'Tranquilo', panico: 'Pánico', preocupado: 'Preocupado', sorpresa: 'Sorpresa', enojo: 'Enojo', cansado: 'Cansado', hablando: 'Hablando' };
+    const G_ES = { reposo: 'Reposo', telefono: 'Con teléfono', saludo: 'Saludo', panico: 'Pánico', trabajando: 'Trabajando', senalar: 'Señalar', celebrar: 'Celebrar', cadera: 'Manos en la cadera', pensar: 'Pensar' };
+    $('emocion').innerHTML = Object.keys(EMOCIONES).map((k) => `<option value="${k}">${E_ES[k] || k}</option>`).join('');
+    for (const id of ['gestoIzq', 'gestoDer']) $(id).innerHTML = Object.keys(GESTOS).map((k) => `<option value="${k}">${G_ES[k] || k}</option>`).join('');
+    $('acc').innerHTML = Object.entries(ACC).map(([k, v]) => `<label><input type="checkbox" data-acc="${k}"> ${v}</label>`).join('');
+    $('pieles').insertAdjacentHTML('beforeend', PIELES.map((c) => `<button data-piel="${hex(c)}" style="background:${hex(c)}" title="${hex(c)}"></button>`).join(''));
+
+    // ---------- Sugerencias ----------
+    const P = (nombre, rol, e) => ({ nombre, rol, ...e });
+    const base = { fisico: 'normal', cuerpo: 'completo', piel: 0xf0c4a0, peloEstilo: 'corto', peloColor: 0x2a1a14, ropaTipo: 'playera', ropaColor: 0x1b4fd6, acento: 0xff7a1a, acc: [], emocion: 'alegria', gestoIzq: 'reposo', gestoDer: 'reposo', manoIzq: '', manoDer: '', cabeza: 1 };
+    const SUGERIDOS = [
+      P('Coach fuerte', 'gimnasio, deporte', { ...base, fisico: 'fuerte', piel: 0xe0a97a, peloColor: 0x1a1008, ropaColor: 0xff7a1a, acento: 0x13306b, acc: ['gorra', 'bigote'], gestoIzq: 'celebrar', manoIzq: 'mancuerna', manoDer: 'mancuerna' }),
+      P('Atleta mujer', 'gimnasio, cliente fit', { ...base, fisico: 'fuerte', piel: 0xc68642, peloEstilo: 'mono', peloColor: 0x1a1008, ropaColor: 0x1fb5a8, acento: 0xffffff, gestoDer: 'cadera', manoIzq: 'mancuerna' }),
+      P('Doctora', 'clínica, dentista', { ...base, piel: 0xf6d5b8, peloEstilo: 'largo', peloColor: 0x5a3318, ropaTipo: 'bata', ropaColor: 0xffffff, acento: 0x5ec8ea, acc: ['cubrebocas', 'guantes'], gestoDer: 'senalar' }),
+      P('Taquero', 'taquería, comida', { ...base, piel: 0xc68642, peloColor: 0x1a1008, ropaTipo: 'delantal', ropaColor: 0xc0392b, acento: 0xffffff, acc: ['gorro-chef', 'bigote'], gestoIzq: 'trabajando', gestoDer: 'trabajando' }),
+      P('Florista', 'florería, tienda', { ...base, piel: 0xf0c4a0, peloEstilo: 'mono', peloColor: 0xb5651d, ropaTipo: 'delantal', ropaColor: 0x1f8f5a, acento: 0xf4f1e6, gestoDer: 'saludo' }),
+      P('Estilista', 'salón de belleza', { ...base, piel: 0xe0a97a, peloEstilo: 'largo', peloColor: 0xd4492b, ropaColor: 0x111827, acento: 0xf2c14e, acc: ['lentes'], gestoIzq: 'cadera' }),
+      P('Dueño con saco', 'oficina, despacho', { ...base, piel: 0xf0c4a0, peloColor: 0x9a9a9a, ropaTipo: 'saco', ropaColor: 0x1f2a44, acento: 0xff7a1a, acc: ['lentes', 'corbata'], gestoDer: 'pensar', emocion: 'tranquilo' }),
+      P('Cliente con celular', 'prospecto', { ...base, piel: 0x8d5524, peloColor: 0x1a1008, ropaColor: 0x7a3fd0, acento: 0xffffff, manoDer: 'telefono', gestoDer: 'telefono', emocion: 'sorpresa' }),
+      P('Mecánico', 'taller, oficios', { ...base, fisico: 'fuerte', piel: 0xc68642, peloColor: 0x1a1008, ropaColor: 0x2b5fb8, acento: 0xf2c14e, acc: ['gorra', 'guantes', 'bigote'], gestoDer: 'senalar' }),
+      P('Abuela', 'ejemplo de cliente mayor', { ...base, piel: 0xf6d5b8, peloEstilo: 'mono', peloColor: 0xb8b8b8, ropaColor: 0xb04a8f, acento: 0xffffff, acc: ['lentes'], emocion: 'tranquilo', gestoDer: 'saludo' }),
+    ];
+
+    // ---------- Escena de vista previa ----------
+    let E, vivo = null, config = structuredClone(base), giroManual = 0;
+    try { E = crearEscena($('vista'), 600, 800, { camara: [0, 2.6, 14.5], mira: [0, 1.7, 0], fov: 30 }); }
+    catch (e) { $('aviso').style.display = 'block'; throw e; }
+    E.renderer.setClearColor(0x13306b, 1);
+    E.scene.add(pared({ color: 0x13306b, z: -3 }), suelo({ color: 0x0c1730 }), sombra(1.8, 0.35));
+
+    const aOpts = (c) => ({ fisico: c.fisico, cuerpo: c.cuerpo, piel: c.piel, pelo: { estilo: c.peloEstilo, color: c.peloColor }, ropa: { tipo: c.ropaTipo, color: c.ropaColor, acento: c.acento }, acento: c.acento, accesorios: c.acc, cabeza: c.cabeza });
+    function construir(c) {
+      const p = crearPersonaje(aOpts(c));
+      p.grupo.position.y = c.cuerpo === 'completo' ? 1.7 : 0.9;
+      for (const [lado, k] of [['izq', 'manoIzq'], ['der', 'manoDer']]) {
+        if (c[k] === 'mancuerna') agarrar(p, lado, mancuerna());
+        if (c[k] === 'telefono') { const t = telefono(); t.scale.setScalar(0.38); agarrar(p, lado, t, { y: -0.2, rot: [0, 0, 0] }); }
+      }
+      return p;
+    }
+    const pose = (c, t, giro) => ({ emociones: [[0, c.emocion]], gestos: { izq: [[0, c.manoIzq === 'mancuerna' && c.gestoIzq === 'reposo' ? 'reposo' : c.gestoIzq]], der: [[0, c.gestoDer]] }, giro, habla: c.emocion === 'hablando' ? [[0, 999]] : [] });
+    function poner(c) {
+      if (vivo) E.scene.remove(vivo.grupo);
+      vivo = construir(c); E.scene.add(vivo.grupo);
+    }
+    function dibujar() { animarPersonaje(vivo, performance.now() / 1000, pose(config, 0, giroManual)); E.render(); requestAnimationFrame(dibujar); }
+
+    // ---------- Formulario <-> config ----------
+    function aForm() {
+      for (const k of ['fisico', 'cuerpo', 'emocion', 'gestoIzq', 'gestoDer', 'manoIzq', 'manoDer', 'peloEstilo', 'ropaTipo']) $(k).value = config[k];
+      for (const k of ['piel', 'peloColor', 'ropaColor', 'acento']) $(k).value = hex(config[k]);
+      $('cabeza').value = config.cabeza;
+      document.querySelectorAll('[data-acc]').forEach((i) => (i.checked = config.acc.includes(i.dataset.acc)));
+    }
+    function deForm() {
+      for (const k of ['fisico', 'cuerpo', 'emocion', 'gestoIzq', 'gestoDer', 'manoIzq', 'manoDer', 'peloEstilo', 'ropaTipo']) config[k] = $(k).value;
+      for (const k of ['piel', 'peloColor', 'ropaColor', 'acento']) config[k] = num($(k).value);
+      config.cabeza = +$('cabeza').value;
+      config.acc = [...document.querySelectorAll('[data-acc]')].filter((i) => i.checked).map((i) => i.dataset.acc);
+      poner(config);
+    }
+    $('ctl').addEventListener('input', deForm);
+    $('pieles').addEventListener('click', (e) => { const b = e.target.closest('[data-piel]'); if (!b) return; $('piel').value = b.dataset.piel; deForm(); });
+    function cargar(c) { config = { ...structuredClone(base), ...structuredClone(c) }; $('nombre').value = c.nombre || ''; $('rol').value = c.rol || ''; aForm(); poner(config); }
+
+    // arrastrar para girar
+    let arr = null;
+    $('vista').addEventListener('pointerdown', (e) => { arr = { x: e.clientX, g: giroManual }; $('vista').setPointerCapture(e.pointerId); });
+    $('vista').addEventListener('pointermove', (e) => { if (arr) giroManual = arr.g + (e.clientX - arr.x) * 0.012; });
+    $('vista').addEventListener('pointerup', () => { arr = null; });
+
+    // ---------- Miniaturas (un solo renderer aparte) ----------
+    const W = 300, H = 400;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const M = crearEscena(cv, W, H, { camara: [0, 2.4, 11.5], mira: [0, 1.75, 0], fov: 30 });
+    M.renderer.setClearColor(0x13306b, 1);
+    M.scene.add(pared({ color: 0x13306b, z: -3 }), suelo({ color: 0x0c1730 }), sombra(1.8, 0.35));
+    function foto(c) {
+      const p = construir(c); M.scene.add(p.grupo);
+      animarPersonaje(p, 2, pose(c, 2, 0.18)); M.render();
+      const url = cv.toDataURL('image/jpeg', 0.9); M.scene.remove(p.grupo); return url;
+    }
+    const tarjeta = (c, i, borrar) => `<div class="it" data-i="${i}"><img alt="${esc(c.nombre)}" src="${foto(c.form ? { ...base, ...c.form } : c)}"><b>${esc(c.nombre)}</b><small>${esc(c.rol || '')}</small>${borrar ? `<button class="x" data-del="${esc(c.id)}">✕</button>` : ''}</div>`;
+
+    let guardados = [];
+    // La biblioteca guarda la config del formulario completa en `form` (config = opciones de crearPersonaje, para Micho)
+    function pintar() {
+      $('sugeridos').innerHTML = SUGERIDOS.map((c, i) => tarjeta(c, i, false)).join('');
+      $('guardados').innerHTML = guardados.length ? guardados.map((c, i) => tarjeta(c, i, true)).join('') : '<p>Aún no hay personajes guardados.</p>';
+    }
+    $('sugeridos').addEventListener('click', (e) => { const it = e.target.closest('.it'); if (it) cargar(SUGERIDOS[+it.dataset.i]); scrollTo({ top: 0, behavior: 'smooth' }); });
+    $('guardados').addEventListener('click', async (e) => {
+      const d = e.target.closest('[data-del]');
+      if (d) { if (confirm('¿Quitar este personaje de tu biblioteca?')) { await fetch('/api/personajes/' + d.dataset.del, { method: 'DELETE' }); await recargar(); } return; }
+      const it = e.target.closest('.it'); if (!it) return;
+      const g = guardados[+it.dataset.i]; cargar({ ...g.form, nombre: g.nombre, rol: g.rol }); scrollTo({ top: 0, behavior: 'smooth' });
+    });
+    async function recargar() { guardados = await (await fetch('/api/personajes')).json(); pintar(); }
+
+    $('guardar').onclick = async () => {
+      const nombre = $('nombre').value.trim(); if (!nombre) { $('msg').textContent = 'Ponle un nombre al personaje.'; return; }
+      deForm();
+      try {
+        await api('/api/personajes', { nombre, rol: $('rol').value.trim(), config: { ...aOpts(config), id: nombre.toLowerCase().replace(/[^a-z0-9]+/g, '-') }, form: config, manos: { izq: config.manoIzq, der: config.manoDer }, emocion: config.emocion, gesto: config.gestoDer });
+        $('msg').textContent = `Guardado: ${nombre}. Micho lo usará en los próximos videos.`; await recargar();
+      } catch (e) { $('msg').textContent = e.message; }
+    };
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+    $('azar').onclick = () => {
+      const fuerte = Math.random() < 0.35;
+      const c = { ...structuredClone(base), fisico: fuerte ? 'fuerte' : 'normal', piel: pick(PIELES), peloEstilo: pick(['corto', 'mono', 'largo', 'calvo']), peloColor: pick([0x1a1008, 0x5a3318, 0xb5651d, 0xe8c066, 0x9a9a9a, 0xd4492b]),
+        ropaTipo: pick(['playera', 'bata', 'delantal', 'saco']), ropaColor: pick([0x1b4fd6, 0xff7a1a, 0x1fb5a8, 0x1f8f5a, 0xc0392b, 0x7a3fd0, 0x2b2f3a, 0xffffff]), acento: pick([0xff7a1a, 0xffffff, 0xf2c14e, 0x5ec8ea]),
+        acc: Object.keys(ACC).filter((k) => !['gorro-chef', 'cubrebocas'].includes(k) && Math.random() < 0.22), emocion: pick(['alegria', 'tranquilo', 'sorpresa', 'hablando']), gestoDer: pick(['reposo', 'saludo', 'senalar', 'cadera', 'celebrar']), cabeza: 1 };
+      cargar(c); $('nombre').value = ''; $('rol').value = '';
+    };
+    $('hoja').onclick = () => {
+      const todos = [...guardados.map((g) => ({ ...base, ...g.form, nombre: g.nombre, rol: g.rol })), ...SUGERIDOS];
+      const cols = 5, filas = Math.ceil(todos.length / cols), h = H + 56;
+      const hoja = document.createElement('canvas'); hoja.width = cols * W; hoja.height = filas * h; const x = hoja.getContext('2d');
+      x.fillStyle = '#0b1220'; x.fillRect(0, 0, hoja.width, hoja.height);
+      let pend = todos.length;
+      todos.forEach((c, i) => {
+        const im = new Image(); im.onload = () => {
+          const cx = (i % cols) * W, cy = Math.floor(i / cols) * h; x.drawImage(im, cx, cy);
+          x.fillStyle = '#fff'; x.font = 'bold 20px sans-serif'; x.fillText(c.nombre, cx + 12, cy + H + 26);
+          x.fillStyle = '#9fb0d0'; x.font = '14px sans-serif'; x.fillText(c.rol || '', cx + 12, cy + H + 46);
+          if (!--pend) hoja.toBlob((b) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'personajes-pixel.png'; a.click(); });
+        }; im.src = foto(c);
+      });
+    };
+
+    await recargar(); cargar(SUGERIDOS[0]); dibujar();
+    window.__listo = true;
+  </script>
+</body>
+</html>
