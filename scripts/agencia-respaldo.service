@@ -1,0 +1,6 @@
+[Unit]
+Description=Respaldo de la agencia (Railway -> Google Drive)
+
+[Service]
+Type=oneshot
+ExecStart=%h/Work/agencia_creativa/scripts/respaldo.sh

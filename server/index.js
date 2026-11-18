@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { WebSocketServer } from 'ws';
-import { db, save, newId } from './store.js';
+import { db, save, newId, DATA_DIR } from './store.js';
 import { publicRoster, byId } from './roster.js';
 import { bus, agentState, answerRequest, judgePiece, log, pieceSummary, tokenPieza, usageSummary, usageReport, addMemory } from './hub.js';
 import { startTelegram } from './telegram.js';
@@ -491,6 +491,28 @@ app.get('/api/campaigns/:id/zip', async (req, res) => {
   } catch (e) { console.warn('[zip campaña]', e.message); try { res.destroy(); } catch {} }
 });
 
+// Respaldo completo de los datos que NO están en git (base + archivos de clientes), en flujo y sin gastar IA.
+// Lo descarga scripts/respaldo.sh desde una compu y lo sube a Drive. Excluye lo que se regenera (hf, música, sfx, voz).
+app.get('/api/respaldo/zip', async (req, res) => {
+  const raiz = path.join(DATA_DIR, 'clientes');
+  const lista = [];
+  const recorre = (dir, rel) => {
+    let ents = []; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      if (e.isDirectory()) recorre(path.join(dir, e.name), `${rel}/${e.name}`);
+      else if (e.isFile()) lista.push({ ruta: path.join(dir, e.name), rel: `${rel}/${e.name}` });
+    }
+  };
+  recorre(raiz, 'clientes'); recorre(path.join(DATA_DIR, 'espacios'), 'espacios');
+  res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="respaldo-agencia-${fechaLocal()}.zip"`, 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' });
+  const zip = new ZipEscritor(res);
+  try {
+    await zip.agregarBuffer('db.json', JSON.stringify(db));
+    for (const f of lista) { try { await zip.agregarArchivo(f.rel, f.ruta); } catch (e) { if (e.message.includes('cerró')) throw e; console.warn('[respaldo]', f.rel, e.message); } }
+    await zip.agregarBuffer('LEEME.txt', `Respaldo ${new Date().toISOString()}\n${lista.length} archivos de clientes + db.json.\nPara restaurar: copiar db.json a DATA_FILE y las carpetas clientes/ y espacios/ al volumen /data.`);
+    await zip.cerrar();
+  } catch (e) { console.warn('[respaldo]', e.message); try { res.destroy(); } catch {} }
+});
 
 // ---- Memoria ----
 app.get('/api/memories', (req, res) => {

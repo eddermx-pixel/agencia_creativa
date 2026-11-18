@@ -1,0 +1,9 @@
+[Unit]
+Description=Respaldo semanal de la agencia
+
+[Timer]
+OnCalendar=Sun 03:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
