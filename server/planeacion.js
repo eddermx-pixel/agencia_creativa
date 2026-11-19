@@ -130,7 +130,7 @@ export const setUrlPublica = (f) => { urlPublica = f; };
 let BASE = '';
 const ghlCfg = (cl) => ({ conectado: !!ghlToken(), locationId: locDe(cl) || null });
 
-export async function publicar(p, { fecha, hora, cuentas }) {
+export async function publicar(p, { fecha, hora, cuentas, caption }) {
   const camp = db.campaigns.find((c) => c.id === p.campaignId);
   const cl = db.clients.find((c) => c.id === camp?.clientId);
   if (!ghlToken()) throw new Error('Falta GHL_TOKEN en las variables de Railway.');
@@ -148,10 +148,16 @@ export async function publicar(p, { fecha, hora, cuentas }) {
   else throw new Error('Esta pieza no tiene imagen/video descargable. Abre la pieza y usa "Guardar en archivo del cliente" (video MP4) o sube el PNG, y vuelve a programar.');
   const userId = cl?.ghlUserId || process.env.GHL_USER_ID;
   if (!userId) throw new Error('Falta GHL_USER_ID (usuario de GoHighLevel que publica).');
-  const when = new Date(`${fecha}T${hora || '10:00'}:00`);
+  // La hora es de México (sin horario de verano desde 2022); Railway corre en UTC, así que se fija el desfase.
+  const when = new Date(`${fecha}T${hora || '10:00'}:00${process.env.GHL_UTC_OFFSET || '-06:00'}`);
   if (!(when > new Date())) throw new Error('La fecha y hora debe estar en el futuro.');
-  const summary = p.tipo === 'texto' ? p.contenido : `${p.titulo}\n\n${p.descripcion || ''}`.trim();
-  const j = await ghl('POST', `/social-media-posting/${loc}/posts`, { accountIds: ids, summary, media, type: 'post', status: 'scheduled', scheduleDate: when.toISOString(), userId });
+  // El título y la descripción de una pieza son notas internas: para publicar se pasa el caption real.
+  const summary = String(caption || '').trim() || (p.tipo === 'texto' ? p.contenido : `${p.titulo}\n\n${p.descripcion || ''}`.trim());
+  const formato = media[0]?.type.startsWith('video/') ? 'reel' : 'post';
+  const j = await ghl('POST', `/social-media-posting/${loc}/posts`, {
+    accountIds: ids, summary, media, type: p.tipo === 'texto' ? 'post' : formato, status: 'scheduled', scheduleDate: when.toISOString(), userId,
+    ...(p.tipo === 'texto' ? {} : { instagramPostDetails: { type: formato }, facebookPostDetails: { type: formato }, tiktokPostDetails: { privacyLevel: 'PUBLIC_TO_EVERYONE', enableComment: true, enableDuet: false, enableStitch: false } }),
+  });
   p.ghl = { postId: j.results?.post?._id || j.post?._id || j._id || null, fecha: when.toISOString(), cuentas: ids };
   const plan = db.plan.find((x) => x.pieceId === p.id);
   if (plan) plan.estado = 'programada';
@@ -258,7 +264,7 @@ export function registrar(app, { baseUrl, runCampaign, track, clientSummary, ws 
     const p = db.pieces.find((x) => x.id === req.params.id);
     if (!p) return res.status(404).json({ error: 'No existe' });
     if (p.estado !== 'aprobada') return res.status(409).json({ error: 'Primero aprueba la pieza.' });
-    try { res.json(await publicar(p, { fecha: String(req.body?.fecha || ''), hora: req.body?.hora, cuentas: req.body?.cuentas })); } catch (e) { res.status(400).json({ error: e.message }); }
+    try { res.json(await publicar(p, { fecha: String(req.body?.fecha || ''), hora: req.body?.hora, cuentas: req.body?.cuentas, caption: req.body?.caption })); } catch (e) { res.status(400).json({ error: e.message }); }
   });
   // Al aprobar una pieza ligada a un plan con fecha: se programa sola si el cliente lo activó
   bus.on('piece', (p) => {
