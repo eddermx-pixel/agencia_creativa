@@ -160,3 +160,6 @@ $('ghlLoad').onclick = async () => {
     box.querySelectorAll('input').forEach((i) => (i.onchange = () => { ghlSel = [...box.querySelectorAll('input:checked')].map((x) => x.value); }));
   } catch (e) { box.textContent = e.message; }
 };
+
+// Subcuentas de GoHighLevel (si la agencia ya está autorizada) para elegir por nombre.
+api('/api/ghl/subcuentas').then((d) => { $('subcuentas').innerHTML = (d.subcuentas || []).map((x) => `<option value="${esc(x.id)}" label="${esc(x.nombre)}"></option>`).join(''); }).catch(() => {});

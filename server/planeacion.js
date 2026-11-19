@@ -6,6 +6,7 @@ import { bus, log, addUsage } from './hub.js';
 import * as files from './files.js';
 import fs from 'node:fs';
 import * as pipeline from './pipeline.js';
+import * as oauth from './ghl-oauth.js';
 
 export const OBJETIVOS = {
   reconocimiento: '👀 Reconocimiento (que más gente nos conozca)',
@@ -116,10 +117,17 @@ export function resumen({ clientId = '', mes = '' } = {}) {
 const GHL = process.env.GHL_API_URL || 'https://services.leadconnectorhq.com';
 const ghlToken = () => process.env.GHL_TOKEN || '';
 const locDe = (cl) => cl?.ghlLocationId || process.env.GHL_LOCATION_ID || '';
-async function ghl(method, p, body) {
+// Token para una subcuenta: el de Pixel (GHL_TOKEN) si es la de Pixel; para cualquier otra, el que da la app de agencia (OAuth).
+async function tokenDe(loc) {
+  if (loc && loc === process.env.GHL_LOCATION_ID && ghlToken()) return ghlToken();
+  if (oauth.conectada()) return oauth.tokenSubcuenta(loc);
+  return ghlToken();
+}
+const ghlConectado = () => !!ghlToken() || oauth.conectada();
+async function ghl(method, p, body, token) {
   // Cloudflare de GHL bloquea clientes sin User-Agent propio (error 1010); se reintenta una vez ante 429/5xx.
   for (let intento = 0; ; intento++) {
-    const r = await fetch(`${GHL}${p}`, { method, headers: { Authorization: `Bearer ${ghlToken()}`, Version: '2021-07-28', 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'AgenciaIA/1.0' }, body: body ? JSON.stringify(body) : undefined });
+    const r = await fetch(`${GHL}${p}`, { method, headers: { Authorization: `Bearer ${token || ghlToken()}`, Version: '2021-07-28', 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'AgenciaIA/1.0' }, body: body ? JSON.stringify(body) : undefined });
     const j = await r.json().catch(() => ({}));
     if (r.ok) return j;
     if (intento === 0 && (r.status === 429 || r.status >= 500)) { await new Promise((ok) => setTimeout(ok, 1500)); continue; }
@@ -129,12 +137,12 @@ async function ghl(method, p, body) {
 let urlPublica = null;
 export const setUrlPublica = (f) => { urlPublica = f; };
 let BASE = '';
-const ghlCfg = (cl) => ({ conectado: !!ghlToken(), locationId: locDe(cl) || null });
+const ghlCfg = (cl) => ({ conectado: ghlConectado(), agencia: oauth.conectada(), locationId: locDe(cl) || null });
 
 export async function publicar(p, { fecha, hora, cuentas, caption }) {
   const camp = db.campaigns.find((c) => c.id === p.campaignId);
   const cl = db.clients.find((c) => c.id === camp?.clientId);
-  if (!ghlToken()) throw new Error('Falta GHL_TOKEN en las variables de Railway.');
+  if (!ghlConectado()) throw new Error('GoHighLevel no está conectado (falta GHL_TOKEN o autorizar la agencia).');
   const loc = locDe(cl);
   if (!loc) throw new Error('Falta el Location ID de GoHighLevel (en el kit del cliente o GHL_LOCATION_ID).');
   const ids = (cuentas?.length ? cuentas : cl?.ghlCuentas) || [];
@@ -158,7 +166,7 @@ export async function publicar(p, { fecha, hora, cuentas, caption }) {
   const j = await ghl('POST', `/social-media-posting/${loc}/posts`, {
     accountIds: ids, summary, media, type: p.tipo === 'texto' ? 'post' : formato, status: 'scheduled', scheduleDate: when.toISOString(), userId,
     ...(p.tipo === 'texto' ? {} : { instagramPostDetails: { type: formato }, facebookPostDetails: { type: formato }, tiktokPostDetails: { privacyLevel: 'PUBLIC_TO_EVERYONE', enableComment: true, enableDuet: false, enableStitch: false } }),
-  });
+  }, await tokenDe(loc));
   p.ghl = { postId: j.results?.post?._id || j.post?._id || j._id || null, fecha: when.toISOString(), cuentas: ids };
   const plan = db.plan.find((x) => x.pieceId === p.id);
   if (plan) plan.estado = 'programada';
@@ -171,7 +179,8 @@ export async function publicar(p, { fecha, hora, cuentas, caption }) {
 // ---------- Rutas ----------
 export function registrar(app, { baseUrl, runCampaign, track, clientSummary, ws }) {
   app.use((req, res, next) => { if (!process.env.PUBLIC_URL) BASE = baseUrl(req); next(); });
-  pipeline.init({ ghl, ghlToken, locDe }, app);
+  oauth.registrar(app, baseUrl);
+  pipeline.init({ ghl: async (m, p, b) => ghl(m, p, b, await tokenDe(locDe(null))), ghlToken: ghlConectado, locDe }, app);
   app.get('/api/objetivos', (req, res) => res.json({ objetivos: OBJETIVOS, plataformas: PLATAFORMAS, formatos: FORMATOS, estados: ESTADOS_PLAN, ghl: ghlCfg() }));
 
   // Buscar campañas por texto, objetivo, mes, cliente, estado
@@ -256,9 +265,9 @@ export function registrar(app, { baseUrl, runCampaign, track, clientSummary, ws 
   app.get('/api/ghl/cuentas', async (req, res) => {
     try {
       const cl = db.clients.find((c) => c.id === req.query.clientId);
-      if (!ghlToken()) throw new Error('Falta GHL_TOKEN en las variables de Railway.');
+      if (!ghlConectado()) throw new Error('GoHighLevel no está conectado (falta GHL_TOKEN o autorizar la agencia).');
       const loc = locDe(cl); if (!loc) throw new Error('Falta el Location ID de GoHighLevel.');
-      const j = await ghl('GET', `/social-media-posting/${loc}/accounts`);
+      const j = await ghl('GET', `/social-media-posting/${loc}/accounts`, undefined, await tokenDe(loc));
       const lista = j.results?.accounts || j.accounts || [];
       res.json(lista.map((a) => ({ id: a.id || a._id, nombre: a.name || a.profileName || a.platform, plataforma: a.platform || a.type })));
     } catch (e) { res.status(502).json({ error: e.message }); }
@@ -277,6 +286,6 @@ export function registrar(app, { baseUrl, runCampaign, track, clientSummary, ws 
     const cl = db.clients.find((c) => c.id === camp?.clientId);
     if (!plan || !plan.fecha) return;
     if (!plan.pieceId) { plan.pieceId = p.id; plan.estado = 'aprobada'; save(); }
-    if (cl?.ghlAuto && ghlToken()) publicar(p, { fecha: plan.fecha, hora: plan.hora }).catch((e) => log('director', `⚠️ No se pudo programar en GoHighLevel: ${e.message}`, p.campaignId));
+    if (cl?.ghlAuto && ghlConectado()) publicar(p, { fecha: plan.fecha, hora: plan.hora }).catch((e) => log('director', `⚠️ No se pudo programar en GoHighLevel: ${e.message}`, p.campaignId));
   });
 }

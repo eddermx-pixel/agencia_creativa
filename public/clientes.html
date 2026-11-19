@@ -98,7 +98,7 @@
         <textarea name="ads" rows="2" placeholder="Ej. Meta Ads $5,000/mes a mujeres 25-40 en CDMX, oferta 2x1 de temporada, mensaje: 'pan artesanal hecho hoy'. Google Ads por 'panadería cerca'."></textarea>
       </label>
       <details><summary><b>🔌 GoHighLevel</b> (publicar redes ya autorizadas)</summary>
-        <label>Location ID (subcuenta)<input name="ghlLocationId" placeholder="Si lo dejas vacío usa GHL_LOCATION_ID"></label>
+        <label>Location ID (subcuenta)<input name="ghlLocationId" list="subcuentas" placeholder="Elige la subcuenta o pega su ID (vacío = la de Pixel)"><datalist id="subcuentas"></datalist></label>
         <div id="ghlCuentas" class="empty" style="font-size:13px"></div>
         <button type="button" id="ghlLoad">Cargar redes conectadas</button>
         <label style="flex-direction:row;gap:8px;align-items:center"><input type="checkbox" name="ghlAuto"> Programar automáticamente al aprobar (usa la fecha del plan del mes)</label>
