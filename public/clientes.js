@@ -60,7 +60,8 @@ function open(c) {
   const f = $('form');
   f.reset();
   for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas', 'metas', 'ads', 'ghlLocationId', 'cobroMensual']) f.elements[k].value = c?.[k] || '';
-  f.elements.ghlAuto.checked = !!c?.ghlAuto; ghlSel = [...(c?.ghlCuentas || [])];
+  f.elements.ghlAuto.checked = !!c?.ghlAuto; f.elements.ghlMover.checked = !!c?.ghlMover;
+  f.elements.ghlOportunidadId.innerHTML = `<option value="">(sin elegir: busca por nombre)</option>${c?.ghlOportunidadId ? `<option value="${esc(c.ghlOportunidadId)}" selected>${esc(c.ghlOportunidadId)}</option>` : ''}`; ghlSel = [...(c?.ghlCuentas || [])];
   $('ghlCuentas').textContent = ghlSel.length ? `${ghlSel.length} red(es) elegidas` : 'Aún no eliges redes.';
   const vp = c?.videoPrefs || {};
   for (const k of ['nivel', 'look', 'musica', 'subtitulos', 'estiloTexto', 'sensacion']) f.elements[`vp_${k}`].value = vp[k] ?? '';
@@ -86,7 +87,7 @@ $('form').onsubmit = async (e) => {
   const f = e.target.elements;
   const body = { colores };
   for (const k of ['nombre', 'rubro', 'tono', 'publico', 'tipografia', 'notas', 'metas', 'ads', 'ghlLocationId', 'cobroMensual']) body[k] = f[k].value;
-  body.ghlCuentas = ghlSel; body.ghlAuto = f.ghlAuto.checked;
+  body.ghlCuentas = ghlSel; body.ghlAuto = f.ghlAuto.checked; body.ghlMover = f.ghlMover.checked; body.ghlOportunidadId = f.ghlOportunidadId.value;
   const vp = {};
   for (const k of ['nivel', 'look', 'musica', 'subtitulos', 'estiloTexto', 'sensacion']) if (f[`vp_${k}`].value) vp[k] = f[`vp_${k}`].value;
   vp.emojis = f.vp_emojis.checked; vp.sfx = f.vp_sfx.checked; body.videoPrefs = vp;
@@ -142,6 +143,15 @@ $('qrPrint').onclick = () => {
   w.document.close();
 };
 
+$('ghlPipe').onclick = async () => {
+  const sel = $('form').elements.ghlOportunidadId; const actual = sel.value; $('ghlPipe').textContent = 'Consultando…';
+  try {
+    const d = await api(`/api/ghl/pipeline${editing ? `?clientId=${editing}` : ''}`);
+    const elegida = actual || d.coincide || '';
+    sel.innerHTML = `<option value="">(sin elegir: busca por nombre)</option>${d.tarjetas.map((t) => `<option value="${esc(t.id)}" ${t.id === elegida ? 'selected' : ''}>${esc(t.nombre)} · ${esc(t.etapa)}</option>`).join('')}`;
+    $('ghlPipe').textContent = d.coincide && !actual ? 'Tarjetas cargadas (ya marqué la que coincide)' : 'Cargar tarjetas';
+  } catch (e) { $('ghlPipe').textContent = e.message; }
+};
 $('ghlLoad').onclick = async () => {
   const box = $('ghlCuentas'); box.textContent = 'Consultando…';
   try {

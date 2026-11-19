@@ -137,7 +137,7 @@ app.get('/api/team', (req, res) => {
 
 // ---- Clientes (kit de marca) ----
 const clientSummary = ({ logo, ...c }) => ({ ...c, tieneLogo: !!logo });
-const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas', 'objetivo', 'competencia', 'metas', 'ads', 'ghlLocationId', 'ghlUserId', 'cobroMensual'];
+const CLIENT_FIELDS = ['nombre', 'rubro', 'publico', 'tono', 'tipografia', 'notas', 'objetivo', 'competencia', 'metas', 'ads', 'ghlLocationId', 'ghlUserId', 'ghlOportunidadId', 'cobroMensual'];
 
 function cleanClient(body, prev = {}) {
   const c = { ...prev };
@@ -145,6 +145,7 @@ function cleanClient(body, prev = {}) {
   if (Array.isArray(body.colores)) c.colores = body.colores.filter((x) => /^#[0-9a-f]{6}$/i.test(x)).slice(0, 5);
   if (Array.isArray(body.ghlCuentas)) c.ghlCuentas = body.ghlCuentas.map((x) => String(x).slice(0, 80)).slice(0, 20);
   if (typeof body.ghlAuto === 'boolean') c.ghlAuto = body.ghlAuto;
+  if (typeof body.ghlMover === 'boolean') c.ghlMover = body.ghlMover;
   if (body.videoPrefs && typeof body.videoPrefs === 'object') {
     const v = body.videoPrefs; const o = {};
     if ([1, 2, 3].includes(+v.nivel)) o.nivel = +v.nivel;

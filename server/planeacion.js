@@ -5,6 +5,7 @@ import { db, save, newId } from './store.js';
 import { bus, log, addUsage } from './hub.js';
 import * as files from './files.js';
 import fs from 'node:fs';
+import * as pipeline from './pipeline.js';
 
 export const OBJETIVOS = {
   reconocimiento: '👀 Reconocimiento (que más gente nos conozca)',
@@ -162,6 +163,7 @@ export async function publicar(p, { fecha, hora, cuentas, caption }) {
   const plan = db.plan.find((x) => x.pieceId === p.id);
   if (plan) plan.estado = 'programada';
   save(); bus.emit('piece', p);
+  pipeline.evento(camp, 'programada');
   log('director', `📅 Programada en GoHighLevel: "${p.titulo}" (${fecha} ${hora || '10:00'})`, p.campaignId);
   return p.ghl;
 }
@@ -169,6 +171,7 @@ export async function publicar(p, { fecha, hora, cuentas, caption }) {
 // ---------- Rutas ----------
 export function registrar(app, { baseUrl, runCampaign, track, clientSummary, ws }) {
   app.use((req, res, next) => { if (!process.env.PUBLIC_URL) BASE = baseUrl(req); next(); });
+  pipeline.init({ ghl, ghlToken, locDe }, app);
   app.get('/api/objetivos', (req, res) => res.json({ objetivos: OBJETIVOS, plataformas: PLATAFORMAS, formatos: FORMATOS, estados: ESTADOS_PLAN, ghl: ghlCfg() }));
 
   // Buscar campañas por texto, objetivo, mes, cliente, estado

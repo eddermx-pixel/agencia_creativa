@@ -148,6 +148,12 @@ function recordatorios() {
   }, 60000).unref?.();
 }
 
+// Mensaje suelto al chat del dueño (sin botones). Devuelve false si Telegram no está configurado.
+export async function avisar(text) {
+  if (!TOKEN || !CHAT) return false;
+  try { return !!(await api('sendMessage', { chat_id: CHAT, text, disable_web_page_preview: true })).ok; } catch { return false; }
+}
+
 export function startTelegram() {
   if (!TOKEN) {
     console.log('[telegram] Sin TELEGRAM_BOT_TOKEN: notificaciones desactivadas.');
