@@ -116,10 +116,14 @@ const GHL = process.env.GHL_API_URL || 'https://services.leadconnectorhq.com';
 const ghlToken = () => process.env.GHL_TOKEN || '';
 const locDe = (cl) => cl?.ghlLocationId || process.env.GHL_LOCATION_ID || '';
 async function ghl(method, p, body) {
-  const r = await fetch(`${GHL}${p}`, { method, headers: { Authorization: `Bearer ${ghlToken()}`, Version: '2021-07-28', 'Content-Type': 'application/json', Accept: 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`GoHighLevel ${r.status}: ${j.message || j.error || JSON.stringify(j).slice(0, 200)}`);
-  return j;
+  // Cloudflare de GHL bloquea clientes sin User-Agent propio (error 1010); se reintenta una vez ante 429/5xx.
+  for (let intento = 0; ; intento++) {
+    const r = await fetch(`${GHL}${p}`, { method, headers: { Authorization: `Bearer ${ghlToken()}`, Version: '2021-07-28', 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'AgenciaIA/1.0' }, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) return j;
+    if (intento === 0 && (r.status === 429 || r.status >= 500)) { await new Promise((ok) => setTimeout(ok, 1500)); continue; }
+    throw new Error(`GoHighLevel ${r.status}: ${j.message || j.error || j.detail || JSON.stringify(j).slice(0, 200)}`);
+  }
 }
 let urlPublica = null;
 export const setUrlPublica = (f) => { urlPublica = f; };
@@ -136,12 +140,18 @@ export async function publicar(p, { fecha, hora, cuentas }) {
   if (!ids.length) throw new Error('Elige a qué redes publicar (cuentas conectadas en GoHighLevel).');
   const media = [];
   if (p.tipo === 'texto') { /* solo texto */ }
-  else if (p.mediaRuta && camp?.clientId && urlPublica) media.push({ url: urlPublica(camp.clientId, p.mediaRuta, BASE || process.env.PUBLIC_URL || ''), type: /\.(mp4|mov)$/i.test(p.mediaRuta) ? 'video/mp4' : 'image/png' });
+  else if (camp?.clientId && urlPublica && (p.tipo === 'arte' ? p.jpgRuta || p.pngRuta : p.mediaRuta)) {
+    // Arte → su JPG/PNG final (el SVG no sirve en redes); video → el MP4 guardado en "Resultado final".
+    const ruta = p.tipo === 'arte' ? p.jpgRuta || p.pngRuta : p.mediaRuta;
+    media.push({ url: urlPublica(camp.clientId, ruta, BASE || process.env.PUBLIC_URL || ''), type: /\.(mp4|mov)$/i.test(ruta) ? 'video/mp4' : /\.png$/i.test(ruta) ? 'image/png' : 'image/jpeg' });
+  }
   else throw new Error('Esta pieza no tiene imagen/video descargable. Abre la pieza y usa "Guardar en archivo del cliente" (video MP4) o sube el PNG, y vuelve a programar.');
+  const userId = cl?.ghlUserId || process.env.GHL_USER_ID;
+  if (!userId) throw new Error('Falta GHL_USER_ID (usuario de GoHighLevel que publica).');
   const when = new Date(`${fecha}T${hora || '10:00'}:00`);
   if (!(when > new Date())) throw new Error('La fecha y hora debe estar en el futuro.');
   const summary = p.tipo === 'texto' ? p.contenido : `${p.titulo}\n\n${p.descripcion || ''}`.trim();
-  const j = await ghl('POST', `/social-media-posting/${loc}/posts`, { accountIds: ids, summary, media, type: 'post', status: 'scheduled', scheduleDate: when.toISOString(), userId: cl?.ghlUserId || process.env.GHL_USER_ID || undefined });
+  const j = await ghl('POST', `/social-media-posting/${loc}/posts`, { accountIds: ids, summary, media, type: 'post', status: 'scheduled', scheduleDate: when.toISOString(), userId });
   p.ghl = { postId: j.results?.post?._id || j.post?._id || j._id || null, fecha: when.toISOString(), cuentas: ids };
   const plan = db.plan.find((x) => x.pieceId === p.id);
   if (plan) plan.estado = 'programada';
