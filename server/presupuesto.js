@@ -26,10 +26,10 @@ export function modeloPara(agentId) {
   return general;
 }
 
-// ¿Los videos de Micho con HyperFrames DEBEN usar la librería de personajes 3D? (por defecto sí; EXIGIR_3D=0 o el ajuste lo apagan)
+// ¿Los videos de Micho con HyperFrames DEBEN usar la librería de personajes 3D? (por defecto NO: Micho usa 3D cuando el brief lo pide; EXIGIR_3D=1 o el ajuste lo fuerzan)
 export function exigir3d() {
   const c = cfg();
-  return c.exigir3d !== undefined ? !!c.exigir3d : process.env.EXIGIR_3D !== '0';
+  return c.exigir3d !== undefined ? !!c.exigir3d : process.env.EXIGIR_3D === '1';
 }
 
 export function limites() {
