@@ -1,5 +1,5 @@
 // GoHighLevel a nivel AGENCIA (app privada del Marketplace): un solo permiso da acceso a TODAS las subcuentas.
-//   1. El dueño abre /api/ghl/conectar → GHL le pide autorizar la app → vuelve a /oauth/ghl/callback con un código.
+//   1. El dueño abre /api/ghl/conectar → GHL le pide autorizar la app → vuelve a /oauth/pixel/callback con un código.
 //   2. El código se cambia por un token de agencia (y un refresh token que GHL rota en cada uso: se guarda en la base).
 //   3. Con el token de agencia se pide un token por subcuenta (POST /oauth/locationToken, dura ~24 h) y se lista cada subcuenta.
 // Variables: GHL_CLIENT_ID, GHL_CLIENT_SECRET (de la app en marketplace.gohighlevel.com). Sin ellas todo sigue como antes (GHL_TOKEN de Pixel).
@@ -76,14 +76,14 @@ export async function subcuentas(forzar = false) {
 }
 
 export function registrar(app, baseUrl) {
-  const redirect = (req) => `${baseUrl(req)}/oauth/ghl/callback`;
+  const redirect = (req) => `${baseUrl(req)}/oauth/pixel/callback`;
   app.get('/api/ghl/conectar', (req, res) => {
     if (!configurado()) return res.status(400).send('Faltan GHL_CLIENT_ID y GHL_CLIENT_SECRET en las variables de Railway.');
     const e = est(); e.state = crypto.randomBytes(16).toString('hex'); save();
     const q = new URLSearchParams({ response_type: 'code', redirect_uri: redirect(req), client_id: id(), scope: SCOPES.join(' '), state: e.state });
     res.redirect(`${AUTH}?${q}`);
   });
-  app.get('/oauth/ghl/callback', async (req, res) => {
+  app.get('/oauth/pixel/callback', async (req, res) => {
     try {
       const e = est();
       if (!req.query.code) throw new Error(req.query.error_description || req.query.error || 'GoHighLevel no devolvió el código.');
