@@ -18,7 +18,10 @@ const id = () => process.env.GHL_CLIENT_ID || '';
 const secreto = () => process.env.GHL_CLIENT_SECRET || '';
 export const configurado = () => !!(id() && secreto());
 const est = () => (db.agency.ghlOauth ||= {});
-export const conectada = () => !!est().refresh;
+// Vía simple: un Private Integration de AGENCIA (GHL_AGENCY_TOKEN + GHL_COMPANY_ID). Vía app del Marketplace: OAuth (refresh rotativo).
+const fijo = () => process.env.GHL_AGENCY_TOKEN || '';
+const companyId = () => process.env.GHL_COMPANY_ID || est().companyId || '';
+export const conectada = () => !!(fijo() && companyId()) || !!est().refresh;
 
 async function pedir(ruta, cuerpo, cabeceras = {}) {
   const r = await fetch(`${API}${ruta}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json', 'User-Agent': 'AgenciaIA/1.0', Version: '2021-07-28', ...cabeceras }, body: new URLSearchParams(cuerpo) });
@@ -36,6 +39,7 @@ function guardar(j) {
 
 let renovando = null; // el refresh token es de un solo uso: nunca dos renovaciones a la vez
 async function tokenAgencia() {
+  if (fijo()) return fijo();
   const e = est();
   if (!e.refresh) throw new Error('La agencia aún no está autorizada en GoHighLevel (abre /api/ghl/conectar).');
   if (e.access && e.expira - Date.now() > 300000) return e.access;
@@ -50,7 +54,7 @@ export async function tokenSubcuenta(locationId) {
   const c = porSub.get(locationId);
   if (c && c.exp - Date.now() > 300000) return c.token;
   const t = await tokenAgencia();
-  const j = await pedir('/oauth/locationToken', { companyId: est().companyId, locationId }, { Authorization: `Bearer ${t}` });
+  const j = await pedir('/oauth/locationToken', { companyId: companyId(), locationId }, { Authorization: `Bearer ${t}` });
   porSub.set(locationId, { token: j.access_token, exp: Date.now() + (j.expires_in || 86399) * 1000 });
   return j.access_token;
 }
@@ -61,7 +65,7 @@ export async function subcuentas(forzar = false) {
   const t = await tokenAgencia();
   const out = [];
   for (let skip = 0; skip < 1000; skip += 100) {
-    const r = await fetch(`${API}/locations/search?companyId=${est().companyId}&limit=100&skip=${skip}`, { headers: { Authorization: `Bearer ${t}`, Version: '2021-07-28', Accept: 'application/json', 'User-Agent': 'AgenciaIA/1.0' } });
+    const r = await fetch(`${API}/locations/search?companyId=${companyId()}&limit=100&skip=${skip}`, { headers: { Authorization: `Bearer ${t}`, Version: '2021-07-28', Accept: 'application/json', 'User-Agent': 'AgenciaIA/1.0' } });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(`GoHighLevel ${r.status}: ${j.message || JSON.stringify(j).slice(0, 160)}`);
     out.push(...(j.locations || []).map((l) => ({ id: l.id, nombre: l.name, empresa: l.business?.name || '', ciudad: l.city || '' })));
@@ -92,7 +96,7 @@ export function registrar(app, baseUrl) {
   });
   app.get('/api/ghl/subcuentas', async (req, res) => {
     try {
-      res.json({ configurado: configurado(), conectada: conectada(), companyId: est().companyId || null, subcuentas: conectada() ? await subcuentas(req.query.forzar === '1') : [] });
+      res.json({ configurado: configurado(), conectada: conectada(), companyId: companyId() || null, vias: { token: !!fijo(), app: !!est().refresh }, subcuentas: conectada() ? await subcuentas(req.query.forzar === '1') : [] });
     } catch (err) { res.status(502).json({ error: err.message, configurado: configurado(), conectada: conectada() }); }
   });
 }
