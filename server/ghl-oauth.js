@@ -80,7 +80,7 @@ export function registrar(app, baseUrl) {
   app.get('/api/ghl/conectar', (req, res) => {
     if (!configurado()) return res.status(400).send('Faltan GHL_CLIENT_ID y GHL_CLIENT_SECRET en las variables de Railway.');
     const e = est(); e.state = crypto.randomBytes(16).toString('hex'); save();
-    const q = new URLSearchParams({ response_type: 'code', redirect_uri: redirect(req), client_id: id(), scope: SCOPES.join(' '), state: e.state });
+    const q = new URLSearchParams({ response_type: 'code', redirect_uri: redirect(req), client_id: id(), scope: SCOPES.join(' '), state: e.state, version_id: id().split('-')[0] }); // version_id: GHL lo exige mientras la app está en borrador
     res.redirect(`${AUTH}?${q}`);
   });
   app.get('/oauth/pixel/callback', async (req, res) => {
