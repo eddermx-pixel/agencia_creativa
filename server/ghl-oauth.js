@@ -37,6 +37,11 @@ function guardar(j) {
   save();
 }
 
+// El `state` va firmado (hora + HMAC con el secreto de la agencia): no depende de nada guardado, así sobrevive a reinicios y a abrir el enlace dos veces.
+const firmar = (ts) => crypto.createHmac('sha256', db.agency.pubSecret || 'x').update(`ghl-oauth|${ts}`).digest('hex').slice(0, 32);
+const nuevoState = () => { const ts = Date.now(); return `${ts}.${firmar(ts)}`; };
+const stateValido = (st) => { const [ts, f] = String(st || '').split('.'); return !!ts && f === firmar(ts) && Date.now() - +ts < 30 * 60000; };
+
 let renovando = null; // el refresh token es de un solo uso: nunca dos renovaciones a la vez
 async function tokenAgencia() {
   const e = est();
@@ -79,16 +84,13 @@ export function registrar(app, baseUrl) {
   const redirect = (req) => `${baseUrl(req)}/oauth/pixel/callback`;
   app.get('/api/ghl/conectar', (req, res) => {
     if (!configurado()) return res.status(400).send('Faltan GHL_CLIENT_ID y GHL_CLIENT_SECRET en las variables de Railway.');
-    const e = est(); e.state = crypto.randomBytes(16).toString('hex'); save();
-    const q = new URLSearchParams({ response_type: 'code', redirect_uri: redirect(req), client_id: id(), scope: SCOPES.join(' '), state: e.state, version_id: id().split('-')[0] }); // version_id: GHL lo exige mientras la app está en borrador
+    const q = new URLSearchParams({ response_type: 'code', redirect_uri: redirect(req), client_id: id(), scope: SCOPES.join(' '), state: nuevoState(), version_id: id().split('-')[0] }); // version_id: GHL lo exige mientras la app está en borrador
     res.redirect(`${AUTH}?${q}`);
   });
   app.get('/oauth/pixel/callback', async (req, res) => {
     try {
-      const e = est();
       if (!req.query.code) throw new Error(req.query.error_description || req.query.error || 'GoHighLevel no devolvió el código.');
-      if (!e.state || req.query.state !== e.state) throw new Error('El estado de la autorización no coincide. Vuelve a empezar desde /api/ghl/conectar.');
-      e.state = null;
+      if (!stateValido(req.query.state)) throw new Error('La autorización caducó o no es válida. Vuelve a empezar desde /api/ghl/conectar.');
       guardar(await pedir('/oauth/token', { client_id: id(), client_secret: secreto(), grant_type: 'authorization_code', code: String(req.query.code), user_type: 'Company', redirect_uri: redirect(req) }));
       listaCache.t = 0;
       res.redirect('/clientes.html?ghl=conectado');
