@@ -120,10 +120,10 @@ const locDe = (cl) => cl?.ghlLocationId || process.env.GHL_LOCATION_ID || '';
 // Token para una subcuenta: el de Pixel (GHL_TOKEN) si es la de Pixel; para cualquier otra, el que da la app de agencia (OAuth).
 async function tokenDe(loc) {
   if (loc && loc === process.env.GHL_LOCATION_ID && ghlToken()) return ghlToken();
-  if (oauth.conectada()) return oauth.tokenSubcuenta(loc);
+  if (oauth.puede(loc)) return oauth.tokenSubcuenta(loc);
   return ghlToken();
 }
-const ghlConectado = () => !!ghlToken() || oauth.conectada();
+const ghlConectado = () => !!ghlToken() || oauth.conectada() || oauth.instaladas().length > 0;
 async function ghl(method, p, body, token) {
   // Cloudflare de GHL bloquea clientes sin User-Agent propio (error 1010); se reintenta una vez ante 429/5xx.
   for (let intento = 0; ; intento++) {
