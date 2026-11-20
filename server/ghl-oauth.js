@@ -39,8 +39,8 @@ function guardar(j) {
 
 let renovando = null; // el refresh token es de un solo uso: nunca dos renovaciones a la vez
 async function tokenAgencia() {
-  if (fijo()) return fijo();
   const e = est();
+  if (!e.refresh && fijo()) return fijo(); // la app del Marketplace (con permisos de subcuenta) manda sobre el token fijo
   if (!e.refresh) throw new Error('La agencia aún no está autorizada en GoHighLevel (abre /api/ghl/conectar).');
   if (e.access && e.expira - Date.now() > 300000) return e.access;
   renovando ||= pedir('/oauth/token', { client_id: id(), client_secret: secreto(), grant_type: 'refresh_token', refresh_token: e.refresh, user_type: 'Company' })
